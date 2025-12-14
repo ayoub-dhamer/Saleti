@@ -37,7 +37,10 @@ dependencies:
 
   adhan: ^2.0.0
   geolocator: ^10.0.0
+  table_calendar: ^3.0.10
   hijri: ^3.0.0
+  quran: ^1.0.1
+  shared_preferences: ^2.1.1
   intl: ^0.19.0
 
 dev_dependencies:
@@ -61,6 +64,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  fonts:
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
