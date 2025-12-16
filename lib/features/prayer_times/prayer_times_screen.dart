@@ -20,7 +20,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   void initState() {
     super.initState();
 
-    // 🔹 Example location (Mecca)
+    // 📍 Example location (Mecca)
     final coordinates = Coordinates(21.4225, 39.8262);
     final params = CalculationMethod.muslim_world_league.getParameters();
 
@@ -45,29 +45,40 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   Widget build(BuildContext context) {
     final hijri = HijriCalendar.now();
 
-    final nextPrayer = prayerTimes.nextPrayer();
+    final nextPrayer = prayerTimes.nextPrayer() == Prayer.none
+        ? Prayer.fajr
+        : prayerTimes.nextPrayer();
+
     final nextPrayerTime = prayerTimes.timeForPrayer(nextPrayer)!;
     final remaining = nextPrayerTime.difference(now);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _header(hijri),
-            const SizedBox(height: 16),
-            _clock(),
-            const SizedBox(height: 16),
-            _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
-            const SizedBox(height: 8),
-            Expanded(child: _prayerList()),
-          ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.white, Color(0xFFEAF7F5)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _header(hijri),
+              const SizedBox(height: 16),
+              _clock(),
+              const SizedBox(height: 16),
+              _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
+              const SizedBox(height: 8),
+              Expanded(child: _prayerList()),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // HEADER
+  // 🕌 HEADER
   Widget _header(HijriCalendar hijri) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -102,7 +113,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // CLOCK
+  // 🕰️ CLOCK
   Widget _clock() {
     return Container(
       width: 220,
@@ -114,14 +125,14 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       ),
       child: Center(
         child: Text(
-          DateFormat('hh:mm').format(now),
-          style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+          DateFormat('hh:mm a').format(now),
+          style: const TextStyle(fontSize: 44, fontWeight: FontWeight.bold),
         ),
       ),
     );
   }
 
-  // UPCOMING PRAYER
+  // 🔔 UPCOMING PRAYER
   Widget _upcomingPrayer(Prayer nextPrayer, DateTime time, Duration remaining) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -147,7 +158,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${nextPrayer.name.toUpperCase()} at ${DateFormat('HH:mm').format(time)}',
+                '${_prettyPrayerName(nextPrayer)} at ${DateFormat('HH:mm').format(time)}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -167,7 +178,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // PRAYER LIST
+  // 📋 PRAYER LIST
   Widget _prayerList() {
     final prayers = {
       'Fajr': prayerTimes.fajr,
@@ -178,10 +189,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       'Isha': prayerTimes.isha,
     };
 
+    final currentPrayer = prayerTimes.currentPrayer();
+
     return ListView(
       children: prayers.entries.map((entry) {
         final isCurrent =
-            prayerTimes.currentPrayer().name == entry.key.toLowerCase();
+            currentPrayer != Prayer.none &&
+            currentPrayer.name == entry.key.toLowerCase();
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -210,6 +224,26 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         );
       }).toList(),
     );
+  }
+
+  // 🕋 HELPERS
+  String _prettyPrayerName(Prayer p) {
+    switch (p) {
+      case Prayer.fajr:
+        return 'Fajr';
+      case Prayer.sunrise:
+        return 'Sunrise';
+      case Prayer.dhuhr:
+        return 'Dhuhr';
+      case Prayer.asr:
+        return 'Asr';
+      case Prayer.maghrib:
+        return 'Maghrib';
+      case Prayer.isha:
+        return 'Isha';
+      default:
+        return '';
+    }
   }
 
   String _formatDuration(Duration d) {
