@@ -16,6 +16,7 @@ class SaletiApp extends StatelessWidget {
 
       // ✅ REQUIRED FOR quran_library
       theme: ThemeData(
+        fontFamily: 'Amiri',
         useMaterial3: false, // IMPORTANT
         primaryColor: Colors.green,
         scaffoldBackgroundColor: Colors.white,
