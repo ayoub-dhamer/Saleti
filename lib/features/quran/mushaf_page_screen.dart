@@ -1,88 +1,103 @@
 import 'package:flutter/material.dart';
-import 'package:quran/quran.dart';
-import 'mushaf_page_data.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MushafPageScreen extends StatefulWidget {
-  final int initialPage;
+  final int startPage;
 
-  const MushafPageScreen({super.key, this.initialPage = 1});
+  const MushafPageScreen({super.key, this.startPage = 1});
 
   @override
   State<MushafPageScreen> createState() => _MushafPageScreenState();
 }
 
 class _MushafPageScreenState extends State<MushafPageScreen> {
-  late PageController _controller;
-
-  // 🔹 Currently selected ayah
-  String? selectedAyahKey;
+  late PageController _pageController;
+  int _currentPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(initialPage: widget.initialPage - 1);
+    _currentPage = widget.startPage.clamp(1, 604);
+    _pageController = PageController(initialPage: _currentPage - 1);
+  }
+
+  // 🔹 Save last opened page
+  Future<void> _saveLastPage(int page) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_mushaf_page', page);
+  }
+
+  // 🔖 Bookmark page
+  Future<void> _addBookmark(int page) async {
+    final prefs = await SharedPreferences.getInstance();
+    final bookmarks = prefs.getStringList('mushaf_bookmarks') ?? [];
+
+    final key = page.toString();
+    if (!bookmarks.contains(key)) {
+      bookmarks.add(key);
+      await prefs.setStringList('mushaf_bookmarks', bookmarks);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Page $page bookmarked')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfffdfaf3),
+      backgroundColor: const Color(0xfffdf8ef),
+      appBar: AppBar(
+        backgroundColor: Colors.green,
+        title: Text('Page $_currentPage'),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.list),
+          tooltip: 'Surah list',
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_add),
+            tooltip: 'Bookmark page',
+            onPressed: () => _addBookmark(_currentPage),
+          ),
+        ],
+      ),
       body: PageView.builder(
-        controller: _controller,
+        controller: _pageController,
+        reverse: true, // RTL page direction (Arabic Mushaf)
         itemCount: 604,
-        onPageChanged: (_) {
-          // Clear selection when page changes
-          setState(() => selectedAyahKey = null);
+        onPageChanged: (index) {
+          final page = index + 1;
+          setState(() => _currentPage = page);
+          _saveLastPage(page);
         },
         itemBuilder: (context, index) {
           final pageNumber = index + 1;
-          final pageAyahs = MushafPageData.pages[pageNumber] ?? [];
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: SingleChildScrollView(
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                textDirection: TextDirection.rtl,
-                children: pageAyahs.map((v) {
-                  final surah = v['surah']!;
-                  final ayah = v['ayah']!;
-                  final key = '$surah:$ayah';
-                  final text = getVerse(surah, ayah);
-
-                  final isSelected = key == selectedAyahKey;
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        selectedAyahKey = key;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
-                      ),
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.green.withOpacity(0.25)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '$text ﴿$ayah﴾',
-                        textDirection: TextDirection.rtl,
-                        style: const TextStyle(
-                          fontFamily: 'AmiriQuran',
-                          fontSize: 26,
-                          height: 1.8,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
+          return Center(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 3,
+              child: Image.asset(
+                'assets/mushaf/$pageNumber.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Text(
+                    'Page image not found',
+                    style: TextStyle(color: Colors.red),
                   );
-                }).toList(),
+                },
               ),
             ),
           );
