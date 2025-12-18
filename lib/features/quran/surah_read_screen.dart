@@ -1,142 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:quran/quran.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-class SurahReadScreen extends StatefulWidget {
-  final int surahNumber;
-  final int startAyah;
+class SurahPagedScreen extends StatefulWidget {
+  final int initialSurah;
 
-  const SurahReadScreen({
-    super.key,
-    required this.surahNumber,
-    this.startAyah = 1,
-  });
+  const SurahPagedScreen({super.key, this.initialSurah = 1});
 
   @override
-  State<SurahReadScreen> createState() => _SurahReadScreenState();
+  State<SurahPagedScreen> createState() => _SurahPagedScreenState();
 }
 
-class _SurahReadScreenState extends State<SurahReadScreen> {
-  final ScrollController _scrollController = ScrollController();
-  int? _lastAyah;
-
-  bool _isDarkMode = false;
+class _SurahPagedScreenState extends State<SurahPagedScreen> {
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _loadLastRead();
-    _loadTheme();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.startAyah > 1) {
-        _scrollController.jumpTo((widget.startAyah - 1) * 80.0);
-      }
-    });
-  }
-
-  Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
-    });
-  }
-
-  // 🔹 Load last ayah
-  Future<void> _loadLastRead() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _lastAyah = prefs.getInt('last_ayah');
-    });
-  }
-
-  // 🔹 Save reading progress
-  Future<void> _saveLastRead(int ayah) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('last_surah', widget.surahNumber);
-    await prefs.setInt('last_ayah', ayah);
-  }
-
-  // 🔹 Bookmark ayah
-  Future<void> addBookmark(int surah, int ayah) async {
-    final prefs = await SharedPreferences.getInstance();
-    final bookmarks = prefs.getStringList('quran_bookmarks') ?? [];
-
-    final key = '$surah:$ayah';
-    if (!bookmarks.contains(key)) {
-      bookmarks.add(key);
-      await prefs.setStringList('quran_bookmarks', bookmarks);
-    }
+    _pageController = PageController(initialPage: widget.initialSurah - 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final surahNameArabic = getSurahNameArabic(widget.surahNumber);
-    final surahNameEnglish = getSurahName(widget.surahNumber);
-    final totalAyahs = getVerseCount(widget.surahNumber);
-
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: 114,
+        itemBuilder: (context, index) {
+          final surahNumber = index + 1;
+          return _surahPage(surahNumber);
+        },
+      ),
+    );
+  }
+
+  Widget _surahPage(int surahNumber) {
+    final totalAyahs = getVerseCount(surahNumber);
+    final spans = <InlineSpan>[];
+
+    for (int i = 1; i <= totalAyahs; i++) {
+      spans.add(TextSpan(text: '${getVerse(surahNumber, i)} '));
+      spans.add(
+        WidgetSpan(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '﴿$i﴾',
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
           children: [
-            Text(surahNameArabic, style: const TextStyle(fontSize: 22)),
-            Text(surahNameEnglish, style: const TextStyle(fontSize: 14)),
+            Text(
+              getSurahNameArabic(surahNumber),
+              style: const TextStyle(
+                fontSize: 28,
+                fontFamily: 'Amiri',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: RichText(
+                  textAlign: TextAlign.right,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 26,
+                      height: 1.8,
+                      fontFamily: 'Amiri',
+                      color: Colors.black,
+                    ),
+                    children: spans,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
-        centerTitle: true,
-        backgroundColor: _isDarkMode ? Colors.black : Colors.white,
-      ),
-      body: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        itemCount: totalAyahs,
-        itemBuilder: (context, index) {
-          final ayahNumber = index + 1;
-          final ayahText = getVerse(widget.surahNumber, ayahNumber);
-
-          final isLastRead = ayahNumber == _lastAyah;
-
-          // Save progress
-          _saveLastRead(ayahNumber);
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isLastRead
-                  ? Colors.green.withOpacity(0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '$ayahText ﴿$ayahNumber﴾',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    height: 2.0,
-                    fontFamily: 'Amiri',
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.bookmark_border),
-                    onPressed: () {
-                      addBookmark(widget.surahNumber, ayahNumber);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ayah bookmarked')),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
       ),
     );
   }

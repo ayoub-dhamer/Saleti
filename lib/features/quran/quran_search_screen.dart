@@ -44,10 +44,7 @@ class _QuranSearchScreenState extends State<QuranSearchScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => SurahReadScreen(
-                    surahNumber: r['surah'],
-                    startAyah: r['ayah'],
-                  ),
+                  builder: (_) => const SurahPagedScreen(initialSurah: 1),
                 ),
               );
             },

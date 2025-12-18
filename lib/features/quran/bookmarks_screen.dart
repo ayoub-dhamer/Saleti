@@ -56,10 +56,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => SurahReadScreen(
-                          surahNumber: surah,
-                          startAyah: ayah,
-                        ),
+                        builder: (_) => const SurahPagedScreen(initialSurah: 1),
                       ),
                     );
                   },

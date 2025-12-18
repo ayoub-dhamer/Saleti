@@ -36,10 +36,7 @@ class SurahListScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => SurahReadScreen(
-                          surahNumber: lastSurah,
-                          startAyah: lastAyah,
-                        ),
+                        builder: (_) => const SurahPagedScreen(initialSurah: 1),
                       ),
                     );
                   },
@@ -59,7 +56,7 @@ class SurahListScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => SurahReadScreen(surahNumber: surahNumber),
+                      builder: (_) => const SurahPagedScreen(initialSurah: 1),
                     ),
                   );
                 },
