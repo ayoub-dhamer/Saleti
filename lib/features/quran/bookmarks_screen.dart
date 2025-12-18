@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quran/quran.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'surah_read_screen.dart';
+import 'mushaf_page_screen.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -12,7 +10,7 @@ class BookmarksScreen extends StatefulWidget {
 }
 
 class _BookmarksScreenState extends State<BookmarksScreen> {
-  List<String> _bookmarks = [];
+  List<int> _bookmarkedPages = [];
 
   @override
   void initState() {
@@ -22,8 +20,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _loadBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('mushaf_bookmarks') ?? [];
+
     setState(() {
-      _bookmarks = prefs.getStringList('quran_bookmarks') ?? [];
+      _bookmarkedPages =
+          list.map((e) => int.tryParse(e) ?? 0).where((e) => e > 0).toList()
+            ..sort();
     });
   }
 
@@ -34,29 +36,21 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         title: const Text('Bookmarks'),
         backgroundColor: Colors.green,
       ),
-      body: _bookmarks.isEmpty
+      body: _bookmarkedPages.isEmpty
           ? const Center(child: Text('No bookmarks yet'))
           : ListView.builder(
-              itemCount: _bookmarks.length,
+              itemCount: _bookmarkedPages.length,
               itemBuilder: (context, index) {
-                final parts = _bookmarks[index].split(':');
-                final surah = int.parse(parts[0]);
-                final ayah = int.parse(parts[1]);
+                final page = _bookmarkedPages[index];
 
                 return ListTile(
                   leading: const Icon(Icons.bookmark, color: Colors.green),
-                  title: Text(
-                    getSurahNameArabic(surah),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontFamily: 'Amiri', fontSize: 18),
-                  ),
-                  subtitle: Text('${getSurahName(surah)} • Ayah $ayah'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  title: Text('Page $page'),
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const SurahPagedScreen(initialSurah: 1),
+                        builder: (_) => MushafPageScreen(startPage: page),
                       ),
                     );
                   },
