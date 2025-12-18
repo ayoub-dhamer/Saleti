@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../data/surah_page_map.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
@@ -14,101 +13,140 @@ class MushafPageScreen extends StatefulWidget {
 class _MushafPageScreenState extends State<MushafPageScreen> {
   late PageController _pageController;
   int _currentPage = 1;
+  Set<int> _bookmarkedPages = {};
 
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.startPage.clamp(1, 604);
+    _currentPage = widget.startPage;
     _pageController = PageController(initialPage: _currentPage - 1);
+    _loadBookmarks();
   }
 
-  // 🔹 Save last opened page
+  /// 🔹 Load bookmarked pages
+  Future<void> _loadBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('mushaf_bookmarks') ?? [];
+
+    final pages = <int>{};
+
+    for (final item in list) {
+      final parts = item.split('|');
+
+      // ✅ STRICT validation
+      if (parts.length != 3) continue;
+
+      final page = int.tryParse(parts[0]);
+      if (page == null || page < 1 || page > 604) continue;
+
+      pages.add(page);
+    }
+
+    setState(() {
+      _bookmarkedPages = pages;
+    });
+  }
+
+  /// 🔹 Save last page
   Future<void> _saveLastPage(int page) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('last_mushaf_page', page);
   }
 
-  String getSurahFromPage(int page) {
-    final pages = surahByPage.keys.where((p) => p <= page).toList()..sort();
-    return surahByPage[pages.last]!;
-  }
-
-  // 🔖 Bookmark page
+  /// 🔹 Add bookmark
   Future<void> _addBookmark(int page) async {
     final prefs = await SharedPreferences.getInstance();
-    final bookmarks = prefs.getStringList('mushaf_bookmarks') ?? [];
+    final list = prefs.getStringList('mushaf_bookmarks') ?? [];
 
-    final surah = getSurahFromPage(page);
-    final today = DateTime.now();
+    final now = DateTime.now();
     final date =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    final entry = '$page|$surah|$date';
+    final surahName = 'Surah'; // placeholder
+    final key = '$page|$surahName|$date';
 
-    if (!bookmarks.contains(entry)) {
-      bookmarks.add(entry);
-      await prefs.setStringList('mushaf_bookmarks', bookmarks);
+    // ✅ Only compare full page number safely
+    final exists = list.any((e) {
+      final parts = e.split('|');
+      return parts.length == 3 && parts[0] == page.toString();
+    });
+
+    if (!exists) {
+      list.add(key);
+      await prefs.setStringList('mushaf_bookmarks', list);
+      _loadBookmarks();
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Page $page bookmarked')));
+      }
     }
   }
 
   @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final isBookmarked = _bookmarkedPages.contains(_currentPage);
+
     return Scaffold(
-      backgroundColor: const Color(0xfffdf8ef),
+      backgroundColor: isBookmarked
+          ? const Color(0xffeaf6ee)
+          : const Color(0xfffdf8ef),
       appBar: AppBar(
         backgroundColor: Colors.green,
         title: Text('Page $_currentPage'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.list),
-          tooltip: 'Surah list',
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bookmark_add),
-            tooltip: 'Bookmark page',
+            icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_add),
             onPressed: () => _addBookmark(_currentPage),
           ),
         ],
       ),
-      body: PageView.builder(
-        controller: _pageController,
-        reverse: true, // RTL page direction (Arabic Mushaf)
-        itemCount: 604,
-        onPageChanged: (index) {
-          final page = index + 1;
-          setState(() => _currentPage = page);
-          _saveLastPage(page);
-        },
-        itemBuilder: (context, index) {
-          final pageNumber = index + 1;
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            reverse: true,
+            itemCount: 604,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPage = index + 1;
+              });
+              _saveLastPage(_currentPage);
+            },
+            itemBuilder: (context, index) {
+              final pageNumber = index + 1;
+              final highlighted = _bookmarkedPages.contains(pageNumber);
 
-          return Center(
-            child: InteractiveViewer(
-              minScale: 1,
-              maxScale: 3,
-              child: Image.asset(
-                'assets/mushaf/$pageNumber.png',
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Text(
-                    'Page image not found',
-                    style: TextStyle(color: Colors.red),
-                  );
-                },
+              return Container(
+                color: highlighted
+                    ? const Color(0xffeaf6ee)
+                    : const Color(0xfffdf8ef),
+                child: InteractiveViewer(
+                  maxScale: 3,
+                  child: Image.asset(
+                    'assets/mushaf/$pageNumber.png',
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // 🔖 Bookmark indicator
+          if (isBookmarked)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Icon(
+                Icons.bookmark,
+                color: Colors.green.shade700,
+                size: 32,
               ),
             ),
-          );
-        },
+        ],
       ),
     );
   }
