@@ -1,80 +1,89 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quran/quran.dart';
+import 'mushaf_page_data.dart';
 
 class MushafPageScreen extends StatefulWidget {
-  final int startPage;
+  final int initialPage;
 
-  const MushafPageScreen({super.key, this.startPage = 1});
+  const MushafPageScreen({super.key, this.initialPage = 1});
 
   @override
   State<MushafPageScreen> createState() => _MushafPageScreenState();
 }
 
 class _MushafPageScreenState extends State<MushafPageScreen> {
-  late PageController _pageController;
-  int _currentPage = 1;
+  late PageController _controller;
+
+  // 🔹 Currently selected ayah
+  String? selectedAyahKey;
 
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.startPage;
-    _pageController = PageController(initialPage: _currentPage - 1);
-  }
-
-  Future<void> _saveLastPage(int page) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('last_mushaf_page', page);
-  }
-
-  Future<void> _addBookmark(int page) async {
-    final prefs = await SharedPreferences.getInstance();
-    final bookmarks = prefs.getStringList('mushaf_bookmarks') ?? [];
-
-    final key = page.toString();
-    if (!bookmarks.contains(key)) {
-      bookmarks.add(key);
-      await prefs.setStringList('mushaf_bookmarks', bookmarks);
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Page $page bookmarked')));
-      }
-    }
+    _controller = PageController(initialPage: widget.initialPage - 1);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfffdf8ef),
-      appBar: AppBar(
-        backgroundColor: Colors.green,
-        title: Text('Page $_currentPage'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_add),
-            onPressed: () => _addBookmark(_currentPage),
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xfffdfaf3),
       body: PageView.builder(
-        controller: _pageController,
-        reverse: true, // Arabic direction
+        controller: _controller,
         itemCount: 604,
-        onPageChanged: (index) {
-          setState(() {
-            _currentPage = index + 1;
-          });
-          _saveLastPage(_currentPage);
+        onPageChanged: (_) {
+          // Clear selection when page changes
+          setState(() => selectedAyahKey = null);
         },
         itemBuilder: (context, index) {
           final pageNumber = index + 1;
+          final pageAyahs = MushafPageData.pages[pageNumber] ?? [];
 
-          return InteractiveViewer(
-            maxScale: 3,
-            child: Image.asset(
-              'assets/mushaf/$pageNumber.png',
-              fit: BoxFit.contain,
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: SingleChildScrollView(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                textDirection: TextDirection.rtl,
+                children: pageAyahs.map((v) {
+                  final surah = v['surah']!;
+                  final ayah = v['ayah']!;
+                  final key = '$surah:$ayah';
+                  final text = getVerse(surah, ayah);
+
+                  final isSelected = key == selectedAyahKey;
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedAyahKey = key;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.green.withOpacity(0.25)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '$text ﴿$ayah﴾',
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                          fontFamily: 'AmiriQuran',
+                          fontSize: 26,
+                          height: 1.8,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           );
         },

@@ -8,82 +8,44 @@ class QuranScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Al-Qur’an'),
-        centerTitle: true,
-        backgroundColor: Colors.green,
-      ),
-      body: Padding(
+      appBar: AppBar(title: const Text('Quran'), backgroundColor: Colors.green),
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _mainButton(
+        children: [
+          _item(
+            context,
+            'Read Mushaf',
+            Icons.menu_book,
+            () => Navigator.push(
               context,
-              icon: Icons.menu_book,
-              title: 'Read Mushaf',
-              subtitle: '604 authentic pages',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MushafPageScreen()),
-                );
-              },
+              MaterialPageRoute(builder: (_) => const MushafPageScreen()),
             ),
-            const SizedBox(height: 16),
-            _mainButton(
+          ),
+          _item(
+            context,
+            'Bookmarks',
+            Icons.bookmark,
+            () => Navigator.push(
               context,
-              icon: Icons.bookmark,
-              title: 'Bookmarks',
-              subtitle: 'Saved Mushaf pages',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-                );
-              },
+              MaterialPageRoute(builder: (_) => const BookmarksScreen()),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _mainButton(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 40, color: Colors.green),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.black54)),
-              ],
-            ),
-          ],
-        ),
+  Widget _item(
+    BuildContext context,
+    String title,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: Colors.green),
+        title: Text(title),
+        onTap: onTap,
       ),
     );
   }
