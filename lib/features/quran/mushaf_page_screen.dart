@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../data/surah_page_map.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
@@ -27,20 +28,26 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     await prefs.setInt('last_mushaf_page', page);
   }
 
+  String getSurahFromPage(int page) {
+    final pages = surahByPage.keys.where((p) => p <= page).toList()..sort();
+    return surahByPage[pages.last]!;
+  }
+
   // 🔖 Bookmark page
   Future<void> _addBookmark(int page) async {
     final prefs = await SharedPreferences.getInstance();
     final bookmarks = prefs.getStringList('mushaf_bookmarks') ?? [];
 
-    final key = page.toString();
-    if (!bookmarks.contains(key)) {
-      bookmarks.add(key);
-      await prefs.setStringList('mushaf_bookmarks', bookmarks);
+    final surah = getSurahFromPage(page);
+    final today = DateTime.now();
+    final date =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Page $page bookmarked')));
+    final entry = '$page|$surah|$date';
+
+    if (!bookmarks.contains(entry)) {
+      bookmarks.add(entry);
+      await prefs.setStringList('mushaf_bookmarks', bookmarks);
     }
   }
 
