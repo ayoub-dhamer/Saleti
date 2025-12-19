@@ -18,9 +18,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.startPage;
-    _pageController = PageController(initialPage: _currentPage - 1);
-    _loadBookmarks();
+    _initPage();
+  }
+
+  Future<void> _initPage() async {
+    final lastPage = await _loadLastPage();
+
+    setState(() {
+      _currentPage = lastPage;
+      _pageController = PageController(initialPage: lastPage - 1);
+    });
   }
 
   /// 🔹 Load bookmarked pages
@@ -51,6 +58,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _saveLastPage(int page) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('last_mushaf_page', page);
+  }
+
+  Future<int> _loadLastPage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('last_mushaf_page') ?? widget.startPage;
   }
 
   /// 🔹 Add bookmark
@@ -86,6 +98,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_pageController == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final isBookmarked = _bookmarkedPages.contains(_currentPage);
 
     return Scaffold(
@@ -109,10 +125,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             reverse: true,
             itemCount: 604,
             onPageChanged: (index) {
+              final page = index + 1;
+
               setState(() {
-                _currentPage = index + 1;
+                _currentPage = page;
               });
-              _saveLastPage(_currentPage);
+
+              _saveLastPage(page);
             },
             itemBuilder: (context, index) {
               final pageNumber = index + 1;

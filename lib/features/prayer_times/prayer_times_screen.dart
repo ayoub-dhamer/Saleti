@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -12,23 +14,15 @@ class PrayerTimesScreen extends StatefulWidget {
 }
 
 class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
-  late PrayerTimes prayerTimes;
+  PrayerTimes? prayerTimes;
   Timer? _timer;
   DateTime now = DateTime.now();
+  String _locationName = 'Loading...';
 
   @override
   void initState() {
     super.initState();
-
-    // 📍 Example location (Mecca)
-    final coordinates = Coordinates(21.4225, 39.8262);
-    final params = CalculationMethod.muslim_world_league.getParameters();
-
-    prayerTimes = PrayerTimes(
-      coordinates,
-      DateComponents.from(DateTime.now()),
-      params,
-    );
+    _initLocationAndPrayerTimes();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => now = DateTime.now());
@@ -41,15 +35,65 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.dispose();
   }
 
+  // 📍 INIT GPS + PRAYER TIMES
+  Future<void> _initLocationAndPrayerTimes() async {
+    final hasPermission = await _handleLocationPermission();
+    if (!hasPermission) return;
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    final placemarks = await placemarkFromCoordinates(
+      position.latitude,
+      position.longitude,
+    );
+
+    final place = placemarks.first;
+
+    final coordinates = Coordinates(position.latitude, position.longitude);
+
+    final params = CalculationMethod.muslim_world_league.getParameters()
+      ..madhab = Madhab.shafi; // Maliki & Shafi use the same Asr rule
+
+    setState(() {
+      _locationName = '${place.locality ?? place.administrativeArea ?? ''}';
+
+      prayerTimes = PrayerTimes(
+        coordinates,
+        DateComponents.from(DateTime.now()),
+        params,
+      );
+    });
+  }
+
+  // 🔐 LOCATION PERMISSION
+  Future<bool> _handleLocationPermission() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (prayerTimes == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final hijri = HijriCalendar.now();
 
-    final nextPrayer = prayerTimes.nextPrayer() == Prayer.none
+    final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
-        : prayerTimes.nextPrayer();
+        : prayerTimes!.nextPrayer();
 
-    final nextPrayerTime = prayerTimes.timeForPrayer(nextPrayer)!;
+    final nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
     final remaining = nextPrayerTime.difference(now);
 
     return Scaffold(
@@ -85,13 +129,16 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.location_on, color: Colors.green),
-              SizedBox(width: 6),
+              const Icon(Icons.location_on, color: Colors.green),
+              const SizedBox(width: 6),
               Text(
-                'Mecca',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                _locationName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -181,15 +228,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   // 📋 PRAYER LIST
   Widget _prayerList() {
     final prayers = {
-      'Fajr': prayerTimes.fajr,
-      'Sunrise': prayerTimes.sunrise,
-      'Dhuhr': prayerTimes.dhuhr,
-      'Asr': prayerTimes.asr,
-      'Maghrib': prayerTimes.maghrib,
-      'Isha': prayerTimes.isha,
+      'Fajr': prayerTimes!.fajr,
+      'Sunrise': prayerTimes!.sunrise,
+      'Dhuhr': prayerTimes!.dhuhr,
+      'Asr': prayerTimes!.asr,
+      'Maghrib': prayerTimes!.maghrib,
+      'Isha': prayerTimes!.isha,
     };
 
-    final currentPrayer = prayerTimes.currentPrayer();
+    final currentPrayer = prayerTimes!.currentPrayer();
 
     return ListView(
       children: prayers.entries.map((entry) {
