@@ -21,188 +21,211 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     _selectedHijri = HijriCalendar.fromDate(_focusedDay);
   }
 
-  // Optional: Add highlighted Islamic events
-  final Map<DateTime, String> islamicEvents = {
-    // Example: Ramadan start 2025
-    DateTime(2025, 3, 1): 'Ramadan Starts',
-    DateTime(2025, 3, 29): 'Eid al-Fitr',
-  };
+  // Islamic Events (Hijri dates)
+  final List<Map<String, dynamic>> islamicHolidays = [
+    {"month": 1, "day": 1, "name": "Islamic New Year"},
+    {"month": 1, "day": 10, "name": "Day of Ashura"},
+    {"month": 3, "day": 12, "name": "Mawlid al-Nabi"},
+    {"month": 9, "day": 1, "name": "Start of Ramadan"},
+    {"month": 9, "day": 27, "name": "Lailat al-Qadr"},
+    {"month": 10, "day": 1, "name": "Eid al-Fitr"},
+    {"month": 12, "day": 8, "name": "Start of Hajj"},
+    {"month": 12, "day": 9, "name": "Day of Arafah"},
+    {"month": 12, "day": 10, "name": "Eid al-Adha"},
+  ];
 
-  bool _isWeekend(DateTime day) =>
-      day.weekday == DateTime.friday || day.weekday == DateTime.saturday;
+  bool _isHoliday(DateTime day) {
+    final hijri = HijriCalendar.fromDate(day);
+    return islamicHolidays.any(
+      (event) => event["day"] == hijri.hDay && event["month"] == hijri.hMonth,
+    );
+  }
+
+  String? _holidayName(DateTime day) {
+    final hijri = HijriCalendar.fromDate(day);
+    final match = islamicHolidays.firstWhere(
+      (event) => event["day"] == hijri.hDay && event["month"] == hijri.hMonth,
+      orElse: () => {},
+    );
+    return match.isEmpty ? null : match["name"];
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text('Hijri Calendar'),
+        title: const Text(
+          'Hijri Calendar',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         backgroundColor: Colors.deepPurpleAccent,
       ),
-      body: Column(
-        children: [
-          TableCalendar(
-            firstDay: DateTime(2020, 1, 1),
-            lastDay: DateTime(2030, 12, 31),
-            focusedDay: _focusedDay,
-            calendarFormat: CalendarFormat.month,
-            startingDayOfWeek: StartingDayOfWeek.saturday,
-            selectedDayPredicate: (day) {
-              return isSameDay(_selectedDay, day);
-            },
-            onDaySelected: (selectedDay, focusedDay) {
-              setState(() {
-                _selectedDay = selectedDay;
-                _focusedDay = focusedDay;
-                _selectedHijri = HijriCalendar.fromDate(selectedDay);
-              });
-            },
-            calendarBuilders: CalendarBuilders(
-              defaultBuilder: (context, day, focusedDay) {
-                final hijri = HijriCalendar.fromDate(day);
-                return Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: _isWeekend(day)
-                        ? Colors.deepPurple[50]
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        blurRadius: 3,
-                        offset: const Offset(1, 2),
-                      ),
-                    ],
+
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // 🌙 SELECTED DATE INFO
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.deepPurpleAccent,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.deepPurpleAccent.withOpacity(0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${day.day}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _isWeekend(day)
-                                ? Colors.deepPurple
-                                : Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${hijri.hDay}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    "${_selectedHijri.hDay} ${_selectedHijri.longMonthName} ${_selectedHijri.hYear} AH",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                );
-              },
-              todayBuilder: (context, day, focusedDay) {
-                final hijri = HijriCalendar.fromDate(day);
-                return Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurpleAccent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.deepPurple.withOpacity(0.5),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
+
+                  const SizedBox(height: 6),
+
+                  if (_holidayName(_selectedDay!) != null)
+                    Text(
+                      _holidayName(_selectedDay!)!,
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${day.day}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '${hijri.hDay}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
-                );
-              },
-              selectedBuilder: (context, day, focusedDay) {
-                final hijri = HijriCalendar.fromDate(day);
-                return Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.orange.withOpacity(0.5),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${day.day}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '${hijri.hDay}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                Text(
-                  'Selected Hijri Date: ${_selectedHijri.hDay} ${_selectedHijri.longMonthName} ${_selectedHijri.hYear} AH',
-                  style: const TextStyle(
-                    fontSize: 18,
+
+            const SizedBox(height: 20),
+
+            // 📅 CALENDAR
+            Expanded(
+              child: TableCalendar(
+                firstDay: DateTime(2020),
+                lastDay: DateTime(2030),
+                focusedDay: _focusedDay,
+                calendarFormat: CalendarFormat.month,
+                startingDayOfWeek: StartingDayOfWeek.saturday,
+                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                    _selectedHijri = HijriCalendar.fromDate(selectedDay);
+                  });
+                },
+
+                // UI IMPROVEMENTS
+                daysOfWeekStyle: const DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(fontWeight: FontWeight.bold),
+                  weekendStyle: TextStyle(
                     fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
                   ),
                 ),
-                const SizedBox(height: 8),
-                if (islamicEvents[_selectedDay!] != null)
-                  Text(
-                    'Event: ${islamicEvents[_selectedDay!]}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.redAccent,
-                    ),
+
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
                   ),
-              ],
+                ),
+
+                calendarBuilders: CalendarBuilders(
+                  defaultBuilder: _dayTile,
+                  todayBuilder: _todayTile,
+                  selectedBuilder: _selectedTile,
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 📌 TEMPLATE FOR NORMAL DAY
+  Widget _dayTile(context, day, _) {
+    final hijri = HijriCalendar.fromDate(day);
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _isHoliday(day) ? Colors.amber.withOpacity(0.3) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _isHoliday(day) ? Colors.amber : Colors.grey.shade400,
+        ),
+      ),
+      child: _dayContent(day, hijri),
+    );
+  }
+
+  // ⭐ TODAY TILE
+  Widget _todayTile(context, day, _) {
+    final hijri = HijriCalendar.fromDate(day);
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.deepPurpleAccent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: _dayContent(day, hijri, textColor: Colors.white),
+    );
+  }
+
+  // ⭐ SELECTED DAY TILE
+  Widget _selectedTile(context, day, _) {
+    final hijri = HijriCalendar.fromDate(day);
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.orangeAccent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: _dayContent(day, hijri, textColor: Colors.white),
+    );
+  }
+
+  // 📅 Reusable Day Content
+  Widget _dayContent(
+    DateTime day,
+    HijriCalendar hijri, {
+    Color textColor = Colors.black,
+  }) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            "${day.day}",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: textColor,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            "${hijri.hDay}",
+            style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
           ),
         ],
       ),

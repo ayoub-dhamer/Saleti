@@ -4,6 +4,7 @@ import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 import '../prayer_times/prayer_times_screen.dart';
 import '../hijri_calendar/hijri_calendar_screen.dart';
 import '../quran/quran_screen.dart';
+import '../qibla/qibla_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
