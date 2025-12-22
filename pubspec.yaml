@@ -78,6 +78,7 @@ flutter:
     - assets/mushaf/
     - assets/compass.png
     - assets/needle.png
+    - assets/islamic_pattern.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -67,7 +67,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // 🌙 SELECTED DATE INFO
+            // 🌙 SELECTED DATE INFO CARD
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -128,7 +128,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                   });
                 },
 
-                // UI IMPROVEMENTS
                 daysOfWeekStyle: const DaysOfWeekStyle(
                   weekdayStyle: TextStyle(fontWeight: FontWeight.bold),
                   weekendStyle: TextStyle(
@@ -153,23 +152,55 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 10),
+
+            // 🟦 LEGEND — added under the calendar
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _legendItem(Colors.lightBlue, "Selected Day"),
+                _legendItem(Colors.lightGreen, "Holiday"),
+                _legendItem(Colors.deepPurpleAccent, "Today"),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  // 📌 TEMPLATE FOR NORMAL DAY
+  // 📌 LEGEND ITEM WIDGET
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label),
+      ],
+    );
+  }
+
+  // 📌 NORMAL DAY
   Widget _dayTile(context, day, _) {
     final hijri = HijriCalendar.fromDate(day);
 
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: _isHoliday(day) ? Colors.amber.withOpacity(0.3) : Colors.white,
+        color: _isHoliday(day)
+            ? Colors.lightGreen.withOpacity(0.6)
+            : Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: _isHoliday(day) ? Colors.amber : Colors.grey.shade400,
+          color: _isHoliday(day) ? Colors.green : Colors.grey.shade400,
         ),
       ),
       child: _dayContent(day, hijri),
@@ -190,14 +221,14 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // ⭐ SELECTED DAY TILE
+  // ⭐ SELECTED DAY TILE (Light Blue)
   Widget _selectedTile(context, day, _) {
     final hijri = HijriCalendar.fromDate(day);
 
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.orangeAccent,
+        color: Colors.lightBlue,
         borderRadius: BorderRadius.circular(10),
       ),
       child: _dayContent(day, hijri, textColor: Colors.white),
