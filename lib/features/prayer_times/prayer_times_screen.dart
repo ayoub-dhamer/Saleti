@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -19,20 +21,111 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   DateTime now = DateTime.now();
   String _locationName = 'Loading...';
 
+  // Notifications
+  final FlutterLocalNotificationsPlugin notifications =
+      FlutterLocalNotificationsPlugin();
+
+  // Audio
+  final AudioPlayer _player = AudioPlayer();
+  bool isPlaying = false;
+
   @override
   void initState() {
     super.initState();
+    _initNotifications();
     _initLocationAndPrayerTimes();
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       setState(() => now = DateTime.now());
+      _checkPrayerTrigger(); // 🔔 Check if it's prayer time
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _player.dispose();
     super.dispose();
+  }
+
+  // 📌 INITIALIZE NOTIFICATIONS
+  Future<void> _initNotifications() async {
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+    );
+
+    await notifications.initialize(settings);
+  }
+
+  // 📌 SEND NOTIFICATION
+  Future<void> _sendNotification(String prayerName) async {
+    const AndroidNotificationDetails details = AndroidNotificationDetails(
+      'prayer_channel',
+      'Prayer Notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: false, // sound handled manually by audio player
+    );
+
+    await notifications.show(
+      0,
+      'Prayer Time',
+      'It is time for $prayerName',
+      NotificationDetails(android: details),
+    );
+  }
+
+  // 📌 PLAY AZAN
+  Future<void> _playAzan() async {
+    if (isPlaying) return;
+    isPlaying = true;
+
+    // NEW API (audioplayers ^5.2.0)
+    await _player.play(AssetSource('azan.mp3'));
+  }
+
+  // 🛑 STOP AZAN
+  Future<void> _stopAzan() async {
+    await _player.stop();
+    isPlaying = false;
+    setState(() {});
+  }
+
+  // 📍 PRAYER TIME TRIGGER
+  bool _triggered = false;
+
+  void _checkPrayerTrigger() {
+    if (prayerTimes == null) return;
+
+    final prayers = {
+      'Fajr': prayerTimes!.fajr,
+      'Dhuhr': prayerTimes!.dhuhr,
+      'Asr': prayerTimes!.asr,
+      'Maghrib': prayerTimes!.maghrib,
+      'Isha': prayerTimes!.isha,
+    };
+
+    for (var entry in prayers.entries) {
+      final pName = entry.key;
+      final pTime = entry.value;
+
+      if (now.hour == pTime.hour &&
+          now.minute == pTime.minute &&
+          now.second == pTime.second &&
+          !_triggered) {
+        _triggered = true;
+
+        _sendNotification(pName);
+        _playAzan();
+
+        Timer(const Duration(seconds: 3), () {
+          _triggered = false;
+        });
+      }
+    }
   }
 
   // 📍 INIT GPS + PRAYER TIMES
@@ -54,10 +147,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final coordinates = Coordinates(position.latitude, position.longitude);
 
     final params = CalculationMethod.muslim_world_league.getParameters()
-      ..madhab = Madhab.shafi; // Maliki & Shafi use the same Asr rule
+      ..madhab = Madhab.shafi;
 
     setState(() {
-      _locationName = '${place.locality ?? place.administrativeArea ?? ''}';
+      _locationName = place.locality ?? place.administrativeArea ?? 'Unknown';
 
       prayerTimes = PrayerTimes(
         coordinates,
@@ -88,7 +181,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     }
 
     final hijri = HijriCalendar.now();
-
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
@@ -97,32 +189,31 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final remaining = nextPrayerTime.difference(now);
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.white, Color(0xFFEAF7F5)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _header(hijri),
-              const SizedBox(height: 16),
-              _clock(),
-              const SizedBox(height: 16),
-              _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
-              const SizedBox(height: 8),
-              Expanded(child: _prayerList()),
-            ],
-          ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _header(hijri),
+            const SizedBox(height: 16),
+            _clock(),
+            const SizedBox(height: 16),
+            _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
+            const SizedBox(height: 8),
+            Expanded(child: _prayerList()),
+            if (isPlaying)
+              ElevatedButton(
+                onPressed: _stopAzan,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text("Stop Azan"),
+              ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
   }
 
-  // 🕌 HEADER
+  // UI COMPONENTS --------------------------------------------------------------
+
   Widget _header(HijriCalendar hijri) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -160,7 +251,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // 🕰️ CLOCK
   Widget _clock() {
     return Container(
       width: 220,
@@ -179,7 +269,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // 🔔 UPCOMING PRAYER
   Widget _upcomingPrayer(Prayer nextPrayer, DateTime time, Duration remaining) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -225,7 +314,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // 📋 PRAYER LIST
   Widget _prayerList() {
     final prayers = {
       'Fajr': prayerTimes!.fajr,
@@ -273,7 +361,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // 🕋 HELPERS
+  // HELPERS ---------------------------------
+
   String _prettyPrayerName(Prayer p) {
     switch (p) {
       case Prayer.fajr:
