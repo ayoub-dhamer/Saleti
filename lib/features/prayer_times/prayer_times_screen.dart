@@ -79,7 +79,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _player.dispose();
     super.dispose();
   }
 
@@ -238,10 +237,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final coordinates = Coordinates(position.latitude, position.longitude);
 
     final params = CalculationMethod.muslim_world_league.getParameters()
-      ..madhab = Madhab.shafi;
+      ..madhab = Madhab.shafi; // Maliki & Shafi use the same Asr rule
 
     setState(() {
-      _locationName = place.locality ?? place.administrativeArea ?? 'Unknown';
+      _locationName = '${place.locality ?? place.administrativeArea ?? ''}';
 
       prayerTimes = PrayerTimes(
         coordinates,
@@ -272,6 +271,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     }
 
     final hijri = HijriCalendar.now();
+
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
@@ -345,6 +345,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
+  // 🕰️ CLOCK
   Widget _clock() {
     return Container(
       width: 200,
@@ -363,6 +364,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
+  // 🔔 UPCOMING PRAYER
   Widget _upcomingPrayer(Prayer nextPrayer, DateTime time, Duration remaining) {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -408,6 +410,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
+  // 📋 PRAYER LIST
   Widget _prayerList() {
     final prayers = {
       'Fajr': prayerTimes!.fajr,

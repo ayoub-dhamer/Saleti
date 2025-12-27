@@ -44,11 +44,14 @@ dependencies:
   shared_preferences: ^2.2.2
   stylish_bottom_bar: ^1.1.1
   permission_handler: ^11.0.0
+<<<<<<< HEAD
   flutter_local_notifications: ^17.1.0
   just_audio: ^0.9.38
   timezone: ^0.9.3
   audioplayers: ^5.2.0
   google_fonts: ^6.1.0
+=======
+>>>>>>> parent of 960fb58 (add adhan and notifications)
   intl: ^0.19.0
 
 dev_dependencies:
@@ -83,8 +86,12 @@ flutter:
     - assets/mushaf/
     - assets/compass.png
     - assets/needle.png
+<<<<<<< HEAD
     - assets/images/islamic_pattern.png
     - assets/audio/azan.mp3
+=======
+    - assets/islamic_pattern.png
+>>>>>>> parent of 960fb58 (add adhan and notifications)
 
   # To add assets to your application, add an assets section, like this:
   # assets:
