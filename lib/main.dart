@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'features/home/home_screen.dart';
+import 'navigation/main_navigation.dart';
 
 void main() {
   runApp(const SaletiApp());
@@ -13,11 +13,9 @@ class SaletiApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Saleti',
-
-      // ✅ REQUIRED FOR quran_library
       theme: ThemeData(
         fontFamily: 'Amiri',
-        useMaterial3: false, // IMPORTANT
+        useMaterial3: false,
         primaryColor: Colors.green,
         scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
@@ -26,8 +24,7 @@ class SaletiApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-
-      home: const HomeScreen(),
+      home: const MainNavigation(),
     );
   }
 }
