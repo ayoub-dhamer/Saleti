@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'features/home/home_screen.dart';
+import 'features/prayer_times/prayer_settings_screen.dart';
 
 void main() {
   runApp(const SaletiApp());
@@ -13,11 +14,8 @@ class SaletiApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Saleti',
-
-      // ✅ REQUIRED FOR quran_library
       theme: ThemeData(
         fontFamily: 'Amiri',
-        useMaterial3: false, // IMPORTANT
         primaryColor: Colors.green,
         scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
@@ -26,7 +24,6 @@ class SaletiApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-
       home: const HomeScreen(),
     );
   }

@@ -5,6 +5,7 @@ import '../prayer_times/prayer_times_screen.dart';
 import '../hijri_calendar/hijri_calendar_screen.dart';
 import '../quran/quran_screen.dart';
 import '../qibla/qibla_screen.dart';
+import '../prayer_times/prayer_settings_screen.dart'; // <-- NEW
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
     HijriCalendarScreen(),
     HijriCalendarScreen(),
     QuranScreen(),
+    PrayerSettingsScreen(), // <-- NEW PAGE
   ];
 
   @override
@@ -42,14 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: PageView(
         controller: pageController,
         physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          PrayerTimesScreen(),
-          HijriCalendarScreen(),
-          HijriCalendarScreen(),
-          QuranScreen(),
-        ],
+        children: pages,
       ),
-
       bottomNavigationBar: StylishBottomBar(
         option: BubbleBarOptions(
           barStyle: BubbleBarStyle.horizontal,
@@ -58,24 +54,29 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         items: [
           BottomBarItem(
-            icon: Icon(Icons.access_time),
-            title: Text('Prayers'),
+            icon: const Icon(Icons.access_time),
+            title: const Text('Prayers'),
             backgroundColor: Colors.green,
           ),
           BottomBarItem(
-            icon: Icon(Icons.calendar_month),
-            title: Text('Hijri'),
+            icon: const Icon(Icons.calendar_month),
+            title: const Text('Hijri'),
             backgroundColor: Colors.lightBlue,
           ),
           BottomBarItem(
-            icon: Icon(Icons.explore),
-            title: Text('Qibla'),
+            icon: const Icon(Icons.explore),
+            title: const Text('Qibla'),
             backgroundColor: Colors.greenAccent,
           ),
           BottomBarItem(
-            icon: Icon(Icons.menu_book),
-            title: Text('Quran'),
+            icon: const Icon(Icons.menu_book),
+            title: const Text('Quran'),
             backgroundColor: Colors.lightBlueAccent,
+          ),
+          BottomBarItem(
+            icon: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            backgroundColor: Colors.orangeAccent,
           ),
         ],
         currentIndex: selected,

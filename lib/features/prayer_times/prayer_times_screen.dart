@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -28,6 +29,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   // Audio
   final AudioPlayer _player = AudioPlayer();
   bool isPlaying = false;
+
+  // Triggered reminders/Azan
+  Set<String> _triggeredReminders = {};
 
   @override
   void initState() {
@@ -61,7 +65,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   // 📌 SEND NOTIFICATION
-  Future<void> _sendNotification(String prayerName) async {
+  Future<void> _sendNotification(String title) async {
     const AndroidNotificationDetails details = AndroidNotificationDetails(
       'prayer_channel',
       'Prayer Notifications',
@@ -72,8 +76,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     await notifications.show(
       0,
-      'Prayer Time',
-      'It is time for $prayerName',
+      'Prayer Reminder',
+      title,
       NotificationDetails(android: details),
     );
   }
@@ -82,8 +86,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   Future<void> _playAzan() async {
     if (isPlaying) return;
     isPlaying = true;
-
-    // NEW API (audioplayers ^5.2.0)
     await _player.play(AssetSource('azan.mp3'));
   }
 
@@ -95,10 +97,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   // 📍 PRAYER TIME TRIGGER
-  bool _triggered = false;
-
-  void _checkPrayerTrigger() {
+  void _checkPrayerTrigger() async {
     if (prayerTimes == null) return;
+    final prefs = await SharedPreferences.getInstance();
 
     final prayers = {
       'Fajr': prayerTimes!.fajr,
@@ -108,24 +109,49 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       'Isha': prayerTimes!.isha,
     };
 
-    for (var entry in prayers.entries) {
-      final pName = entry.key;
-      final pTime = entry.value;
+    final now = DateTime.now();
 
-      if (now.hour == pTime.hour &&
-          now.minute == pTime.minute &&
-          now.second == pTime.second &&
-          !_triggered) {
-        _triggered = true;
+    prayers.forEach((prayerName, prayerTime) {
+      // Load per-prayer settings
+      final reminderMinutes = prefs.getInt('${prayerName}_reminder') ?? 10;
+      final muteReminder = prefs.getBool('${prayerName}_muteReminder') ?? false;
+      final muteAzan = prefs.getBool('${prayerName}_muteAzan') ?? false;
 
-        _sendNotification(pName);
-        _playAzan();
+      // Reminder trigger time
+      final reminderTime = prayerTime.subtract(
+        Duration(minutes: reminderMinutes),
+      );
 
-        Timer(const Duration(seconds: 3), () {
-          _triggered = false;
-        });
+      // Trigger reminder notification
+      if (!_triggeredReminders.contains('${prayerName}_reminder') &&
+          now.hour == reminderTime.hour &&
+          now.minute == reminderTime.minute &&
+          now.second == reminderTime.second) {
+        _triggeredReminders.add('${prayerName}_reminder');
+
+        if (!muteReminder) {
+          _sendNotification('$prayerName in $reminderMinutes min');
+        }
       }
-    }
+
+      // Trigger Azan at prayer time
+      if (!_triggeredReminders.contains('${prayerName}_azan') &&
+          now.hour == prayerTime.hour &&
+          now.minute == prayerTime.minute &&
+          now.second == prayerTime.second) {
+        _triggeredReminders.add('${prayerName}_azan');
+
+        if (!muteAzan) {
+          _playAzan();
+        }
+      }
+
+      // Reset triggers after 1 minute to allow next day
+      Timer(const Duration(minutes: 1), () {
+        _triggeredReminders.remove('${prayerName}_reminder');
+        _triggeredReminders.remove('${prayerName}_azan');
+      });
+    });
   }
 
   // 📍 INIT GPS + PRAYER TIMES
@@ -184,7 +210,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
-
     final nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
     final remaining = nextPrayerTime.difference(now);
 
@@ -212,7 +237,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // UI COMPONENTS --------------------------------------------------------------
+  // ------------------------- UI COMPONENTS -----------------------------
 
   Widget _header(HijriCalendar hijri) {
     return Padding(
@@ -315,9 +340,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   Widget _prayerList() {
-    final prayers = {
+    final prayersMap = {
       'Fajr': prayerTimes!.fajr,
-      'Sunrise': prayerTimes!.sunrise,
       'Dhuhr': prayerTimes!.dhuhr,
       'Asr': prayerTimes!.asr,
       'Maghrib': prayerTimes!.maghrib,
@@ -326,43 +350,114 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     final currentPrayer = prayerTimes!.currentPrayer();
 
-    return ListView(
-      children: prayers.entries.map((entry) {
-        final isCurrent =
-            currentPrayer != Prayer.none &&
-            currentPrayer.name == entry.key.toLowerCase();
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        final prefs = snapshot.data;
 
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isCurrent ? Colors.green.withOpacity(0.15) : Colors.white,
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                entry.key,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                ),
+        return ListView(
+          children: prayersMap.entries.map((entry) {
+            final prayerName = entry.key;
+            final time = entry.value;
+
+            final isCurrent =
+                currentPrayer != Prayer.none &&
+                currentPrayer.name.toLowerCase() == prayerName.toLowerCase();
+
+            final reminderMinutes =
+                prefs?.getInt('${prayerName}_reminder') ?? 10;
+            final muteReminder =
+                prefs?.getBool('${prayerName}_muteReminder') ?? false;
+            final muteAzan = prefs?.getBool('${prayerName}_muteAzan') ?? false;
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: isCurrent
+                    ? Colors.green.withOpacity(0.15)
+                    : Colors.white,
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 5),
+                ],
               ),
-              Text(
-                DateFormat('hh:mm a').format(entry.value),
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        prayerName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: isCurrent
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('hh:mm a').format(time),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reminder: ${muteReminder ? "Muted" : "$reminderMinutes min before"}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          muteReminder
+                              ? Icons.notifications_off
+                              : Icons.notifications,
+                          color: Colors.orange,
+                        ),
+                        onPressed: () async {
+                          if (prefs == null) return;
+                          await prefs.setBool(
+                            '${prayerName}_muteReminder',
+                            !muteReminder,
+                          );
+                          setState(() {});
+                        },
+                        tooltip: 'Toggle Reminder',
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          muteAzan ? Icons.volume_off : Icons.volume_up,
+                          color: Colors.blue,
+                        ),
+                        onPressed: () async {
+                          if (prefs == null) return;
+                          await prefs.setBool(
+                            '${prayerName}_muteAzan',
+                            !muteAzan,
+                          );
+                          setState(() {});
+                        },
+                        tooltip: 'Toggle Azan',
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
-  // HELPERS ---------------------------------
-
+  // ------------------------- HELPERS -----------------------------
   String _prettyPrayerName(Prayer p) {
     switch (p) {
       case Prayer.fajr:

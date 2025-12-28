@@ -1,40 +1,42 @@
-// lib/features/prayer_times/prayer_settings.dart
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:adhan/adhan.dart';
 
 class PrayerSettings {
-  static const _keyPrefix = 'prayer_';
+  static const List<Prayer> prayers = [
+    Prayer.fajr,
+    Prayer.dhuhr,
+    Prayer.asr,
+    Prayer.maghrib,
+    Prayer.isha,
+  ];
 
-  /// Load all settings
   static Future<Map<Prayer, Map<String, dynamic>>> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final Map<Prayer, Map<String, dynamic>> settings = {};
+    final Map<Prayer, Map<String, dynamic>> map = {};
 
-    for (Prayer p in Prayer.values) {
-      final notify = prefs.getBool('${_keyPrefix}${p.name}_notify') ?? true;
-      final audio = prefs.getBool('${_keyPrefix}${p.name}_audio') ?? true;
-      final minutesBefore =
-          prefs.getInt('${_keyPrefix}${p.name}_minutes') ?? 10;
-
-      settings[p] = {
+    for (var p in prayers) {
+      final notify = prefs.getBool('${p.name}_notify') ?? true;
+      final audio = prefs.getBool('${p.name}_audio') ?? true;
+      final minutesBefore = prefs.getInt('${p.name}_minutesBefore') ?? 10;
+      map[p] = {
         "notify": notify,
         "audio": audio,
         "minutesBefore": minutesBefore,
       };
     }
-    return settings;
+
+    return map;
   }
 
-  /// Save single prayer setting
-  static Future<void> saveSetting(
-    Prayer prayer,
-    String key,
-    dynamic value,
+  static Future<void> saveSettings(
+    Prayer p,
+    bool notify,
+    bool audio,
+    int minutesBefore,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    final fullKey = '${_keyPrefix}${prayer.name}_$key';
-
-    if (value is bool) await prefs.setBool(fullKey, value);
-    if (value is int) await prefs.setInt(fullKey, value);
+    await prefs.setBool('${p.name}_notify', notify);
+    await prefs.setBool('${p.name}_audio', audio);
+    await prefs.setInt('${p.name}_minutesBefore', minutesBefore);
   }
 }
