@@ -59,7 +59,7 @@ dev_dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/images/logo.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -80,9 +80,7 @@ flutter:
 
   assets:
     - assets/mushaf/
-    - assets/compass.png
-    - assets/needle.png
-    - assets/islamic_pattern.png
+    - assets/images/islamic_pattern.png
     - assets/audio/azan.mp3
 
   # To add assets to your application, add an assets section, like this:
