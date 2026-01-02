@@ -5,9 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/notification_service.dart';
-import 'prayer_settings_screen.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -22,16 +21,21 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   DateTime now = DateTime.now();
   String _locationName = 'Loading...';
 
-  // Audio
-  final AudioPlayer _player = AudioPlayer();
-  bool isPlaying = false;
+  // Per-prayer mute settings
+  Map<Prayer, bool> mutePrayer = {
+    Prayer.fajr: false,
+    Prayer.dhuhr: false,
+    Prayer.asr: false,
+    Prayer.maghrib: false,
+    Prayer.isha: false,
+  };
 
   @override
   void initState() {
     super.initState();
     _initLocationAndPrayerTimes();
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => now = DateTime.now());
       _checkPrayerTrigger();
     });
@@ -40,11 +44,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _player.dispose();
     super.dispose();
   }
 
-  // 📍 INIT GPS + PRAYER TIMES
+  /// Initialize GPS + PrayerTimes
   Future<void> _initLocationAndPrayerTimes() async {
     final hasPermission = await _handleLocationPermission();
     if (!hasPermission) return;
@@ -61,45 +64,24 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final place = placemarks.first;
     final coordinates = Coordinates(position.latitude, position.longitude);
 
-    final params = CalculationMethod.muslim_world_league.getParameters()
+    final params = CalculationMethod.muslimWorldLeague.getParameters()
       ..madhab = Madhab.shafi;
-
-    final today = DateTime.now();
 
     setState(() {
       _locationName = place.locality ?? place.administrativeArea ?? 'Unknown';
-
       prayerTimes = PrayerTimes(
         coordinates,
-        DateComponents.from(today),
+        DateComponents.from(DateTime.now()),
         params,
       );
     });
 
     // Schedule reminders for all prayers
-    _schedulePrayerReminders();
+    _scheduleAllReminders();
   }
 
-  // 🔔 Schedule reminders for all prayers
-  void _schedulePrayerReminders() {
-    if (prayerTimes == null) return;
-
-    final prayersMap = {
-      Prayer.fajr: prayerTimes!.fajr,
-      Prayer.dhuhr: prayerTimes!.dhuhr,
-      Prayer.asr: prayerTimes!.asr,
-      Prayer.maghrib: prayerTimes!.maghrib,
-      Prayer.isha: prayerTimes!.isha,
-    };
-
-    prayersMap.forEach((prayer, time) {
-      NotificationService.schedulePrayerReminder(prayer, time);
-    });
-  }
-
-  // 🛑 PRAYER TIME TRIGGER
+  /// Check prayer trigger and play Azan
   bool _triggered = false;
-
   void _checkPrayerTrigger() {
     if (prayerTimes == null) return;
 
@@ -115,20 +97,61 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       if (now.hour == time.hour &&
           now.minute == time.minute &&
           now.second == time.second &&
-          !_triggered) {
+          !_triggered &&
+          !mutePrayer[prayer]!) {
         _triggered = true;
 
-        // Play Azan if not muted
-        await NotificationService.playAzan(prayer);
+        // Play Azan
+        await NotificationService.playAzan();
 
-        Future.delayed(const Duration(seconds: 1), () {
-          _triggered = false;
-        });
+        // Optional: show local notification
+        await NotificationService.scheduleReminder(
+          id: prayer.index,
+          title: 'Prayer Time',
+          body: 'It is time for ${_prettyPrayerName(prayer)}',
+          dateTime: now,
+        );
+
+        Timer(const Duration(seconds: 3), () => _triggered = false);
       }
     });
   }
 
-  // 🔐 LOCATION PERMISSION
+  /// Schedule reminders (5,10,15,20,25,30 minutes before)
+  Future<void> _scheduleAllReminders() async {
+    if (prayerTimes == null) return;
+
+    final reminders = [5, 10, 15, 20, 25, 30]; // minutes before
+    final prayers = {
+      Prayer.fajr: prayerTimes!.fajr,
+      Prayer.dhuhr: prayerTimes!.dhuhr,
+      Prayer.asr: prayerTimes!.asr,
+      Prayer.maghrib: prayerTimes!.maghrib,
+      Prayer.isha: prayerTimes!.isha,
+    };
+
+    int notificationId = 100; // starting ID for reminders
+
+    for (var entry in prayers.entries) {
+      final prayer = entry.key;
+      final time = entry.value;
+
+      for (var minutesBefore in reminders) {
+        final reminderTime = time.subtract(Duration(minutes: minutesBefore));
+
+        if (reminderTime.isAfter(DateTime.now()) && !mutePrayer[prayer]!) {
+          await NotificationService.scheduleReminder(
+            id: notificationId++,
+            title: 'Upcoming Prayer',
+            body: '${_prettyPrayerName(prayer)} in $minutesBefore minutes',
+            dateTime: reminderTime,
+          );
+        }
+      }
+    }
+  }
+
+  /// Location permission
   Future<bool> _handleLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
@@ -142,6 +165,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         permission == LocationPermission.whileInUse;
   }
 
+  /// ------------------ UI BUILD ------------------
   @override
   Widget build(BuildContext context) {
     if (prayerTimes == null) {
@@ -152,7 +176,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
-
     final nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
     final remaining = nextPrayerTime.difference(now);
 
@@ -167,20 +190,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
             _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
             const SizedBox(height: 8),
             Expanded(child: _prayerList()),
-            if (isPlaying)
-              ElevatedButton(
-                onPressed: () => _player.stop(),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text("Stop Azan"),
-              ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  // -------------------- UI COMPONENTS --------------------
+  // ------------------ UI COMPONENTS ------------------
 
   Widget _header(HijriCalendar hijri) {
     return Padding(
@@ -285,7 +301,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   Widget _prayerList() {
     final prayers = {
       'Fajr': prayerTimes!.fajr,
-      'Sunrise': prayerTimes!.sunrise,
       'Dhuhr': prayerTimes!.dhuhr,
       'Asr': prayerTimes!.asr,
       'Maghrib': prayerTimes!.maghrib,
@@ -298,7 +313,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       children: prayers.entries.map((entry) {
         final isCurrent =
             currentPrayer != Prayer.none &&
-            currentPrayer.name == entry.key.toLowerCase();
+            currentPrayer.name.toLowerCase() == entry.key.toLowerCase();
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -318,9 +333,29 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
-              Text(
-                DateFormat('hh:mm a').format(entry.value),
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  Text(
+                    DateFormat('hh:mm a').format(entry.value),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 8),
+                  // Toggle mute for prayer
+                  IconButton(
+                    icon: Icon(
+                      mutePrayer[_stringToPrayer(entry.key)]!
+                          ? Icons.volume_off
+                          : Icons.volume_up,
+                      color: Colors.green,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        mutePrayer[_stringToPrayer(entry.key)] =
+                            !mutePrayer[_stringToPrayer(entry.key)]!;
+                      });
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -329,14 +364,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  // -------------------- HELPERS --------------------
+  // ------------------ HELPERS ------------------
 
   String _prettyPrayerName(Prayer p) {
     switch (p) {
       case Prayer.fajr:
         return 'Fajr';
-      case Prayer.sunrise:
-        return 'Sunrise';
       case Prayer.dhuhr:
         return 'Dhuhr';
       case Prayer.asr:
@@ -355,5 +388,22 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final m = (d.inMinutes % 60).toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '$h:$m:$s';
+  }
+
+  Prayer _stringToPrayer(String s) {
+    switch (s.toLowerCase()) {
+      case 'fajr':
+        return Prayer.fajr;
+      case 'dhuhr':
+        return Prayer.dhuhr;
+      case 'asr':
+        return Prayer.asr;
+      case 'maghrib':
+        return Prayer.maghrib;
+      case 'isha':
+        return Prayer.isha;
+      default:
+        return Prayer.fajr;
+    }
   }
 }

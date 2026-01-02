@@ -1,10 +1,8 @@
-import 'package:adhan/adhan.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../features/prayer_times/prayer_times_screen.dart';
-import '../features/prayer_times/prayer_settings_screen.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:just_audio/just_audio.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -12,79 +10,77 @@ class NotificationService {
 
   static final AudioPlayer _audioPlayer = AudioPlayer();
 
-  /// Initialize notification plugin
+  /// Initialize notifications & timezone
   static Future<void> init() async {
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Timezone setup
+    tz.initializeTimeZones();
+    final String localTimeZone = await FlutterNativeTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(localTimeZone));
 
-    const InitializationSettings settings = InitializationSettings(
+    // Notification settings
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    const iOSSettings = DarwinInitializationSettings();
+
+    const initSettings = InitializationSettings(
       android: androidSettings,
+      iOS: iOSSettings,
     );
 
-    await _notifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: (response) {
-        // Optional: handle notification tap
-      },
-    );
+    await _notifications.initialize(initSettings);
   }
 
-  /// Schedule a reminder notification
-  /// [prayer] – which prayer
-  /// [prayerTime] – exact DateTime of prayer
-  static Future<void> schedulePrayerReminder(
-    Prayer prayer,
-    DateTime prayerTime,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
+  /// Schedule reminder or Azan
+  static Future<void> scheduleReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime dateTime,
+  }) async {
+    final tz.TZDateTime tzTime = tz.TZDateTime.from(dateTime, tz.local);
 
-    // Load prayer settings
-    final setting = await PrayerSettingsScreen.getPrayerSettings(prayer);
-
-    if (setting.muteReminder) return; // Skip if muted
-
-    final reminderTime = prayerTime.subtract(
-      Duration(minutes: setting.reminderMinutes),
-    );
-
-    // Notification ID (unique per prayer)
-    final id = prayer.index;
-
-    final androidDetails = AndroidNotificationDetails(
+    const androidDetails = AndroidNotificationDetails(
       'prayer_channel',
       'Prayer Notifications',
-      channelDescription: 'Reminders for prayers',
+      channelDescription: 'Reminders and Azan notifications for prayers',
       importance: Importance.max,
       priority: Priority.high,
-      playSound: false, // sound handled manually
+      playSound: false,
+      enableVibration: true,
     );
 
-    final notificationDetails = NotificationDetails(android: androidDetails);
+    const iosDetails = DarwinNotificationDetails(presentSound: false);
 
     await _notifications.zonedSchedule(
       id,
-      'Prayer Reminder',
-      '${prayer.name} prayer in ${setting.reminderMinutes} min',
-      tz.TZDateTime.from(reminderTime, tz.local),
-      notificationDetails,
-      androidAllowWhileIdle: true,
+      title,
+      body,
+      tzTime,
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+      androidAllowWhileIdle: true,
     );
   }
 
-  /// Trigger Azan audio at prayer time
-  static Future<void> playAzan(Prayer prayer) async {
-    final setting = await PrayerSettingsScreen.getPrayerSettings(prayer);
-    if (setting.muteAzan) return;
-
-    // Play Azan audio
-    await _audioPlayer.play(AssetSource('azan.mp3'));
+  /// Play Azan audio
+  static Future<void> playAzan() async {
+    try {
+      await _audioPlayer.setAsset('assets/audio/azan.mp3');
+      await _audioPlayer.play();
+    } catch (e) {
+      print('Error playing Azan: $e');
+    }
   }
 
-  /// Cancel all scheduled reminders
-  static Future<void> cancelAllReminders() async {
+  /// Cancel all notifications (optional)
+  static Future<void> cancelAll() async {
     await _notifications.cancelAll();
+  }
+
+  /// Cancel a single notification by ID
+  static Future<void> cancel(int id) async {
+    await _notifications.cancel(id);
   }
 }
