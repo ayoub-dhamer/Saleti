@@ -5,7 +5,7 @@ import 'utils/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize notification service
+  // Initialize notifications + timezone
   await NotificationService.init();
 
   runApp(const SaletiApp());

@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'prayer_settings.dart';
+import '../../utils/notification_service.dart';
 
 class PrayerSettingsScreen extends StatefulWidget {
   const PrayerSettingsScreen({super.key});
@@ -11,131 +9,86 @@ class PrayerSettingsScreen extends StatefulWidget {
 }
 
 class _PrayerSettingsScreenState extends State<PrayerSettingsScreen> {
-  final List<String> prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-  final Map<String, PrayerSettings> settings = {};
+  Map<String, Map<String, bool>> _settings = {};
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadSettings();
   }
 
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    for (final prayer in prayers) {
-      final jsonStr = prefs.getString('settings_$prayer');
-      if (jsonStr != null) {
-        settings[prayer] = PrayerSettings.fromMap(jsonDecode(jsonStr));
-      } else {
-        settings[prayer] = PrayerSettings.defaults();
-      }
-    }
-
-    setState(() {});
+  /// Load saved mute settings from NotificationService
+  void _loadSettings() {
+    setState(() {
+      _settings = Map.from(NotificationService.prayerSettings);
+    });
   }
 
-  Future<void> _save(String prayer) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'settings_$prayer',
-      jsonEncode(settings[prayer]!.toMap()),
-    );
+  /// Toggle reminder or Azan for a prayer
+  void _toggle(String prayer, String type) {
+    setState(() {
+      _settings[prayer]![type] = !_settings[prayer]![type]!;
+      NotificationService.updatePrayerSetting(
+        prayer,
+        type,
+        _settings[prayer]![type]!,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (settings.length != prayers.length) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Prayer Notifications'),
-        backgroundColor: Colors.green,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: prayers.map(_prayerTile).toList(),
-      ),
-    );
-  }
+      appBar: AppBar(title: const Text('Prayer Notifications')),
+      body: ListView.builder(
+        itemCount: prayers.length,
+        itemBuilder: (context, index) {
+          final prayer = prayers[index];
+          final settings = _settings[prayer]!;
 
-  Widget _prayerTile(String prayer) {
-    final s = settings[prayer]!;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              prayer,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-
-            SwitchListTile(
-              title: const Text('Reminder'),
-              value: s.reminderEnabled,
-              onChanged: (v) {
-                setState(() {
-                  settings[prayer] = PrayerSettings(
-                    reminderEnabled: v,
-                    reminderMinutes: s.reminderMinutes,
-                    adhanEnabled: s.adhanEnabled,
-                  );
-                });
-                _save(prayer);
-              },
-            ),
-
-            if (s.reminderEnabled)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DropdownButtonFormField<int>(
-                  value: s.reminderMinutes,
-                  decoration: const InputDecoration(
-                    labelText: 'Minutes before',
-                  ),
-                  items: const [5, 10, 15, 20, 25, 30]
-                      .map(
-                        (m) => DropdownMenuItem(
-                          value: m,
-                          child: Text('$m minutes'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      settings[prayer] = PrayerSettings(
-                        reminderEnabled: s.reminderEnabled,
-                        reminderMinutes: v!,
-                        adhanEnabled: s.adhanEnabled,
-                      );
-                    });
-                    _save(prayer);
-                  },
+            child: ListTile(
+              title: Text(
+                prayer[0].toUpperCase() + prayer.substring(1),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-
-            SwitchListTile(
-              title: const Text('Adhan'),
-              value: s.adhanEnabled,
-              onChanged: (v) {
-                setState(() {
-                  settings[prayer] = PrayerSettings(
-                    reminderEnabled: s.reminderEnabled,
-                    reminderMinutes: s.reminderMinutes,
-                    adhanEnabled: v,
-                  );
-                });
-                _save(prayer);
-              },
+              subtitle: Row(
+                children: [
+                  Row(
+                    children: [
+                      const Text('Reminder'),
+                      Switch(
+                        value: settings['reminder']!,
+                        onChanged: (_) => _toggle(prayer, 'reminder'),
+                        activeColor: Colors.green,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Row(
+                    children: [
+                      const Text('Azan'),
+                      Switch(
+                        value: settings['azan']!,
+                        onChanged: (_) => _toggle(prayer, 'azan'),
+                        activeColor: Colors.green,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

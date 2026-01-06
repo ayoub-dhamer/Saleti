@@ -1,86 +1,91 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
-import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:just_audio/just_audio.dart';
+import 'package:timezone/data/latest_all.dart' as tzData;
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
-  static final AudioPlayer _audioPlayer = AudioPlayer();
+  /// ⚙️ Per-prayer settings: reminder and azan mute toggles
+  /// Example usage:
+  /// NotificationService.prayerSettings['fajr'] = {'reminder': true, 'azan': true};
+  static Map<String, Map<String, bool>> prayerSettings = {
+    'fajr': {'reminder': true, 'azan': true},
+    'dhuhr': {'reminder': true, 'azan': true},
+    'asr': {'reminder': true, 'azan': true},
+    'maghrib': {'reminder': true, 'azan': true},
+    'isha': {'reminder': true, 'azan': true},
+  };
 
-  /// Initialize notifications & timezone
-  static Future<void> init() async {
-    // Timezone setup
-    tz.initializeTimeZones();
-    final String localTimeZone = await FlutterNativeTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(localTimeZone));
-
-    // Notification settings
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iOSSettings = DarwinInitializationSettings();
-
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iOSSettings,
-    );
-
-    await _notifications.initialize(initSettings);
+  static void updatePrayerSetting(String prayer, String type, bool value) {
+    prayerSettings[prayer]![type] = value;
   }
 
-  /// Schedule reminder or Azan
-  static Future<void> scheduleReminder({
-    required int id,
+  static Future<void> init() async {
+    tzData.initializeTimeZones();
+    tz.setLocalLocation(tz.local);
+
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+    );
+
+    await _notifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (response) {
+        // Optional: handle tap
+      },
+    );
+  }
+
+  /// 🔹 Show immediate notification
+  static Future<void> showNotification({
+    required String title,
+    required String body,
+    int id = 0,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'saleti_channel',
+          'Saleti Notifications',
+          channelDescription: 'Notifications for prayer times',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await _notifications.show(id, title, body, platformDetails);
+  }
+
+  /// 🔹 Schedule a notification at a specific DateTime
+  static Future<void> scheduleNotification({
     required String title,
     required String body,
     required DateTime dateTime,
+    int id = 0,
   }) async {
-    final tz.TZDateTime tzTime = tz.TZDateTime.from(dateTime, tz.local);
-
-    const androidDetails = AndroidNotificationDetails(
-      'prayer_channel',
-      'Prayer Notifications',
-      channelDescription: 'Reminders and Azan notifications for prayers',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: false,
-      enableVibration: true,
-    );
-
-    const iosDetails = DarwinNotificationDetails(presentSound: false);
-
     await _notifications.zonedSchedule(
       id,
       title,
       body,
-      tzTime,
-      NotificationDetails(android: androidDetails, iOS: iosDetails),
+      tz.TZDateTime.from(dateTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'saleti_channel',
+          'Saleti Notifications',
+          channelDescription: 'Notifications for prayer times',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
+      androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      androidAllowWhileIdle: true,
     );
-  }
-
-  /// Play Azan audio
-  static Future<void> playAzan() async {
-    try {
-      await _audioPlayer.setAsset('assets/audio/azan.mp3');
-      await _audioPlayer.play();
-    } catch (e) {
-      print('Error playing Azan: $e');
-    }
-  }
-
-  /// Cancel all notifications (optional)
-  static Future<void> cancelAll() async {
-    await _notifications.cancelAll();
-  }
-
-  /// Cancel a single notification by ID
-  static Future<void> cancel(int id) async {
-    await _notifications.cancel(id);
   }
 }

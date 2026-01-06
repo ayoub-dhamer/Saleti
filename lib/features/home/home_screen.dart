@@ -1,85 +1,91 @@
 import 'package:flutter/material.dart';
-import '../prayer_times/prayer_times_screen.dart';
-import '../quran/quran_screen.dart';
+import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 
-class HomeScreen extends StatelessWidget {
+import '../prayer_times/prayer_times_screen.dart';
+import '../hijri_calendar/hijri_calendar_screen.dart';
+import '../quran/quran_screen.dart';
+import '../qibla/qibla_screen.dart';
+import '../prayer_times/prayer_settings_screen.dart'; // <-- NEW
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int selected = 0;
+  late final PageController pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    pageController.dispose();
+    super.dispose();
+  }
+
+  final List<Widget> pages = const [
+    PrayerTimesScreen(),
+    HijriCalendarScreen(),
+    HijriCalendarScreen(),
+    QuranScreen(),
+    PrayerSettingsScreen(), // <-- NEW PAGE
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Saleti'), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _mainButton(
-              context,
-              icon: Icons.access_time,
-              title: 'Prayer Times',
-              subtitle: 'View today\'s prayers',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PrayerTimesScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _mainButton(
-              context,
-              icon: Icons.menu_book,
-              title: 'Qur\'an',
-              subtitle: 'Surahs & Mushaf',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const QuranScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+      body: PageView(
+        controller: pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: pages,
       ),
-    );
-  }
-
-  Widget _mainButton(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
+      bottomNavigationBar: StylishBottomBar(
+        option: BubbleBarOptions(
+          barStyle: BubbleBarStyle.horizontal,
+          bubbleFillStyle: BubbleFillStyle.fill,
+          opacity: 0.25,
         ),
-        child: Row(
-          children: [
-            Icon(icon, size: 40, color: Colors.green),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.black54)),
-              ],
-            ),
-          ],
-        ),
+        items: [
+          BottomBarItem(
+            icon: const Icon(Icons.access_time),
+            title: const Text('Prayers'),
+            backgroundColor: Colors.green,
+          ),
+          BottomBarItem(
+            icon: const Icon(Icons.calendar_month),
+            title: const Text('Hijri'),
+            backgroundColor: Colors.lightBlue,
+          ),
+          BottomBarItem(
+            icon: const Icon(Icons.explore),
+            title: const Text('Qibla'),
+            backgroundColor: Colors.greenAccent,
+          ),
+          BottomBarItem(
+            icon: const Icon(Icons.menu_book),
+            title: const Text('Quran'),
+            backgroundColor: Colors.lightBlueAccent,
+          ),
+          BottomBarItem(
+            icon: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            backgroundColor: Colors.orangeAccent,
+          ),
+        ],
+        currentIndex: selected,
+        onTap: (index) {
+          setState(() {
+            selected = index;
+            pageController.jumpToPage(index);
+          });
+        },
       ),
     );
   }
