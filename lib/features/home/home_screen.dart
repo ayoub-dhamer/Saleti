@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
     HijriCalendarScreen(),
     HijriCalendarScreen(),
     QuranScreen(),
-    PrayerSettingsScreen(), // <-- NEW PAGE
+    QuranScreen(), // <-- NEW PAGE
   ];
 
   @override

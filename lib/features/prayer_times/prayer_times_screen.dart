@@ -72,42 +72,39 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     };
 
     prayers.forEach((name, time) {
-      final settings = NotificationService.prayerSettings[name]!;
+      final setting = NotificationService.prayerSettings[name]!;
 
-      // Check Azan at exact prayer time
+      // Pre-prayer reminder
+      if (setting.reminderEnabled) {
+        final reminderTime = time.subtract(
+          Duration(minutes: setting.reminderMinutes),
+        );
+        if (now.hour == reminderTime.hour &&
+            now.minute == reminderTime.minute &&
+            now.second == reminderTime.second) {
+          NotificationService.showNotification(
+            title: 'Upcoming Prayer',
+            body:
+                '${_prettyPrayerName(name)} in ${setting.reminderMinutes} minutes',
+          );
+        }
+      }
+
+      // Prayer time notification & azan
       if (now.hour == time.hour &&
           now.minute == time.minute &&
           now.second == time.second &&
           !_triggered) {
         _triggered = true;
 
-        if (settings['azan']!) _playAzan();
-        if (settings['reminder']!) {
-          NotificationService.showNotification(
-            title: 'Prayer Time',
-            body: 'It is time for ${_prettyPrayerName(name)}',
-          );
-        }
+        if (setting.azanEnabled) _playAzan();
 
-        Timer(const Duration(seconds: 3), () {
-          _triggered = false;
-        });
-      }
+        NotificationService.showNotification(
+          title: 'Prayer Time',
+          body: 'It is time for ${_prettyPrayerName(name)}',
+        );
 
-      // Schedule pre-prayer reminders
-      if (settings['reminder']!) {
-        final preMinutes = [5, 10, 15, 20, 25, 30];
-        for (final minBefore in preMinutes) {
-          final reminderTime = time.subtract(Duration(minutes: minBefore));
-          if (now.hour == reminderTime.hour &&
-              now.minute == reminderTime.minute &&
-              now.second == reminderTime.second) {
-            NotificationService.showNotification(
-              title: 'Upcoming Prayer',
-              body: '${_prettyPrayerName(name)} in $minBefore minutes',
-            );
-          }
-        }
+        Timer(const Duration(seconds: 3), () => _triggered = false);
       }
     });
   }
@@ -310,9 +307,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     return ListView(
       children: prayers.entries.map((entry) {
+        final prayerKey = entry.key.toLowerCase();
+        final time = entry.value;
         final isCurrent =
-            currentPrayer != Prayer.none &&
-            currentPrayer.name == entry.key.toLowerCase();
+            currentPrayer != Prayer.none && currentPrayer.name == prayerKey;
+
+        final setting = NotificationService.prayerSettings[prayerKey]!;
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -325,21 +325,111 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                entry.key,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                ),
+              // Prayer name + time
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.key,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: isCurrent
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  Text(
+                    DateFormat('hh:mm a').format(time),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
-              Text(
-                DateFormat('hh:mm a').format(entry.value),
-                style: const TextStyle(fontWeight: FontWeight.w600),
+
+              // Reminder & Notification icons
+              Row(
+                children: [
+                  // Reminder
+                  InkWell(
+                    onTap: () async {
+                      if (!setting.reminderEnabled) {
+                        setting.reminderEnabled = true;
+                      }
+                      final newMinutes = await _showMinutesDialog(
+                        setting.reminderMinutes,
+                      );
+                      if (newMinutes != null) {
+                        setting.reminderMinutes = newMinutes;
+                      }
+                      setting.reminderEnabled = true;
+                      setState(() {});
+                      NotificationService.updatePrayerSetting(
+                        prayerKey,
+                        setting,
+                      );
+                    },
+                    child: Icon(
+                      Icons.alarm,
+                      color: setting.reminderEnabled
+                          ? Colors.green
+                          : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Azan/Notification
+                  IconButton(
+                    onPressed: () {
+                      setting.azanEnabled = !setting.azanEnabled;
+                      setState(() {});
+                      NotificationService.updatePrayerSetting(
+                        prayerKey,
+                        setting,
+                      );
+                    },
+                    icon: Icon(
+                      setting.azanEnabled
+                          ? Icons.notifications_active
+                          : Icons.notifications_off,
+                      color: setting.azanEnabled ? Colors.blue : Colors.grey,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         );
       }).toList(),
+    );
+  }
+
+  Future<int?> _showMinutesDialog(int currentMinutes) async {
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        int selected = currentMinutes;
+        return AlertDialog(
+          title: const Text('Select reminder minutes'),
+          content: DropdownButton<int>(
+            value: selected,
+            items: [5, 10, 15, 20, 25, 30]
+                .map((e) => DropdownMenuItem(value: e, child: Text('$e min')))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) selected = v;
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, selected),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -2,23 +2,33 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzData;
 
+class PrayerSettings {
+  bool reminderEnabled;
+  int reminderMinutes;
+  bool azanEnabled;
+
+  PrayerSettings({
+    this.reminderEnabled = true,
+    this.reminderMinutes = 10,
+    this.azanEnabled = true,
+  });
+}
+
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
-  /// ⚙️ Per-prayer settings: reminder and azan mute toggles
-  /// Example usage:
-  /// NotificationService.prayerSettings['fajr'] = {'reminder': true, 'azan': true};
-  static Map<String, Map<String, bool>> prayerSettings = {
-    'fajr': {'reminder': true, 'azan': true},
-    'dhuhr': {'reminder': true, 'azan': true},
-    'asr': {'reminder': true, 'azan': true},
-    'maghrib': {'reminder': true, 'azan': true},
-    'isha': {'reminder': true, 'azan': true},
+  /// ⚙️ Per-prayer settings
+  static Map<String, PrayerSettings> prayerSettings = {
+    'fajr': PrayerSettings(),
+    'dhuhr': PrayerSettings(),
+    'asr': PrayerSettings(),
+    'maghrib': PrayerSettings(),
+    'isha': PrayerSettings(),
   };
 
-  static void updatePrayerSetting(String prayer, String type, bool value) {
-    prayerSettings[prayer]![type] = value;
+  static void updatePrayerSetting(String prayer, PrayerSettings settings) {
+    prayerSettings[prayer] = settings;
   }
 
   static Future<void> init() async {
