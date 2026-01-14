@@ -2,33 +2,25 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzData;
 
-class PrayerSettings {
-  bool reminderEnabled;
-  int reminderMinutes;
-  bool azanEnabled;
-
-  PrayerSettings({
-    this.reminderEnabled = true,
-    this.reminderMinutes = 10,
-    this.azanEnabled = true,
-  });
-}
-
+/// Handles per-prayer notifications and Azan playback
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
-  /// ⚙️ Per-prayer settings
-  static Map<String, PrayerSettings> prayerSettings = {
-    'fajr': PrayerSettings(),
-    'dhuhr': PrayerSettings(),
-    'asr': PrayerSettings(),
-    'maghrib': PrayerSettings(),
-    'isha': PrayerSettings(),
+  /// Prayer settings: reminder + azan + minutes before
+  static Map<String, Map<String, dynamic>> prayerSettings = {
+    'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
+    'dhuhr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
+    'asr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
+    'maghrib': {'reminder': true, 'azan': true, 'minutesBefore': 10},
+    'isha': {'reminder': true, 'azan': true, 'minutesBefore': 10},
   };
 
-  static void updatePrayerSetting(String prayer, PrayerSettings settings) {
-    prayerSettings[prayer] = settings;
+  static void updatePrayerSetting(
+    String prayer,
+    Map<String, dynamic> newSettings,
+  ) {
+    prayerSettings[prayer] = newSettings;
   }
 
   static Future<void> init() async {
@@ -50,52 +42,81 @@ class NotificationService {
     );
   }
 
-  /// 🔹 Show immediate notification
-  static Future<void> showNotification({
+  /// Show simple reminder notification
+  static Future<void> showReminder({
     required String title,
     required String body,
     int id = 0,
   }) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'saleti_channel',
-          'Saleti Notifications',
-          channelDescription: 'Notifications for prayer times',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
+    const androidDetails = AndroidNotificationDetails(
+      'prayer_reminder_channel',
+      'Prayer Reminders',
+      channelDescription: 'Reminder notifications before prayer',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
     );
 
-    await _notifications.show(id, title, body, platformDetails);
-  }
-
-  /// 🔹 Schedule a notification at a specific DateTime
-  static Future<void> scheduleNotification({
-    required String title,
-    required String body,
-    required DateTime dateTime,
-    int id = 0,
-  }) async {
-    await _notifications.zonedSchedule(
+    await _notifications.show(
       id,
       title,
       body,
+      NotificationDetails(android: androidDetails),
+    );
+  }
+
+  /// Schedule Azan notification with custom sound
+  static Future<void> scheduleAzan({
+    required String prayer,
+    required DateTime dateTime,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'azan_channel',
+      'Azan Notifications',
+      channelDescription: 'Azan at prayer time',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('azan'),
+      fullScreenIntent: true, // optional: shows screen if needed
+      autoCancel: true,
+    );
+
+    await _notifications.zonedSchedule(
+      prayer.hashCode,
+      'Prayer Time',
+      'It is time for $prayer',
       tz.TZDateTime.from(dateTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'saleti_channel',
-          'Saleti Notifications',
-          channelDescription: 'Notifications for prayer times',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-      ),
+      NotificationDetails(android: androidDetails),
       androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+  }
+
+  /// Schedule both pre-prayer reminders and Azan
+  static Future<void> schedulePrayerNotifications(
+    String prayer,
+    DateTime prayerTime,
+  ) async {
+    final settings = prayerSettings[prayer]!;
+
+    // Reminder before prayer
+    if (settings['reminder'] == true) {
+      final minutes = settings['minutesBefore'] as int;
+      final reminderTime = prayerTime.subtract(Duration(minutes: minutes));
+      if (reminderTime.isAfter(DateTime.now())) {
+        await showReminder(
+          title: 'Upcoming Prayer',
+          body: '$prayer in $minutes minutes',
+          id: prayer.hashCode + 1,
+        );
+      }
+    }
+
+    // Schedule Azan
+    if (settings['azan'] == true && prayerTime.isAfter(DateTime.now())) {
+      await scheduleAzan(prayer: prayer, dateTime: prayerTime);
+    }
   }
 }
