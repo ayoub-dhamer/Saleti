@@ -25,10 +25,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
     _initLocationAndPrayerTimes();
 
-    // Update every second for countdown
+    // ⏱ Update clock only
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => now = DateTime.now());
-      _scheduleNotifications();
     });
   }
 
@@ -38,42 +37,42 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.dispose();
   }
 
-  /// ----------------- LOCATION & PRAYER TIMES -----------------
+  /// ---------------- LOCATION ----------------
   Future<void> _initLocationAndPrayerTimes() async {
     final hasPermission = await _handleLocationPermission();
     if (!hasPermission) return;
 
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+    final position = await Geolocator.getCurrentPosition();
 
     final placemarks = await placemarkFromCoordinates(
       position.latitude,
       position.longitude,
     );
 
-    final place = placemarks.first;
-
     final coordinates = Coordinates(position.latitude, position.longitude);
-
-    final params = CalculationParameters(fajrAngle: 18.0, ishaAngle: 17.0)
+    final params = CalculationParameters(fajrAngle: 18, ishaAngle: 17)
       ..madhab = Madhab.shafi;
 
     setState(() {
-      _locationName = place.locality ?? place.administrativeArea ?? 'Unknown';
+      _locationName =
+          placemarks.first.locality ??
+          placemarks.first.administrativeArea ??
+          'Unknown';
+
       prayerTimes = PrayerTimes(
         coordinates,
         DateComponents.from(DateTime.now()),
         params,
       );
     });
+
+    _scheduleAllNotifications(); // ✅ schedule once
   }
 
   Future<bool> _handleLocationPermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
+    if (!await Geolocator.isLocationServiceEnabled()) return false;
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
@@ -82,11 +81,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         permission == LocationPermission.whileInUse;
   }
 
-  /// ----------------- SCHEDULE NOTIFICATIONS -----------------
-  void _scheduleNotifications() {
+  /// ---------------- SCHEDULING ----------------
+  void _scheduleAllNotifications() {
     if (prayerTimes == null) return;
 
-    final prayers = {
+    final map = {
       'fajr': prayerTimes!.fajr,
       'dhuhr': prayerTimes!.dhuhr,
       'asr': prayerTimes!.asr,
@@ -94,12 +93,23 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       'isha': prayerTimes!.isha,
     };
 
-    prayers.forEach((name, time) {
-      NotificationService.schedulePrayerNotifications(name, time);
+    map.forEach((prayer, time) {
+      final setting = NotificationService.prayerSettings[prayer]!;
+
+      if (setting['reminder'] == true) {
+        final minutes = setting['minutesBefore'] as int;
+        final reminderTime = time.subtract(Duration(minutes: minutes));
+
+        NotificationService.showReminder(prayer, minutes);
+      }
+
+      if (setting['azan'] == true) {
+        NotificationService.showAzan(prayer);
+      }
     });
   }
 
-  /// ----------------- WIDGETS -----------------
+  /// ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     if (prayerTimes == null) {
@@ -110,6 +120,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
+
     final nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
     final remaining = nextPrayerTime.difference(now);
 
@@ -132,7 +143,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
   Widget _header(HijriCalendar hijri) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -142,10 +153,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
               const SizedBox(width: 6),
               Text(
                 _locationName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -167,7 +175,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  /// ----------------- CLOCK CIRCLE -----------------
+  /// 🕒 Circle Clock
   Widget _clockCircle() {
     return Container(
       width: 220,
@@ -202,29 +210,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Upcoming Prayer',
-                style: TextStyle(color: Colors.green),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${_prettyPrayerName(nextPrayer.name)} at ${DateFormat('hh:mm a').format(time)}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          Text(
+            '${_pretty(nextPrayer.name)} at ${DateFormat('hh:mm a').format(time)}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           Text(
             _formatDuration(remaining),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.green,
-            ),
+            style: const TextStyle(color: Colors.green),
           ),
         ],
       ),
@@ -233,93 +225,63 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
   Widget _prayerList() {
     final prayers = {
-      'Fajr': prayerTimes!.fajr,
-      'Dhuhr': prayerTimes!.dhuhr,
-      'Asr': prayerTimes!.asr,
-      'Maghrib': prayerTimes!.maghrib,
-      'Isha': prayerTimes!.isha,
+      'fajr': prayerTimes!.fajr,
+      'dhuhr': prayerTimes!.dhuhr,
+      'asr': prayerTimes!.asr,
+      'maghrib': prayerTimes!.maghrib,
+      'isha': prayerTimes!.isha,
     };
-
-    final currentPrayer = prayerTimes!.currentPrayer();
 
     return ListView(
       children: prayers.entries.map((entry) {
-        final prayerKey = entry.key.toLowerCase();
-        final time = entry.value;
-        final isCurrent =
-            currentPrayer != Prayer.none && currentPrayer.name == prayerKey;
-
-        final setting = NotificationService.prayerSettings[prayerKey]!;
+        final setting = NotificationService.prayerSettings[entry.key]!;
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          margin: const EdgeInsets.all(10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: isCurrent ? Colors.green.withOpacity(0.15) : Colors.white,
+            color: Colors.white,
             boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Prayer name + time
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.key,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: isCurrent
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
+                    _pretty(entry.key),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    DateFormat('hh:mm a').format(time),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  Text(DateFormat('hh:mm a').format(entry.value)),
                 ],
               ),
-
-              // Reminder & Azan icons
               Row(
                 children: [
-                  // Reminder
-                  InkWell(
-                    onTap: () async {
-                      final newMinutes = await _showMinutesDialog(
-                        setting['minutesBefore'] as int,
-                      );
-                      if (newMinutes != null) {
-                        setting['minutesBefore'] = newMinutes;
-                        setting['reminder'] = true;
-                        setState(() {});
-                        NotificationService.updatePrayerSetting(
-                          prayerKey,
-                          setting,
-                        );
-                      }
-                    },
-                    child: Icon(
+                  // ⏰ Reminder
+                  IconButton(
+                    icon: Icon(
                       Icons.alarm,
                       color: setting['reminder'] == true
                           ? Colors.green
                           : Colors.grey,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Azan toggle
-                  IconButton(
-                    onPressed: () {
-                      setting['azan'] = !(setting['azan'] as bool);
-                      setState(() {});
-                      NotificationService.updatePrayerSetting(
-                        prayerKey,
-                        setting,
+                    onPressed: () async {
+                      final minutes = await _showMinutesDialog(
+                        setting['minutesBefore'] as int,
                       );
+                      if (minutes != null) {
+                        setting['minutesBefore'] = minutes;
+                        setting['reminder'] = true;
+                        setState(() {});
+                        _scheduleAllNotifications();
+                      }
                     },
+                  ),
+
+                  // 🔔 Azan
+                  IconButton(
                     icon: Icon(
                       setting['azan'] == true
                           ? Icons.notifications_active
@@ -328,6 +290,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                           ? Colors.blue
                           : Colors.grey,
                     ),
+                    onPressed: () {
+                      setting['azan'] = !(setting['azan'] as bool);
+                      setState(() {});
+                      _scheduleAllNotifications();
+                    },
                   ),
                 ],
               ),
@@ -338,23 +305,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     );
   }
 
-  /// ----------------- HELPERS -----------------
-  String _prettyPrayerName(String name) {
-    switch (name) {
-      case 'fajr':
-        return 'Fajr';
-      case 'dhuhr':
-        return 'Dhuhr';
-      case 'asr':
-        return 'Asr';
-      case 'maghrib':
-        return 'Maghrib';
-      case 'isha':
-        return 'Isha';
-      default:
-        return '';
-    }
-  }
+  /// ---------------- HELPERS ----------------
+  String _pretty(String name) => name[0].toUpperCase() + name.substring(1);
 
   String _formatDuration(Duration d) {
     final h = d.inHours.toString().padLeft(2, '0');
@@ -363,32 +315,32 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     return '$h:$m:$s';
   }
 
-  Future<int?> _showMinutesDialog(int currentMinutes) async {
+  Future<int?> _showMinutesDialog(int current) {
     return showDialog<int>(
       context: context,
-      builder: (context) {
-        int selected = currentMinutes;
-        return AlertDialog(
-          title: const Text('Select reminder minutes'),
-          content: DropdownButton<int>(
-            value: selected,
-            items: [5, 10, 15, 20, 25, 30]
-                .map((e) => DropdownMenuItem(value: e, child: Text('$e min')))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) selected = v;
-            },
+      builder: (_) {
+        int selected = current;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: const Text('Reminder Minutes'),
+            content: DropdownButton<int>(
+              value: selected,
+              items: [5, 10, 15, 20, 25, 30]
+                  .map((e) => DropdownMenuItem(value: e, child: Text('$e min')))
+                  .toList(),
+              onChanged: (v) => setStateDialog(() => selected = v ?? selected),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: const Text('Save'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, selected),
-              child: const Text('Save'),
-            ),
-          ],
         );
       },
     );
