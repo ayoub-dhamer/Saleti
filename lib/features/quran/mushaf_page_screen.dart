@@ -11,7 +11,7 @@ class MushafPageScreen extends StatefulWidget {
 }
 
 class _MushafPageScreenState extends State<MushafPageScreen> {
-  late PageController _pageController;
+  PageController? _pageController;
   int _currentPage = 1;
   Set<int> _bookmarkedPages = {};
 
@@ -19,14 +19,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   void initState() {
     super.initState();
     _initPage();
+    _loadBookmarks();
   }
 
   Future<void> _initPage() async {
     final lastPage = await _loadLastPage();
 
+    _pageController = PageController(initialPage: lastPage - 1);
+
     setState(() {
       _currentPage = lastPage;
-      _pageController = PageController(initialPage: lastPage - 1);
     });
   }
 
@@ -39,8 +41,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     for (final item in list) {
       final parts = item.split('|');
-
-      // ✅ STRICT validation
       if (parts.length != 3) continue;
 
       final page = int.tryParse(parts[0]);
@@ -49,9 +49,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       pages.add(page);
     }
 
-    setState(() {
-      _bookmarkedPages = pages;
-    });
+    setState(() => _bookmarkedPages = pages);
   }
 
   /// 🔹 Save last page
@@ -66,7 +64,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   /// 🔹 Add bookmark
-  Future<void> _addBookmark(int page) async {
+  Future<void> _toggleBookmark(int page) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
 
@@ -74,26 +72,22 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final date =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    final surahName = 'Surah'; // placeholder
+    final surahName = 'Surah'; // TODO: replace later
     final key = '$page|$surahName|$date';
 
-    // ✅ Only compare full page number safely
-    final exists = list.any((e) {
+    final existsIndex = list.indexWhere((e) {
       final parts = e.split('|');
       return parts.length == 3 && parts[0] == page.toString();
     });
 
-    if (!exists) {
+    if (existsIndex >= 0) {
+      list.removeAt(existsIndex);
+    } else {
       list.add(key);
-      await prefs.setStringList('mushaf_bookmarks', list);
-      _loadBookmarks();
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Page $page bookmarked')));
-      }
     }
+
+    await prefs.setStringList('mushaf_bookmarks', list);
+    _loadBookmarks();
   }
 
   @override
@@ -105,68 +99,170 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final isBookmarked = _bookmarkedPages.contains(_currentPage);
 
     return Scaffold(
-      backgroundColor: isBookmarked
-          ? const Color(0xffeaf6ee)
-          : const Color(0xfffdf8ef),
-      appBar: AppBar(
-        backgroundColor: Colors.green,
-        title: Text('Page $_currentPage'),
-        actions: [
-          IconButton(
-            icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_add),
-            onPressed: () => _addBookmark(_currentPage),
-          ),
-        ],
-      ),
-      body: Stack(
+      backgroundColor: const Color(0xfff7f3ea),
+
+      body: Column(
         children: [
-          PageView.builder(
-            controller: _pageController,
-            reverse: true,
-            itemCount: 604,
-            onPageChanged: (index) {
-              final page = index + 1;
+          /// 🌿 BEAUTIFUL TOP HEADER
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xff1fa463), Color(0xff157347)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+            ),
+            child: Row(
+              children: [
+                /// 📖 Surah Name
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Al-Qur’an',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Page $_currentPage',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
 
-              setState(() {
-                _currentPage = page;
-              });
+                const Spacer(),
 
-              _saveLastPage(page);
-            },
-            itemBuilder: (context, index) {
-              final pageNumber = index + 1;
-              final highlighted = _bookmarkedPages.contains(pageNumber);
-
-              return Container(
-                color: highlighted
-                    ? const Color(0xffeaf6ee)
-                    : const Color(0xfffdf8ef),
-                child: InteractiveViewer(
-                  maxScale: 3,
-                  child: Image.asset(
-                    'assets/mushaf/$pageNumber.png',
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    height: double.infinity,
+                /// 📄 Page Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Text(
+                    '$_currentPage / 604',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              );
-            },
+
+                const SizedBox(width: 12),
+
+                /// 🔖 Bookmark Button
+                GestureDetector(
+                  onTap: () => _toggleBookmark(_currentPage),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isBookmarked
+                          ? Colors.amber.shade400
+                          : Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isBookmarked
+                              ? Icons.bookmark
+                              : Icons.bookmark_outline,
+                          size: 18,
+                          color: isBookmarked ? Colors.black : Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isBookmarked ? 'Saved' : 'Save',
+                          style: TextStyle(
+                            color: isBookmarked ? Colors.black : Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          // 🔖 Bookmark indicator
-          if (isBookmarked)
-            Positioned(
-              top: 16,
-              right: 16,
-              child: Icon(
-                Icons.bookmark,
-                color: Colors.green.shade700,
-                size: 32,
-              ),
+          /// 📖 READING AREA (FULLSCREEN)
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              reverse: true,
+              itemCount: 604,
+              onPageChanged: (index) {
+                final page = index + 1;
+                setState(() => _currentPage = page);
+                _saveLastPage(page);
+              },
+              itemBuilder: (context, index) {
+                final pageNumber = index + 1;
+                final highlighted = _bookmarkedPages.contains(pageNumber);
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    InteractiveViewer(
+                      maxScale: 3,
+                      child: Image.asset(
+                        'assets/mushaf/$pageNumber.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+
+                    /// 🎀 Corner Ribbon Bookmark (Elegant)
+                    if (highlighted)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: CustomPaint(
+                          painter: _BookmarkRibbonPainter(),
+                          size: const Size(70, 70),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
+          ),
         ],
       ),
     );
   }
+}
+
+class _BookmarkRibbonPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.amber.shade400
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, 0)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

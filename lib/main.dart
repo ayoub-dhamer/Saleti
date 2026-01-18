@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
+import 'utils/prayer_cache.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await PrayerCache().load();
   // Initialize notifications + timezone
   await NotificationService.init();
 

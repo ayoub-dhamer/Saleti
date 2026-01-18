@@ -9,60 +9,120 @@ class QuranScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
-        title: const Text('Al-Qur’an'),
+        elevation: 0,
         centerTitle: true,
-        backgroundColor: Colors.green,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _mainButton(
-              context,
-              icon: Icons.menu_book,
-              title: 'Surah List',
-              subtitle: 'Browse all surahs',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SurahListScreen()),
-                );
-              },
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 16),
-            _mainButton(
-              context,
-              icon: Icons.auto_stories,
-              title: 'Read Mushaf',
-              subtitle: '604 authentic pages',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MushafPageScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _mainButton(
-              context,
-              icon: Icons.bookmark,
-              title: 'Bookmarks',
-              subtitle: 'Saved Mushaf pages',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-                );
-              },
-            ),
-          ],
+          ),
         ),
+        title: const Text(
+          'Al-Qur’an',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Column(
+        children: [
+          _header(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _mainCard(
+                  context,
+                  icon: Icons.menu_book_rounded,
+                  title: 'Surah List',
+                  subtitle: 'Browse all 114 surahs',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SurahListScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _mainCard(
+                  context,
+                  icon: Icons.auto_stories_rounded,
+                  title: 'Read Mushaf',
+                  subtitle: '604 authentic pages',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MushafPageScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _mainCard(
+                  context,
+                  icon: Icons.bookmark_rounded,
+                  title: 'Bookmarks',
+                  subtitle: 'Saved Mushaf pages',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BookmarksScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _mainButton(
+  /// 🌿 Top Header
+  Widget _header() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Read & Explore',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'The Holy Qur’an at your fingertips',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 📘 Main Card Button
+  Widget _mainCard(
     BuildContext context, {
     required IconData icon,
     required String title,
@@ -70,31 +130,53 @@ class QuranScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 10,
+              offset: Offset(0, 4),
+              color: Colors.black12,
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 40, color: Colors.green),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 30, color: Colors.green),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.black54)),
-              ],
+                  const SizedBox(height: 6),
+                  Text(subtitle, style: TextStyle(color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 28,
+              color: Colors.grey,
             ),
           ],
         ),

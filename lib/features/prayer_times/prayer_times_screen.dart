@@ -6,6 +6,7 @@ import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../utils/notification_service.dart';
+import '../../utils/prayer_cache.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -39,6 +40,26 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
   /// ---------------- LOCATION ----------------
   Future<void> _initLocationAndPrayerTimes() async {
+    final cache = PrayerCache();
+
+    // ✅ If location already saved — use it instantly
+    if (cache.hasLocation) {
+      final times = cache.calculatePrayerTimes();
+
+      setState(() {
+        prayerTimes = times;
+        _locationName = cache.locationName!;
+      });
+
+      _scheduleAllNotifications();
+      return;
+    }
+
+    // ❌ First launch only → request GPS
+    await _refreshLocation();
+  }
+
+  Future<void> _refreshLocation() async {
     final hasPermission = await _handleLocationPermission();
     if (!hasPermission) return;
 
@@ -49,24 +70,27 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       position.longitude,
     );
 
-    final coordinates = Coordinates(position.latitude, position.longitude);
-    final params = CalculationParameters(fajrAngle: 18, ishaAngle: 17)
-      ..madhab = Madhab.shafi;
+    final location =
+        placemarks.first.locality ??
+        placemarks.first.administrativeArea ??
+        'Unknown';
+
+    final cache = PrayerCache();
+
+    await cache.save(
+      lat: position.latitude,
+      lng: position.longitude,
+      locationName: location,
+    );
+
+    final times = cache.calculatePrayerTimes();
 
     setState(() {
-      _locationName =
-          placemarks.first.locality ??
-          placemarks.first.administrativeArea ??
-          'Unknown';
-
-      prayerTimes = PrayerTimes(
-        coordinates,
-        DateComponents.from(DateTime.now()),
-        params,
-      );
+      prayerTimes = times;
+      _locationName = location;
     });
 
-    _scheduleAllNotifications(); // ✅ schedule once
+    _scheduleAllNotifications();
   }
 
   Future<bool> _handleLocationPermission() async {
@@ -147,16 +171,33 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.location_on, color: Colors.green),
-              const SizedBox(width: 6),
-              Text(
-                _locationName,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
+          InkWell(
+            onTap: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Updating location...')),
+              );
+
+              await _refreshLocation();
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Location updated ✅')),
+              );
+            },
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.green),
+                const SizedBox(width: 6),
+                Text(
+                  _locationName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline, // 👈 hint clickable
+                  ),
+                ),
+              ],
+            ),
           ),
+
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
