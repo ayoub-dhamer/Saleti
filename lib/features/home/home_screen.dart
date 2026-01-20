@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> pages = const [
     PrayerTimesScreen(),
     HijriCalendarScreen(),
-    HijriCalendarScreen(),
+    QiblaScreen(),
     QuranScreen(),
     QuranScreen(), // <-- NEW PAGE
   ];
