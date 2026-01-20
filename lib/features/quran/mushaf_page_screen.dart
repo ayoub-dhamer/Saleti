@@ -24,12 +24,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   Future<void> _initPage() async {
     final lastPage = await _loadLastPage();
-
     _pageController = PageController(initialPage: lastPage - 1);
-
-    setState(() {
-      _currentPage = lastPage;
-    });
+    setState(() => _currentPage = lastPage);
   }
 
   /// 🔹 Load bookmarked pages
@@ -38,14 +34,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
 
     final pages = <int>{};
-
     for (final item in list) {
       final parts = item.split('|');
       if (parts.length != 3) continue;
-
       final page = int.tryParse(parts[0]);
       if (page == null || page < 1 || page > 604) continue;
-
       pages.add(page);
     }
 
@@ -63,7 +56,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return prefs.getInt('last_mushaf_page') ?? widget.startPage;
   }
 
-  /// 🔹 Add bookmark
+  /// 🔹 Toggle bookmark
   Future<void> _toggleBookmark(int page) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
@@ -72,7 +65,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final date =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    final surahName = 'Surah'; // TODO: replace later
+    final surahName = 'Surah'; // TODO replace later
     final key = '$page|$surahName|$date';
 
     final existsIndex = list.indexWhere((e) {
@@ -101,48 +94,73 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return Scaffold(
       backgroundColor: const Color(0xfff7f3ea),
 
+      /// 🌿 TOP APP BAR (CENTERED TITLE)
+      appBar: AppBar(
+        elevation: 0,
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Al-Qur’an',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+      ),
+
       body: Column(
         children: [
-          /// 🌿 BEAUTIFUL TOP HEADER
+          /// 🌿 SECOND HEADER (CONTROLS)
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 14),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xff1fa463), Color(0xff157347)],
+                colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
             ),
             child: Row(
               children: [
-                /// 📖 Surah Name
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Al-Qur’an',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Page $_currentPage',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                /// 📖 Page Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Page $_currentPage',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Swipe to continue reading',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
-
-                const Spacer(),
 
                 /// 📄 Page Badge
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
+                    horizontal: 16,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
@@ -166,14 +184,23 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+                      horizontal: 16,
+                      vertical: 10,
                     ),
                     decoration: BoxDecoration(
                       color: isBookmarked
                           ? Colors.amber.shade400
                           : Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(30),
+                      boxShadow: isBookmarked
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
+                          : [],
                     ),
                     child: Row(
                       children: [
@@ -181,15 +208,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                           isBookmarked
                               ? Icons.bookmark
                               : Icons.bookmark_outline,
-                          size: 18,
+                          size: 20,
                           color: isBookmarked ? Colors.black : Colors.white,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           isBookmarked ? 'Saved' : 'Save',
                           style: TextStyle(
-                            color: isBookmarked ? Colors.black : Colors.white,
                             fontWeight: FontWeight.w600,
+                            color: isBookmarked ? Colors.black : Colors.white,
                           ),
                         ),
                       ],
@@ -200,7 +227,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             ),
           ),
 
-          /// 📖 READING AREA (FULLSCREEN)
+          /// 📖 READING AREA
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -226,7 +253,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                       ),
                     ),
 
-                    /// 🎀 Corner Ribbon Bookmark (Elegant)
+                    /// 🎀 Bookmark Ribbon
                     if (highlighted)
                       Positioned(
                         top: 0,
@@ -247,6 +274,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 }
 
+/// 🎀 Ribbon Painter
 class _BookmarkRibbonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
