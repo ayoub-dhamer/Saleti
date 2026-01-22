@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
+import 'package:flutter/services.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -94,11 +95,28 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   Future<bool> _handleLocationPermission() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return false;
+    final gpsEnabled = await _ensureLocationServiceEnabled();
+    if (!gpsEnabled) return false;
 
     var permission = await Geolocator.checkPermission();
+
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location permission permanently denied. Enable it from settings.',
+          ),
+        ),
+      );
+
+      await Geolocator.openAppSettings();
+      return false;
     }
 
     return permission == LocationPermission.always ||
@@ -106,8 +124,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   /// ---------------- SCHEDULING ----------------
-  void _scheduleAllNotifications() {
+  Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
+
+    await NotificationService.cancelAll();
 
     final map = {
       'fajr': prayerTimes!.fajr,
@@ -117,20 +137,76 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       'isha': prayerTimes!.isha,
     };
 
-    map.forEach((prayer, time) {
+    int id = 100;
+
+    map.forEach((prayer, time) async {
       final setting = NotificationService.prayerSettings[prayer]!;
 
+      /// ⏰ Reminder
       if (setting['reminder'] == true) {
         final minutes = setting['minutesBefore'] as int;
         final reminderTime = time.subtract(Duration(minutes: minutes));
 
-        NotificationService.showReminder(prayer, minutes);
+        await NotificationService.scheduleReminder(
+          id: id++,
+          time: reminderTime,
+          prayer: prayer,
+          minutes: minutes,
+        );
       }
 
+      /// 🔊 Azan
       if (setting['azan'] == true) {
-        NotificationService.showAzan(prayer);
+        await NotificationService.scheduleAzan(
+          id: id++,
+          time: time,
+          prayer: prayer,
+        );
       }
     });
+  }
+
+  Future<bool> _ensureLocationServiceEnabled() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (enabled) return true;
+
+    if (!mounted) return false;
+
+    final shouldOpenSettings = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Enable Location'),
+        content: const Text(
+          'Location services are disabled.\n\n'
+          'Please enable GPS to calculate prayer times and Qibla direction.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+              SystemNavigator.pop(); // 👈 Close the app
+            },
+            child: const Text('Exit'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldOpenSettings == true) {
+      await Geolocator.openLocationSettings();
+
+      // Wait a moment so Android applies changes
+      await Future.delayed(const Duration(seconds: 2));
+
+      return Geolocator.isLocationServiceEnabled();
+    }
+
+    return false;
   }
 
   /// ---------------- UI ----------------

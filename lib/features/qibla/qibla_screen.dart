@@ -49,6 +49,24 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text(
+          'Qibla Direction',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
       body: Column(
         children: [
           _header(),
@@ -65,7 +83,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 48, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
@@ -75,39 +93,20 @@ class _QiblaScreenState extends State<QiblaScreen> {
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       child: Column(
-        children: [
-          /// 🔝 Top Row
-          Row(
-            children: [
-              /// 🔙 Back
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-
-              const Spacer(),
-
-              /// 🧭 Title
-              const Text(
-                'Qibla Direction',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const Spacer(),
-              const SizedBox(width: 24),
-            ],
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Find the Qibla',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-
-          const SizedBox(height: 10),
-
-          /// 📝 Subtitle
-          const Text(
+          SizedBox(height: 6),
+          Text(
             'Align your phone to face the Kaaba',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: Colors.white70),
           ),
         ],
       ),

@@ -21,7 +21,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     _selectedHijri = HijriCalendar.fromDate(_focusedDay);
   }
 
-  // Islamic Events (Hijri dates)
   final List<Map<String, dynamic>> islamicHolidays = [
     {"month": 1, "day": 1, "name": "Islamic New Year"},
     {"month": 1, "day": 10, "name": "Day of Ashura"},
@@ -53,130 +52,195 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         title: const Text(
           'Hijri Calendar',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        centerTitle: true,
-        backgroundColor: Colors.deepPurpleAccent,
       ),
+      body: Column(
+        children: [_bigHeader(), _purpleCard(), _calendarSection(), _legend()],
+      ),
+    );
+  }
 
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // 🌙 SELECTED DATE INFO CARD
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.deepPurpleAccent,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.deepPurpleAccent.withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    "${_selectedHijri.hDay} ${_selectedHijri.longMonthName} ${_selectedHijri.hYear} AH",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  if (_holidayName(_selectedDay!) != null)
-                    Text(
-                      _holidayName(_selectedDay!)!,
-                      style: const TextStyle(
-                        color: Colors.amber,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                ],
-              ),
+  // 🟢 BIG HEADER (same feel as Bookmarks)
+  Widget _bigHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Explore Islamic dates',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
             ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Tap any date below to instantly view its Hijri equivalent and special occasions',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 20),
+  bool get _hasHoliday =>
+      _holidayName(_selectedDay!) != null &&
+      _holidayName(_selectedDay!)!.isNotEmpty;
 
-            // 📅 CALENDAR
-            Expanded(
-              child: TableCalendar(
-                firstDay: DateTime(2020),
-                lastDay: DateTime(2030),
-                focusedDay: _focusedDay,
-                calendarFormat: CalendarFormat.month,
-                startingDayOfWeek: StartingDayOfWeek.saturday,
-                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+  // 💜 Purple Info Card
+  Widget _purpleCard() {
+    final holiday = _holidayName(_selectedDay!);
 
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                    _selectedHijri = HijriCalendar.fromDate(selectedDay);
-                  });
-                },
-
-                daysOfWeekStyle: const DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(fontWeight: FontWeight.bold),
-                  weekendStyle: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
-                  ),
+    return Container(
+      transform: Matrix4.translationValues(0, -26, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.deepPurpleAccent,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurpleAccent.withOpacity(0.45),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // 👈 important for shrink/expand
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                "${_selectedHijri.hDay} ${_selectedHijri.longMonthName} ${_selectedHijri.hYear} AH",
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
 
-                headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  titleTextStyle: TextStyle(
-                    fontSize: 20,
+              /// 🌟 Holiday text appears only when available
+              if (holiday != null && holiday.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  holiday,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.yellowAccent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: _dayTile,
-                  todayBuilder: _todayTile,
-                  selectedBuilder: _selectedTile,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // 🟦 LEGEND — added under the calendar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _legendItem(Colors.lightBlue, "Selected Day"),
-                _legendItem(Colors.lightGreen, "Holiday"),
-                _legendItem(Colors.deepPurpleAccent, "Today"),
               ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // 📌 LEGEND ITEM WIDGET
+  // 📅 Calendar takes full remaining space
+  Widget _calendarSection() {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+        child: TableCalendar(
+          firstDay: DateTime(2020),
+          lastDay: DateTime(2030),
+          focusedDay: _focusedDay,
+          calendarFormat: CalendarFormat.month,
+          startingDayOfWeek: StartingDayOfWeek.saturday,
+          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+
+          onDaySelected: (selectedDay, focusedDay) {
+            setState(() {
+              _selectedDay = selectedDay;
+              _focusedDay = focusedDay;
+              _selectedHijri = HijriCalendar.fromDate(selectedDay);
+            });
+          },
+
+          daysOfWeekStyle: const DaysOfWeekStyle(
+            weekdayStyle: TextStyle(fontWeight: FontWeight.bold),
+            weekendStyle: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.deepPurple,
+            ),
+          ),
+
+          headerStyle: const HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: true,
+            titleTextStyle: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          calendarBuilders: CalendarBuilders(
+            defaultBuilder: _dayTile,
+            todayBuilder: _todayTile,
+            selectedBuilder: _selectedTile,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🟦 Legend pinned bottom
+  Widget _legend() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _legendItem(Colors.lightBlue, "Selected"),
+          _legendItem(Colors.lightGreen, "Holiday"),
+          _legendItem(Colors.deepPurpleAccent, "Today"),
+        ],
+      ),
+    );
+  }
+
   Widget _legendItem(Color color, String label) {
     return Row(
       children: [
         Container(
-          width: 16,
-          height: 16,
+          width: 14,
+          height: 14,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(4),
@@ -188,7 +252,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // 📌 NORMAL DAY
   Widget _dayTile(context, day, _) {
     final hijri = HijriCalendar.fromDate(day);
 
@@ -207,7 +270,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // ⭐ TODAY TILE
   Widget _todayTile(context, day, _) {
     final hijri = HijriCalendar.fromDate(day);
 
@@ -221,7 +283,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // ⭐ SELECTED DAY TILE (Light Blue)
   Widget _selectedTile(context, day, _) {
     final hijri = HijriCalendar.fromDate(day);
 
@@ -235,7 +296,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // 📅 Reusable Day Content
   Widget _dayContent(
     DateTime day,
     HijriCalendar hijri, {
