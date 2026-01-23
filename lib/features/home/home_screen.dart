@@ -4,8 +4,7 @@ import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 import '../prayer_times/prayer_times_screen.dart';
 import '../hijri_calendar/hijri_calendar_screen.dart';
 import '../quran/quran_screen.dart';
-import '../qibla/qibla_screen.dart';
-import '../prayer_times/prayer_settings_screen.dart'; // <-- NEW
+import '../qibla/qibla_screen.dart'; // <-- NEW
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> {
     PrayerTimesScreen(),
     HijriCalendarScreen(),
     QiblaScreen(),
-    QuranScreen(),
     QuranScreen(), // <-- NEW PAGE
   ];
 
@@ -72,11 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.menu_book),
             title: const Text('Quran'),
             backgroundColor: Colors.lightBlueAccent,
-          ),
-          BottomBarItem(
-            icon: const Icon(Icons.settings),
-            title: const Text('Settings'),
-            backgroundColor: Colors.orangeAccent,
           ),
         ],
         currentIndex: selected,
