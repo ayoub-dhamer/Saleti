@@ -22,6 +22,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   DateTime now = DateTime.now();
   String _locationName = 'Loading...';
 
+  bool _loading = true;
+  String? _permissionError;
+
   @override
   void initState() {
     super.initState();
@@ -43,26 +46,70 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   Future<void> _initLocationAndPrayerTimes() async {
     final cache = PrayerCache();
 
-    // ✅ If location already saved — use it instantly
+    await cache.load(); // ✅ LOAD SAVED LOCATION FIRST
+
     if (cache.hasLocation) {
       final times = cache.calculatePrayerTimes();
 
       setState(() {
         prayerTimes = times;
         _locationName = cache.locationName!;
+        _loading = false;
       });
 
       _scheduleAllNotifications();
       return;
     }
 
-    // ❌ First launch only → request GPS
-    await _refreshLocation();
+    /// ❌ First launch → explain why location is needed
+    await _showLocationPermissionDialog();
+  }
+
+  Future<void> _showLocationPermissionDialog() async {
+    final allow = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Location Required'),
+        content: const Text(
+          'Your location is required to calculate accurate prayer times and Qibla direction.\n\n'
+          'Please allow location access.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not Now'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Allow'),
+          ),
+        ],
+      ),
+    );
+
+    if (allow == true) {
+      await _refreshLocation();
+    } else {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is required to show prayer times.';
+      });
+    }
   }
 
   Future<void> _refreshLocation() async {
+    setState(() {
+      _loading = true;
+      _permissionError = null;
+    });
+
     final hasPermission = await _handleLocationPermission();
-    if (!hasPermission) return;
+    if (!hasPermission) {
+      setState(() => _loading = false);
+      return;
+    }
 
     final position = await Geolocator.getCurrentPosition();
 
@@ -89,6 +136,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     setState(() {
       prayerTimes = times;
       _locationName = location;
+      _loading = false;
     });
 
     _scheduleAllNotifications();
@@ -104,23 +152,27 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       permission = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      if (!mounted) return false;
+    if (permission == LocationPermission.denied) {
+      setState(() {
+        _permissionError =
+            'Location permission was denied. Please allow it to continue.';
+        _loading = false;
+      });
+      return false;
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location permission permanently denied. Enable it from settings.',
-          ),
-        ),
-      );
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _permissionError =
+            'Location permission is permanently denied. Enable it from settings.';
+        _loading = false;
+      });
 
       await Geolocator.openAppSettings();
       return false;
     }
 
-    return permission == LocationPermission.always ||
-        permission == LocationPermission.whileInUse;
+    return true;
   }
 
   /// ---------------- SCHEDULING ----------------
@@ -212,8 +264,31 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   /// ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
-    if (prayerTimes == null) {
+    if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_permissionError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_off, size: 90, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(_permissionError!, textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _showLocationPermissionDialog,
+                  child: const Text('Grant Permission'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final hijri = HijriCalendar.now();
