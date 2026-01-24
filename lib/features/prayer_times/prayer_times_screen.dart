@@ -32,6 +32,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     // ⏱ Update clock only
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       setState(() => now = DateTime.now());
     });
   }
@@ -43,26 +44,33 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   /// ---------------- LOCATION ----------------
+
   Future<void> _initLocationAndPrayerTimes() async {
     final cache = PrayerCache();
+    await cache.load();
 
-    await cache.load(); // ✅ LOAD SAVED LOCATION FIRST
+    if (!mounted) return;
 
     if (cache.hasLocation) {
-      final times = cache.calculatePrayerTimes();
-
-      setState(() {
-        prayerTimes = times;
-        _locationName = cache.locationName!;
-        _loading = false;
-      });
-
-      _scheduleAllNotifications();
+      _applyPrayerTimes(cache);
       return;
     }
 
-    /// ❌ First launch → explain why location is needed
     await _showLocationPermissionDialog();
+  }
+
+  void _applyPrayerTimes(PrayerCache cache) {
+    final times = cache.calculatePrayerTimes();
+
+    if (!mounted) return;
+
+    setState(() {
+      prayerTimes = times;
+      _locationName = cache.locationName!;
+      _loading = false;
+    });
+
+    _scheduleAllNotifications();
   }
 
   Future<void> _showLocationPermissionDialog() async {
@@ -88,6 +96,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       ),
     );
 
+    if (!mounted) return;
+
     if (allow == true) {
       await _refreshLocation();
     } else {
@@ -100,6 +110,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   Future<void> _refreshLocation() async {
+    if (!mounted) return;
+
     setState(() {
       _loading = true;
       _permissionError = null;
@@ -107,6 +119,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     final hasPermission = await _handleLocationPermission();
     if (!hasPermission) {
+      if (!mounted) return;
       setState(() => _loading = false);
       return;
     }
@@ -131,15 +144,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       locationName: location,
     );
 
-    final times = cache.calculatePrayerTimes();
-
-    setState(() {
-      prayerTimes = times;
-      _locationName = location;
-      _loading = false;
-    });
-
-    _scheduleAllNotifications();
+    _applyPrayerTimes(cache);
   }
 
   Future<bool> _handleLocationPermission() async {
@@ -152,11 +157,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       permission = await Geolocator.requestPermission();
     }
 
+    if (!mounted) return false;
+
     if (permission == LocationPermission.denied) {
       setState(() {
         _permissionError =
             'Location permission was denied. Please allow it to continue.';
-        _loading = false;
       });
       return false;
     }
@@ -165,7 +171,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       setState(() {
         _permissionError =
             'Location permission is permanently denied. Enable it from settings.';
-        _loading = false;
       });
 
       await Geolocator.openAppSettings();
@@ -176,6 +181,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   /// ---------------- SCHEDULING ----------------
+
   Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
 
@@ -191,7 +197,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     int id = 100;
 
-    map.forEach((prayer, time) async {
+    // ✅ Sequential loop (no async inside forEach)
+    for (final entry in map.entries) {
+      final prayer = entry.key;
+      final time = entry.value;
       final setting = NotificationService.prayerSettings[prayer]!;
 
       /// ⏰ Reminder
@@ -215,7 +224,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           prayer: prayer,
         );
       }
-    });
+    }
   }
 
   Future<bool> _ensureLocationServiceEnabled() async {
@@ -237,7 +246,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context, false);
-              SystemNavigator.pop(); // 👈 Close the app
+              SystemNavigator.pop();
             },
             child: const Text('Exit'),
           ),
@@ -251,10 +260,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
 
     if (shouldOpenSettings == true) {
       await Geolocator.openLocationSettings();
-
-      // Wait a moment so Android applies changes
       await Future.delayed(const Duration(seconds: 2));
-
       return Geolocator.isLocationServiceEnabled();
     }
 
@@ -262,6 +268,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   }
 
   /// ---------------- UI ----------------
+  /// ⬇️⬇️⬇️ YOUR UI CODE REMAINS 100% UNCHANGED BELOW ⬇️⬇️⬇️
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
