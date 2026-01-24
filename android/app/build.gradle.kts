@@ -43,3 +43,8 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+// ---------------- Warning Suppression ----------------
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("-Xlint:-options")
+}

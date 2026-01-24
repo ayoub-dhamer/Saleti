@@ -17,24 +17,6 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   final channel = params['channel'] as String;
   final playSound = params['playSound'] as bool;
 
-  // ✅ Ensure channel exists even in background isolate
-  final androidPlugin = _notifications
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >();
-
-  await androidPlugin?.createNotificationChannel(
-    AndroidNotificationChannel(
-      channel,
-      channel,
-      importance: Importance.max,
-      playSound: playSound,
-      sound: playSound
-          ? const RawResourceAndroidNotificationSound('azan')
-          : null,
-    ),
-  );
-
   await _notifications.show(
     id,
     title,
@@ -49,12 +31,14 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
         sound: playSound
             ? const RawResourceAndroidNotificationSound('azan')
             : null,
+        enableVibration: playSound,
       ),
     ),
   );
 }
 
 class NotificationService {
+  // Default prayer notification settings
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
     'dhuhr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
@@ -63,22 +47,23 @@ class NotificationService {
     'isha': {'reminder': true, 'azan': true, 'minutesBefore': 10},
   };
 
-  /// 🚀 Initialize notifications + channels
+  /// Initialize notifications and alarm manager
   static Future<void> init() async {
+    // Initialize Android Alarm Manager
     await AndroidAlarmManager.initialize();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
 
-    // Initialize notifications
     await _notifications.initialize(settings);
 
-    // Create notification channels
+    // Create channels for Android
     const azanChannel = AndroidNotificationChannel(
       'azan_channel',
       'Azan Notifications',
       description: 'Plays azan sound at prayer time',
       importance: Importance.max,
+      playSound: true,
       sound: RawResourceAndroidNotificationSound('azan'),
     );
 
@@ -90,7 +75,6 @@ class NotificationService {
       playSound: false,
     );
 
-    // Resolve Android-specific plugin
     final androidPlugin = _notifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -98,11 +82,9 @@ class NotificationService {
 
     await androidPlugin?.createNotificationChannel(azanChannel);
     await androidPlugin?.createNotificationChannel(reminderChannel);
-
-    // ✅ No requestPermission needed on Android
   }
 
-  /// ⏰ Schedule Reminder
+  /// Schedule a reminder notification (silent)
   static Future<void> scheduleReminder({
     required int id,
     required DateTime time,
@@ -110,8 +92,6 @@ class NotificationService {
     required int minutes,
   }) async {
     if (time.isBefore(DateTime.now())) return;
-
-    final pretty = '${prayer[0].toUpperCase()}${prayer.substring(1)}';
 
     await AndroidAlarmManager.oneShotAt(
       time,
@@ -121,22 +101,20 @@ class NotificationService {
       wakeup: true,
       params: {
         'title': 'Prayer Reminder',
-        'body': '$pretty in $minutes minutes',
+        'body': '$prayer in $minutes minutes',
         'channel': 'reminder_channel',
         'playSound': false,
       },
     );
   }
 
-  /// 🔊 Schedule Azan
+  /// Schedule Azan notification with sound
   static Future<void> scheduleAzan({
     required int id,
     required DateTime time,
     required String prayer,
   }) async {
     if (time.isBefore(DateTime.now())) return;
-
-    final pretty = '${prayer[0].toUpperCase()}${prayer.substring(1)}';
 
     await AndroidAlarmManager.oneShotAt(
       time,
@@ -146,16 +124,16 @@ class NotificationService {
       wakeup: true,
       params: {
         'title': 'Time for Prayer',
-        'body': 'It is time for $pretty prayer',
+        'body': 'It is time for $prayer prayer',
         'channel': 'azan_channel',
         'playSound': true,
       },
     );
   }
 
-  /// 🧹 Cancel alarms safely
+  /// Cancel all scheduled alarms (for rescheduling)
   static Future<void> cancelAll() async {
-    for (int i = 0; i < 300; i++) {
+    for (int i = 0; i < 5000; i++) {
       await AndroidAlarmManager.cancel(i);
     }
   }
