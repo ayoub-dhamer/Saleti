@@ -30,15 +30,6 @@ class SaletiApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        fontFamily: 'Amiri',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.dark,
-        ),
-      ),
-      themeMode: ThemeMode.system, // or controlled by your toggle
       home: const HomeScreen(),
     );
   }

@@ -304,7 +304,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
 
-    final nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
+    DateTime nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
+
+    // ✅ Fix for next-day prayer (prevents negative countdown)
+    if (nextPrayerTime.isBefore(now)) {
+      nextPrayerTime = nextPrayerTime.add(const Duration(days: 1));
+    }
+
     final remaining = nextPrayerTime.difference(now);
 
     return Scaffold(
@@ -330,31 +336,42 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          InkWell(
-            onTap: () async {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Updating location...')),
-              );
+          Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () async {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Updating location...')),
+                  );
 
-              await _refreshLocation();
+                  await _refreshLocation();
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Location updated ✅')),
-              );
-            },
-            child: Row(
-              children: [
-                const Icon(Icons.location_on, color: Colors.green),
-                const SizedBox(width: 6),
-                Text(
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Location updated ✅')),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.location_on, color: Colors.green, size: 24),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
                   _locationName,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline, // 👈 hint clickable
+                    letterSpacing: 0.2,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
 
           Column(
@@ -378,18 +395,148 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   /// 🕒 Circle Clock
   Widget _clockCircle() {
     return Container(
-      width: 220,
-      height: 220,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15)],
-      ),
-      child: Center(
-        child: Text(
-          DateFormat('hh:mm a').format(now),
-          style: const TextStyle(fontSize: 44, fontWeight: FontWeight.bold),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            /// 🌄 Image
+            Image.asset(
+              'assets/images/mosque.png',
+              height: 220,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
+
+            /// 🕒 Time overlay a bit lower at the bottom
+            Positioned(
+              bottom: 4, // closer to the very bottom
+              left: 0,
+              right: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('HH:mm').format(now), // 24h format
+                    style: const TextStyle(
+                      fontSize: 52,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                      letterSpacing: 2,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 4,
+                          color:
+                              Colors.black45, // subtle shadow for readability
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  /// 🌙 Islamic Styled Clock Card
+  Widget _islamicClockCard() {
+    return Container(
+      width: 300,
+      height: 200,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027), // deep night blue
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 25,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          /// ✨ Glow overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  colors: [Colors.white.withOpacity(0.08), Colors.transparent],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+
+          /// 🕌 Mosque Silhouette (pure shapes)
+          Positioned(
+            bottom: -10,
+            left: 0,
+            right: 0,
+            child: Opacity(
+              opacity: 0.15,
+              child: Icon(Icons.mosque, size: 180, color: Colors.white),
+            ),
+          ),
+
+          /// 🕒 Time Content
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('hh:mm').format(now),
+                  style: const TextStyle(
+                    fontSize: 56,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  DateFormat('a').format(now),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.white70,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withOpacity(0.15),
+                  ),
+                  child: Text(
+                    DateFormat('EEEE, d MMM').format(now),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -410,13 +557,27 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          /// 🕌 Prayer name + time
           Text(
-            '${_pretty(nextPrayer.name)} at ${DateFormat('hh:mm a').format(time)}',
+            'Next is ${_pretty(nextPrayer.name)} at ${DateFormat('hh:mm a').format(time)}',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text(
-            _formatDuration(remaining),
-            style: const TextStyle(color: Colors.green),
+
+          /// ⏳ Countdown label + timer
+          Row(
+            children: [
+              const Text(
+                'Time left: ',
+                style: TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+              Text(
+                _formatDuration(remaining),
+                style: const TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ],
       ),

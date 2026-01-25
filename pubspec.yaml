@@ -87,6 +87,7 @@ flutter:
     - assets/images/islamic_pattern.png
     - assets/audio/azan.mp3
     - assets/audio/reminder.mp3
+    - assets/images/mosque.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
