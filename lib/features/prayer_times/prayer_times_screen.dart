@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:saleti/utils/battery_optimization_helper.dart';
+import 'package:saleti/utils/exact_alarm_permission.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +30,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ExactAlarmPermission.ensureEnabled(context); // FIX 2
+      await BatteryOptimizationHelper.requestDisable(context); // FIX 3
+    });
+
     _initLocationAndPrayerTimes();
 
     // ⏱ Update clock only
