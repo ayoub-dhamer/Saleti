@@ -32,8 +32,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ExactAlarmPermission.ensureEnabled(context); // FIX 2
-      await BatteryOptimizationHelper.requestDisable(context); // FIX 3
+      await ExactAlarmPermission.ensureEnabled(context);
+      await BatteryOptimizationHelper.requestDisable(context);
     });
 
     _initLocationAndPrayerTimes();

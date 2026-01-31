@@ -1,10 +1,19 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:android_intent_plus/android_intent.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BatteryOptimizationHelper {
+  static const _askedKey = 'asked_battery_optimization';
+
   static Future<void> requestDisable(BuildContext context) async {
     if (!Platform.isAndroid) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyAsked = prefs.getBool(_askedKey) ?? false;
+
+    // ✅ Do not spam user
+    if (alreadyAsked) return;
 
     if (!context.mounted) return;
 
@@ -14,12 +23,8 @@ class BatteryOptimizationHelper {
       builder: (_) => AlertDialog(
         title: const Text('Disable Battery Optimization'),
         content: const Text(
-          'To ensure Azan and prayer reminders work reliably, '
-          'please disable battery optimization for this app.\n\n'
-          'On the next screen:\n'
-          '• Choose "All apps"\n'
-          '• Select "Saleti"\n'
-          '• Choose "Don\'t optimize"',
+          'Battery optimization can prevent Azan from playing.\n\n'
+          'Please allow unrestricted battery usage.',
         ),
         actions: [
           TextButton(
@@ -28,18 +33,19 @@ class BatteryOptimizationHelper {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Open Settings'),
+            child: const Text('Allow'),
           ),
         ],
       ),
     );
 
-    if (allow == true) {
-      final intent = AndroidIntent(
-        action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-        data: 'package:com.example.saleti', // ⚠️ CHANGE IF NEEDED
-      );
+    // ✅ Mark as asked
+    await prefs.setBool(_askedKey, true);
 
+    if (allow == true) {
+      const intent = AndroidIntent(
+        action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+      );
       await intent.launch();
     }
   }
