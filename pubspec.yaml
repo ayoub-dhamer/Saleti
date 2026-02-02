@@ -43,16 +43,16 @@ dependencies:
   quran: ^1.3.1
   shared_preferences: ^2.2.2
   stylish_bottom_bar: ^1.1.1
-  permission_handler: ^11.0.0
+  permission_handler: ^11.3.0
   flutter_local_notifications: ^17.1.0
   just_audio: ^0.9.38
   timezone: ^0.9.3
   audioplayers: ^5.2.0
   google_fonts: ^6.2.1
-  android_alarm_manager_plus: ^4.0.1
+  android_alarm_manager_plus: ^4.0.8
   flutter_compass: ^0.8.0
   vector_math: ^2.1.4
-  android_intent_plus: ^5.3.0
+  android_intent_plus: ^5.3.1
   intl: ^0.19.0
 
 dev_dependencies:
@@ -85,10 +85,9 @@ flutter:
 
   assets:
     - assets/mushaf/
-    - assets/images/islamic_pattern.png
-    - assets/audio/azan.mp3
-    - assets/audio/reminder.mp3
     - assets/images/mosque.png
+    #- assets/audio/azan.mp3
+    #- assets/audio/reminder.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

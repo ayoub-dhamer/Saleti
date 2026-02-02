@@ -10,6 +10,7 @@ import 'package:saleti/utils/exact_alarm_permission.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
   const PrayerTimesScreen({super.key});
@@ -32,6 +33,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await NotificationPermission.request();
       await ExactAlarmPermission.ensureEnabled(context);
       await BatteryOptimizationHelper.requestDisable(context);
     });
@@ -615,5 +617,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
         );
       },
     );
+  }
+}
+
+class NotificationPermission {
+  static Future<void> request() async {
+    if (await Permission.notification.isDenied) {
+      await Permission.notification.request();
+    }
   }
 }
