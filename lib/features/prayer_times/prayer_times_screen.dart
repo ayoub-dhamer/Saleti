@@ -533,24 +533,43 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
               Row(
                 children: [
                   // ⏰ Reminder
-                  IconButton(
-                    icon: Icon(
-                      Icons.alarm,
-                      color: setting['reminder'] == true
-                          ? Colors.green
-                          : Colors.grey,
-                    ),
-                    onPressed: () async {
+                  // ⏰ Reminder
+                  GestureDetector(
+                    onLongPress: () async {
                       final minutes = await _showMinutesDialog(
                         setting['minutesBefore'] as int,
                       );
+
                       if (minutes != null) {
                         setting['minutesBefore'] = minutes;
                         setting['reminder'] = true;
+
+                        // ✅ SAVE permanently
+                        await NotificationService.saveSettings();
+
                         setState(() {});
                         _scheduleAllNotifications();
                       }
                     },
+                    child: IconButton(
+                      icon: Icon(
+                        setting['reminder'] == true
+                            ? Icons.alarm_on
+                            : Icons.alarm_off,
+                        color: setting['reminder'] == true
+                            ? Colors.green
+                            : Colors.grey,
+                      ),
+                      onPressed: () async {
+                        setting['reminder'] = !(setting['reminder'] as bool);
+
+                        // ✅ SAVE on toggle
+                        await NotificationService.saveSettings();
+
+                        setState(() {});
+                        _scheduleAllNotifications();
+                      },
+                    ),
                   ),
 
                   // 🔔 Azan

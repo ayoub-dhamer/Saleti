@@ -1,6 +1,9 @@
 import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:saleti/utils/daily_rescheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final FlutterLocalNotificationsPlugin _notifications =
     FlutterLocalNotificationsPlugin();
@@ -8,36 +11,36 @@ final FlutterLocalNotificationsPlugin _notifications =
 /// ⚠️ Must be top-level for Android Alarm Manager
 @pragma('vm:entry-point')
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   const android = AndroidInitializationSettings('@mipmap/ic_launcher');
   const settings = InitializationSettings(android: android);
-  await _notifications.initialize(settings);
 
-  final title = params['title'] as String;
-  final body = params['body'] as String;
-  final channel = params['channel'] as String;
-  final playSound = params['playSound'] as bool;
+  final notifications = FlutterLocalNotificationsPlugin();
+  await notifications.initialize(settings);
 
-  await _notifications.show(
+  await notifications.show(
     id,
-    title,
-    body,
+    params['title'],
+    params['body'],
     NotificationDetails(
       android: AndroidNotificationDetails(
-        channel,
-        channel,
+        params['channel'],
+        params['channel'],
         importance: Importance.max,
         priority: Priority.high,
-        playSound: playSound,
-        sound: playSound
+        playSound: params['playSound'],
+        sound: params['playSound']
             ? const RawResourceAndroidNotificationSound('azan')
             : null,
-        enableVibration: playSound,
       ),
     ),
   );
 }
 
 class NotificationService {
+  static const _key = 'prayer_settings';
+
   // Default prayer notification settings
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
@@ -82,6 +85,35 @@ class NotificationService {
 
     await androidPlugin?.createNotificationChannel(azanChannel);
     await androidPlugin?.createNotificationChannel(reminderChannel);
+  }
+
+  static Future<void> loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw == null) return;
+
+    final decoded = Map<String, dynamic>.from(
+      Map<String, dynamic>.fromEntries(
+        prayerSettings.keys.map(
+          (k) => MapEntry(
+            k,
+            Map<String, dynamic>.from(
+              (raw.contains(k) ? prayerSettings[k]! : prayerSettings[k]!),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    prayerSettings = decoded.map(
+      (k, v) => MapEntry(k, Map<String, dynamic>.from(v)),
+    );
+  }
+
+  /// 🔹 SAVE SETTINGS
+  static Future<void> saveSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, prayerSettings.toString());
   }
 
   /// Schedule a reminder notification (silent)
@@ -136,5 +168,26 @@ class NotificationService {
     for (int i = 0; i < 5000; i++) {
       await AndroidAlarmManager.cancel(i);
     }
+  }
+
+  static Future<void> scheduleDailyRescheduler() async {
+    final now = DateTime.now();
+
+    final midnight = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      0,
+      5, // 00:05 AM
+    ).add(const Duration(days: 1));
+
+    await AndroidAlarmManager.oneShotAt(
+      midnight,
+      9999, // reserved ID
+      dailyRescheduleCallback,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
   }
 }

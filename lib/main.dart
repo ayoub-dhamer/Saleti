@@ -1,3 +1,4 @@
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
@@ -8,7 +9,10 @@ void main() async {
   await PrayerCache().load();
 
   // ✅ Initialize notifications
+  await NotificationService.loadSettings();
   await NotificationService.init();
+  await AndroidAlarmManager.initialize();
+  await NotificationService.scheduleDailyRescheduler();
 
   runApp(const SaletiApp());
 }
