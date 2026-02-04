@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:saleti/utils/daily_rescheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 final FlutterLocalNotificationsPlugin _notifications =
     FlutterLocalNotificationsPlugin();
@@ -90,30 +91,22 @@ class NotificationService {
   static Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
+
     if (raw == null) return;
 
-    final decoded = Map<String, dynamic>.from(
-      Map<String, dynamic>.fromEntries(
-        prayerSettings.keys.map(
-          (k) => MapEntry(
-            k,
-            Map<String, dynamic>.from(
-              (raw.contains(k) ? prayerSettings[k]! : prayerSettings[k]!),
-            ),
-          ),
-        ),
-      ),
-    );
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
 
     prayerSettings = decoded.map(
-      (k, v) => MapEntry(k, Map<String, dynamic>.from(v)),
+      (prayer, settings) =>
+          MapEntry(prayer, Map<String, dynamic>.from(settings)),
     );
   }
 
   /// 🔹 SAVE SETTINGS
   static Future<void> saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, prayerSettings.toString());
+    final jsonString = jsonEncode(prayerSettings);
+    await prefs.setString(_key, jsonString);
   }
 
   /// Schedule a reminder notification (silent)
