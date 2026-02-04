@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:saleti/utils/battery_optimization_helper.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
+import 'package:saleti/utils/foreground_service.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +34,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ForegroundService.start(); // 🔥 THIS IS THE KEY
       await NotificationPermission.request();
       await ExactAlarmPermission.ensureEnabled(context);
       await BatteryOptimizationHelper.requestDisable(context);

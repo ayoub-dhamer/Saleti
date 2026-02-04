@@ -53,6 +53,7 @@ dependencies:
   flutter_compass: ^0.8.0
   vector_math: ^2.1.4
   android_intent_plus: ^5.3.1
+  flutter_foreground_task: ^6.1.2
   intl: ^0.19.0
 
 dev_dependencies:
