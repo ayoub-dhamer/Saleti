@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:saleti/utils/battery_optimization_helper.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
-import 'package:saleti/utils/foreground_service.dart';
+import 'package:saleti/utils/foreground_azan_service.dart';
+import 'package:saleti/utils/prayer_reminder_service.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
@@ -34,7 +37,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ForegroundService.start(); // 🔥 THIS IS THE KEY
+      await FlutterForegroundTask.startService(
+        notificationTitle: 'Athan &&& is playing',
+        notificationText:
+            'Salah is not a burden; it is a meeting with the One who loves you most.',
+        callback: startAzanCallback,
+      );
       await NotificationPermission.request();
       await ExactAlarmPermission.ensureEnabled(context);
       await BatteryOptimizationHelper.requestDisable(context);
@@ -192,12 +200,22 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     return true;
   }
 
+  int _alarmId(String prayer, String type) {
+    const base = {
+      'fajr': 1000,
+      'dhuhr': 2000,
+      'asr': 3000,
+      'maghrib': 4000,
+      'isha': 5000,
+    };
+
+    return base[prayer]! + (type == 'azan' ? 1 : 2);
+  }
+
   /// ---------------- SCHEDULING ----------------
 
   Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
-
-    await NotificationService.cancelAll();
 
     final map = {
       'fajr': prayerTimes!.fajr,
@@ -207,31 +225,34 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       'isha': prayerTimes!.isha,
     };
 
-    int id = 100;
-
-    // ✅ Sequential loop (no async inside forEach)
     for (final entry in map.entries) {
       final prayer = entry.key;
       final time = entry.value;
       final setting = NotificationService.prayerSettings[prayer]!;
 
-      /// ⏰ Reminder
+      // ❌ cancel previous alarms for this prayer only
+      await AndroidAlarmManager.cancel(_alarmId(prayer, 'reminder'));
+      await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
+
+      /// ⏰ REMINDER
       if (setting['reminder'] == true) {
         final minutes = setting['minutesBefore'] as int;
         final reminderTime = time.subtract(Duration(minutes: minutes));
 
-        await NotificationService.scheduleReminder(
-          id: id++,
-          time: reminderTime,
-          prayer: prayer,
-          minutes: minutes,
-        );
+        if (reminderTime.isAfter(DateTime.now())) {
+          await NotificationService.scheduleReminder(
+            id: _alarmId(prayer, 'reminder'),
+            time: reminderTime,
+            prayer: prayer,
+            minutes: minutes,
+          );
+        }
       }
 
-      /// 🔊 Azan
-      if (setting['azan'] == true) {
+      /// 🔊 AZAN
+      if (setting['azan'] == true && time.isAfter(DateTime.now())) {
         await NotificationService.scheduleAzan(
-          id: id++,
+          id: _alarmId(prayer, 'azan'),
           time: time,
           prayer: prayer,
         );

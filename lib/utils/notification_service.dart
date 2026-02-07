@@ -1,8 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:saleti/utils/daily_rescheduler.dart';
+import 'package:saleti/utils/foreground_azan_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
@@ -20,23 +22,35 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   final notifications = FlutterLocalNotificationsPlugin();
   await notifications.initialize(settings);
 
+  // 🔕 Silent notification
   await notifications.show(
     id,
     params['title'],
     params['body'],
-    NotificationDetails(
+    const NotificationDetails(
       android: AndroidNotificationDetails(
-        params['channel'],
-        params['channel'],
+        'azan_channel',
+        'Prayer',
         importance: Importance.max,
         priority: Priority.high,
-        playSound: params['playSound'],
-        sound: params['playSound']
-            ? const RawResourceAndroidNotificationSound('azan')
-            : null,
+        playSound: false,
       ),
     ),
   );
+
+  // 🔊 START foreground service (NOT sendData)
+  if (params['playAzan'] == true) {
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Prayer Time',
+      notificationText: 'Azan is playing',
+      callback: startAzanCallback,
+    );
+  }
+}
+
+@pragma('vm:entry-point')
+void startAzanCallback() {
+  FlutterForegroundTask.setTaskHandler(PrayerTaskHandler());
 }
 
 class NotificationService {
@@ -150,8 +164,7 @@ class NotificationService {
       params: {
         'title': 'Time for Prayer',
         'body': 'It is time for $prayer prayer',
-        'channel': 'azan_channel',
-        'playSound': true,
+        'playAzan': true, // 👈 triggers foreground audio
       },
     );
   }

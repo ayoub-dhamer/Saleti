@@ -15,6 +15,8 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <application
         android:label="saleti"
         android:name="${applicationName}"
@@ -26,9 +28,14 @@
         <service
     android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
     android:permission="android.permission.FOREGROUND_SERVICE"
-    android:foregroundServiceType="dataSync"
+    android:foregroundServiceType="mediaPlayback"
      android:stopWithTask="false"
     android:exported="false" />
+
+        <service
+    android:name=".AzanService"
+    android:foregroundServiceType="mediaPlayback"
+    android:exported="false"/>
 
         <service
     android:name="dev.fluttercommunity.plus.androidalarmmanager.AlarmService"
