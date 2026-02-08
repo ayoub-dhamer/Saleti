@@ -16,44 +16,46 @@ final FlutterLocalNotificationsPlugin _notifications =
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 1. Properly parse the flag to prevent accidental audio during reminders
+  final dynamic playAzanRaw = params['playAzan'];
+  final bool shouldPlayAzan = (playAzanRaw == true || playAzanRaw == 'true');
+
   const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const settings = InitializationSettings(android: android);
-
   final notifications = FlutterLocalNotificationsPlugin();
-  await notifications.initialize(settings);
-
-  // 🔕 Silent notification
-  await notifications.show(
-    id,
-    params['title'],
-    params['body'],
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'azan_channel',
-        'Prayer',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: false,
-      ),
-    ),
+  await notifications.initialize(
+    const InitializationSettings(android: android),
   );
 
-  // 🔊 ONLY start azan if explicitly requested
-  final bool playAzan = params['playAzan'] == true;
-
-  if (playAzan) {
-    // 🛑 Prevent duplicate azan
-    if (await FlutterForegroundTask.isRunningService) {
-      return;
-    }
-
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'Athan &&& is playing',
-      notificationText:
-          'Salah is not a burden; it is a meeting with the One who loves you most.',
-      callback: startAzanCallback,
+  // 2. Reminder vs Azan Logic
+  if (!shouldPlayAzan) {
+    // SILENT REMINDER
+    await notifications.show(
+      id,
+      params['title'],
+      params['body'],
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reminder_channel',
+          'Prayer Reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: false, // Ensure this is false
+          enableVibration: true,
+        ),
+      ),
     );
+    return; // Stop here for reminders
   }
+
+  // 3. AZAN LOGIC (High Priority)
+  // Ensure we don't start if already running
+  if (await FlutterForegroundTask.isRunningService) return;
+
+  await FlutterForegroundTask.startService(
+    notificationTitle: params['title'],
+    notificationText: params['body'],
+    callback: startAzanCallback,
+  );
 }
 
 @pragma('vm:entry-point')
@@ -168,8 +170,11 @@ class NotificationService {
       time,
       id,
       alarmCallback,
-      exact: true,
-      wakeup: true,
+      exact: true, // Must be true
+      wakeup: true, // Must be true
+      alarmClock: true, // 💡 ADD THIS: Treats it like a system alarm
+      allowWhileIdle: true,
+      rescheduleOnReboot: true,
       params: {
         'title': 'Time for $prayer Prayer',
         'body':
