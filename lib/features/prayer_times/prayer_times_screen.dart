@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:geolocator/geolocator.dart';
@@ -77,6 +78,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         _isFullyConfigured = batteryOk && alarmOk;
       });
     }
+  }
+
+  Future<void> updateSaletiWidget(String name, String time) async {
+    // 1. Save data to shared preferences that Kotlin can see
+    await HomeWidget.saveWidgetData<String>('next_prayer_name', name);
+    await HomeWidget.saveWidgetData<String>('next_prayer_time', time);
+
+    // 2. Trigger the update
+    // 'androidName' must match the Class Name "PrayerWidgetProvider"
+    await HomeWidget.updateWidget(
+      name: 'PrayerWidgetProvider',
+      androidName: 'PrayerWidgetProvider',
+    );
   }
 
   /// ✅ Sequential Permission Flow
