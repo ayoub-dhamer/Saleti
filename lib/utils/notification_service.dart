@@ -38,11 +38,19 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
     ),
   );
 
-  // 🔊 START foreground service (NOT sendData)
-  if (params['playAzan'] == true) {
+  // 🔊 ONLY start azan if explicitly requested
+  final bool playAzan = params['playAzan'] == true;
+
+  if (playAzan) {
+    // 🛑 Prevent duplicate azan
+    if (await FlutterForegroundTask.isRunningService) {
+      return;
+    }
+
     await FlutterForegroundTask.startService(
-      notificationTitle: 'Prayer Time',
-      notificationText: 'Azan is playing',
+      notificationTitle: 'Athan &&& is playing',
+      notificationText:
+          'Salah is not a burden; it is a meeting with the One who loves you most.',
       callback: startAzanCallback,
     );
   }
@@ -143,6 +151,7 @@ class NotificationService {
         'body': '$prayer in $minutes minutes',
         'channel': 'reminder_channel',
         'playSound': false,
+        'playAzan': false, // ✅ EXPLICIT
       },
     );
   }
@@ -162,8 +171,9 @@ class NotificationService {
       exact: true,
       wakeup: true,
       params: {
-        'title': 'Time for Prayer',
-        'body': 'It is time for $prayer prayer',
+        'title': 'Time for $prayer Prayer',
+        'body':
+            'Salah is not a burden; it is a meeting with the One who loves you most',
         'playAzan': true, // 👈 triggers foreground audio
       },
     );

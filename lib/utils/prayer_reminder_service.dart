@@ -78,6 +78,7 @@ class PrayerReminderService {
       params: {
         'title': 'Prayer Reminder',
         'body': '$prayerName in $minutesBefore minutes',
+        'playAzan': false, // ✅ EXPLICIT
       },
     );
   }

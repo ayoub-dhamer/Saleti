@@ -37,12 +37,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await FlutterForegroundTask.startService(
-        notificationTitle: 'Athan &&& is playing',
-        notificationText:
-            'Salah is not a burden; it is a meeting with the One who loves you most.',
-        callback: startAzanCallback,
-      );
       await NotificationPermission.request();
       await ExactAlarmPermission.ensureEnabled(context);
       await BatteryOptimizationHelper.requestDisable(context);
