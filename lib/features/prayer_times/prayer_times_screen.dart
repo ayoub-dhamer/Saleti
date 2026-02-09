@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
@@ -29,6 +28,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   bool _waitingForAlarmSetting = false;
   bool _isFullyConfigured = true;
 
+  // Session flags to prevent repeat snackbars
+  bool _batteryMessageShown = false;
+  bool _alarmMessageShown = false;
+
   PrayerTimes? prayerTimes;
   Timer? _timer;
   DateTime now = DateTime.now();
@@ -41,11 +44,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _triggerPermissionRequests();
-    });
-
-    _initLocationAndPrayerTimes();
+    // ✅ Launch sequential permission and location flow
+    _initializeApp();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -60,104 +60,160 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     super.dispose();
   }
 
-  /// ✅ Logic: Triggered when returning from Android Settings
+  /// ✅ Orchestrates the launch sequence
+  Future<void> _initializeApp() async {
+    // 1. Request Notification/Battery/Alarm permissions
+    await _triggerPermissionRequests();
+
+    // 2. Initialize Location (GPS Check + Permission + Cache/Fetch)
+    await _initLocationAndPrayerTimes();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkPermissionsStatus();
+      _checkSystemReadiness(showSnackbars: true);
     }
   }
 
   /// ✅ Checks both permissions and updates the UI banner
-  Future<void> _checkSystemReadiness() async {
+  Future<void> _checkSystemReadiness({bool showSnackbars = false}) async {
     bool batteryOk = await BatteryOptimizationHelper.isWhitelisted();
     bool alarmOk = await ExactAlarmPermission.isGranted();
 
-    if (mounted) {
-      setState(() {
-        _isFullyConfigured = batteryOk && alarmOk;
-      });
+    if (!mounted) return;
+
+    setState(() {
+      _isFullyConfigured = batteryOk && alarmOk;
+    });
+
+    if (showSnackbars) {
+      if (_waitingForBatterySetting && batteryOk && !_batteryMessageShown) {
+        setState(() {
+          _waitingForBatterySetting = false;
+          _batteryMessageShown = true;
+        });
+      }
+
+      if (_waitingForAlarmSetting && alarmOk && !_alarmMessageShown) {
+        setState(() {
+          _waitingForAlarmSetting = false;
+          _alarmMessageShown = true;
+        });
+        _scheduleAllNotifications();
+      }
     }
-  }
-
-  Future<void> updateSaletiWidget(String name, String time) async {
-    // 1. Save data to shared preferences that Kotlin can see
-    await HomeWidget.saveWidgetData<String>('next_prayer_name', name);
-    await HomeWidget.saveWidgetData<String>('next_prayer_time', time);
-
-    // 2. Trigger the update
-    // 'androidName' must match the Class Name "PrayerWidgetProvider"
-    await HomeWidget.updateWidget(
-      name: 'PrayerWidgetProvider',
-      androidName: 'PrayerWidgetProvider',
-    );
   }
 
   /// ✅ Sequential Permission Flow
   Future<void> _triggerPermissionRequests() async {
-    // 1. Notifications
     await NotificationPermission.request();
 
     if (!mounted) return;
 
-    // 2. Battery Optimization
-    setState(() => _waitingForBatterySetting = true);
+    setState(() {
+      _waitingForBatterySetting = true;
+    });
+
     await BatteryOptimizationHelper.requestDisable(context);
 
-    // 3. Exact Alarm
     if (mounted) {
       setState(() => _waitingForAlarmSetting = true);
       await ExactAlarmPermission.ensureEnabled(context);
     }
   }
 
-  /// ✅ Verified status logic (Re-check & Success snackbars)
-  Future<void> _checkPermissionsStatus() async {
-    // Check Battery
-    if (_waitingForBatterySetting) {
-      bool isBatteryOk = await BatteryOptimizationHelper.isWhitelisted();
-      if (isBatteryOk && mounted) {
-        setState(() => _waitingForBatterySetting = false);
-        _showSuccessSnackBar('✅ Battery optimization disabled!');
-      }
-    }
-
-    // Check Exact Alarm
-    if (_waitingForAlarmSetting) {
-      bool isAlarmOk = await ExactAlarmPermission.isGranted();
-      if (isAlarmOk && mounted) {
-        setState(() => _waitingForAlarmSetting = false);
-        _showSuccessSnackBar('⏰ Exact alarms enabled!');
-        _scheduleAllNotifications();
-      }
-    }
-
-    // Refresh the general configuration state
-    _checkSystemReadiness();
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  // --- LOCATION LOGIC (UNCHANGED) ---
+  // --- LOCATION LOGIC ---
 
   Future<void> _initLocationAndPrayerTimes() async {
-    final cache = PrayerCache();
-    await cache.load();
     if (!mounted) return;
-    if (cache.hasLocation) {
-      _applyPrayerTimes(cache);
+    setState(() => _loading = true);
+
+    // 1. Hardware GPS + App Permission Check
+    bool hasAccess = await _handleLocationPermission();
+    if (!hasAccess) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _permissionError = 'Location & GPS access required for prayer times.';
+        });
+      }
       return;
     }
-    await _showLocationPermissionDialog();
+
+    // 2. Load from Cache or Refresh
+    final cache = PrayerCache();
+    await cache.load();
+
+    if (cache.hasLocation) {
+      _applyPrayerTimes(cache);
+    } else {
+      await _refreshLocation();
+    }
+  }
+
+  Future<bool> _handleLocationPermission() async {
+    // Check if GPS hardware is ON
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      bool opened = await _ensureLocationServiceEnabled();
+      if (!opened) return false;
+      // Re-verify after potential settings change
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
+    }
+
+    // Check App Level Permission
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return false;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _refreshLocation() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _permissionError = null;
+    });
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      final location =
+          placemarks.first.locality ??
+          placemarks.first.administrativeArea ??
+          'Unknown';
+
+      final cache = PrayerCache();
+      await cache.save(
+        lat: position.latitude,
+        lng: position.longitude,
+        locationName: location,
+      );
+      _applyPrayerTimes(cache);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _permissionError = 'Error fetching location: $e';
+        });
+      }
+    }
   }
 
   void _applyPrayerTimes(PrayerCache cache) {
@@ -171,98 +227,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     _scheduleAllNotifications();
   }
 
-  Future<void> _showLocationPermissionDialog() async {
-    final allow = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Location Required'),
-        content: const Text(
-          'Your location is required for accurate prayer times.\nPlease allow access.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Not Now'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Allow'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (allow == true) {
-      await _refreshLocation();
-    } else {
-      setState(() {
-        _loading = false;
-        _permissionError = 'Location permission required.';
-      });
-    }
-  }
-
-  Future<void> _refreshLocation() async {
-    if (!mounted) return;
-    setState(() {
-      _loading = true;
-      _permissionError = null;
-    });
-    final hasPermission = await _handleLocationPermission();
-    if (!hasPermission) {
-      if (mounted) setState(() => _loading = false);
-      return;
-    }
-    final position = await Geolocator.getCurrentPosition();
-    final placemarks = await placemarkFromCoordinates(
-      position.latitude,
-      position.longitude,
-    );
-    final location =
-        placemarks.first.locality ??
-        placemarks.first.administrativeArea ??
-        'Unknown';
-    final cache = PrayerCache();
-    await cache.save(
-      lat: position.latitude,
-      lng: position.longitude,
-      locationName: location,
-    );
-    _applyPrayerTimes(cache);
-  }
-
-  Future<bool> _handleLocationPermission() async {
-    final gpsEnabled = await _ensureLocationServiceEnabled();
-    if (!gpsEnabled) return false;
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (!mounted) return false;
-    if (permission == LocationPermission.denied) {
-      setState(() => _permissionError = 'Location denied.');
-      return false;
-    }
-    if (permission == LocationPermission.deniedForever) {
-      await Geolocator.openAppSettings();
-      return false;
-    }
-    return true;
-  }
-
-  // --- SCHEDULING ---
-
-  int _alarmId(String prayer, String type) {
-    const base = {
-      'fajr': 1000,
-      'dhuhr': 2000,
-      'asr': 3000,
-      'maghrib': 4000,
-      'isha': 5000,
-    };
-    return base[prayer]! + (type == 'azan' ? 1 : 2);
-  }
+  // --- SCHEDULING & ALARMS ---
 
   Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
@@ -303,41 +268,70 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         );
       }
     }
+
+    await NotificationService.scheduleDailyRescheduler();
   }
+
+  int _alarmId(String prayer, String type) {
+    const base = {
+      'fajr': 1000,
+      'dhuhr': 2000,
+      'asr': 3000,
+      'maghrib': 4000,
+      'isha': 5000,
+    };
+    return base[prayer]! + (type == 'azan' ? 1 : 2);
+  }
+
+  // --- UTILS ---
 
   Future<bool> _ensureLocationServiceEnabled() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (enabled) return true;
     if (!mounted) return false;
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Enable Location'),
-        actions: [
-          TextButton(
-            onPressed: () => SystemNavigator.pop(),
-            child: const Text('Exit'),
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Enable Location (GPS)'),
+            content: const Text(
+              'GPS is required for precise prayer calculation.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Exit'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  await Geolocator.openLocationSettings();
+                  Navigator.pop(context, true);
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
-    );
-    if (res == true) {
-      await Geolocator.openLocationSettings();
-      return true;
-    }
-    return false;
+        ) ??
+        false;
   }
 
-  // --- UI ---
+  String _pretty(String name) => name[0].toUpperCase() + name.substring(1);
+  String _formatDuration(Duration d) =>
+      '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
+  Future<void> updateSaletiWidget(String name, String time) async {
+    await HomeWidget.saveWidgetData<String>('next_prayer_name', name);
+    await HomeWidget.saveWidgetData<String>('next_prayer_time', time);
+    await HomeWidget.updateWidget(
+      name: 'PrayerWidgetProvider',
+      androidName: 'PrayerWidgetProvider',
+    );
+  }
+
+  // --- UI BUILDING ---
 
   @override
   Widget build(BuildContext context) {
-    _checkSystemReadiness();
-
     if (_loading)
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     if (_permissionError != null) {
@@ -347,10 +341,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.location_off, size: 90, color: Colors.red),
-              Text(_permissionError!),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(_permissionError!, textAlign: TextAlign.center),
+              ),
               ElevatedButton(
-                onPressed: _showLocationPermissionDialog,
-                child: const Text('Grant Permission'),
+                onPressed: _initLocationAndPrayerTimes,
+                child: const Text('Retry Permission'),
               ),
             ],
           ),
@@ -372,7 +369,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // ⚠️ WARNING BANNER
             if (!_isFullyConfigured)
               GestureDetector(
                 onTap: _triggerPermissionRequests,
@@ -383,15 +379,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     vertical: 10,
                     horizontal: 16,
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.warning_amber_rounded,
                         color: Colors.orange,
                         size: 20,
                       ),
-                      const SizedBox(width: 10),
-                      const Expanded(
+                      SizedBox(width: 10),
+                      Expanded(
                         child: Text(
                           'Background settings not optimized. Tap to fix.',
                           style: TextStyle(
@@ -404,7 +400,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       Icon(
                         Icons.arrow_forward_ios,
                         size: 12,
-                        color: Colors.orange.shade800,
+                        color: Colors.orange,
                       ),
                     ],
                   ),
@@ -423,7 +419,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  // --- SUB-WIDGETS ---
+  // (Helper widgets like _header, _clockCircle, _upcomingPrayer, _prayerList, _showMinutesDialog
+  // remain the same as your previous implementation)
 
   Widget _header(HijriCalendar hijri) {
     return Padding(
@@ -505,24 +502,67 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   Widget _upcomingPrayer(Prayer nextPrayer, DateTime time, Duration remaining) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.green.withOpacity(0.1),
+        gradient: LinearGradient(
+          colors: [Colors.green.shade600, Colors.green.shade400],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Next: ${_pretty(nextPrayer.name)} at ${DateFormat('hh:mm a').format(time)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.timer_outlined,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Next: ${_pretty(nextPrayer.name)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'At ${DateFormat('hh:mm a').format(time)}',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
           Text(
             _formatDuration(remaining),
             style: const TextStyle(
-              color: Colors.green,
-              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -538,76 +578,190 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'maghrib': prayerTimes!.maghrib,
       'isha': prayerTimes!.isha,
     };
-    return ListView(
-      children: prayers.entries.map((entry) {
-        final setting = NotificationService.prayerSettings[entry.key]!;
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.white,
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+    final next = prayerTimes!.nextPrayer();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(35),
+          topRight: Radius.circular(35),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(35),
+          topRight: Radius.circular(35),
+        ),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          itemCount: prayers.length,
+          separatorBuilder: (context, index) =>
+              const Divider(height: 1, color: Color(0xFFF0F0F0)),
+          itemBuilder: (context, index) {
+            final prayerKey = prayers.keys.elementAt(index);
+            final prayerTime = prayers.values.elementAt(index);
+            final setting = NotificationService.prayerSettings[prayerKey]!;
+            final isNext = next.name == prayerKey;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
                 children: [
-                  Text(
-                    _pretty(entry.key),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  // Highlight indicator for the next prayer
+                  Container(
+                    width: 4,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: isNext ? Colors.green : Colors.transparent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  Text(DateFormat('hh:mm a').format(entry.value)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _pretty(prayerKey),
+                          style: TextStyle(
+                            fontWeight: isNext
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                            fontSize: 17,
+                            color: isNext
+                                ? Colors.green.shade700
+                                : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          DateFormat('hh:mm a').format(prayerTime),
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Compact Action Buttons
+                  _actionIcon(
+                    icon: setting['reminder'] == true
+                        ? Icons.alarm_on
+                        : Icons.alarm_off,
+                    activeColor: Colors.green,
+                    isActive: setting['reminder'] == true,
+                    onTap: () async {
+                      setState(
+                        () => setting['reminder'] = !setting['reminder'],
+                      );
+                      await NotificationService.saveSettings();
+                      _scheduleAllNotifications();
+                    },
+                    onLongPress: () async {
+                      HapticFeedback.heavyImpact();
+                      final minutes = await _showMinutesDialog(
+                        setting['minutesBefore'] as int,
+                      );
+                      if (minutes != null) {
+                        setState(() {
+                          setting['minutesBefore'] = minutes;
+                          setting['reminder'] = true;
+                        });
+                        await NotificationService.saveSettings();
+                        _scheduleAllNotifications();
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _actionIcon(
+                    icon: setting['azan'] == true
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                    activeColor: Colors.blue,
+                    isActive: setting['azan'] == true,
+                    onTap: () async {
+                      setState(() => setting['azan'] = !setting['azan']);
+                      await NotificationService.saveSettings();
+                      _scheduleAllNotifications();
+                    },
+                  ),
                 ],
               ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      setting['reminder'] == true
-                          ? Icons.alarm_on
-                          : Icons.alarm_off,
-                      color: setting['reminder'] == true
-                          ? Colors.green
-                          : Colors.grey,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // Custom Helper for Elegant Buttons
+  Widget _actionIcon({
+    required IconData icon,
+    required Color activeColor,
+    required bool isActive,
+    required VoidCallback onTap,
+    VoidCallback? onLongPress,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor.withOpacity(0.12) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isActive ? activeColor : Colors.grey.shade400,
+        ),
+      ),
+    );
+  }
+
+  Future<int?> _showMinutesDialog(int current) {
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        int selected = current;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: const Text('Reminder Timer'),
+            content: DropdownButton<int>(
+              value: selected,
+              isExpanded: true,
+              items: [5, 10, 15, 20, 25, 30]
+                  .map(
+                    (m) => DropdownMenuItem(
+                      value: m,
+                      child: Text('$m Minutes before'),
                     ),
-                    onPressed: () async {
-                      setting['reminder'] = !setting['reminder'];
-                      await NotificationService.saveSettings();
-                      setState(() {});
-                      _scheduleAllNotifications();
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      setting['azan'] == true
-                          ? Icons.notifications_active
-                          : Icons.notifications_off,
-                      color: setting['azan'] == true
-                          ? Colors.blue
-                          : Colors.grey,
-                    ),
-                    onPressed: () async {
-                      setting['azan'] = !setting['azan'];
-                      await NotificationService.saveSettings();
-                      setState(() {});
-                      _scheduleAllNotifications();
-                    },
-                  ),
-                ],
+                  )
+                  .toList(),
+              onChanged: (v) => setStateDialog(() => selected = v ?? selected),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: const Text('SAVE'),
               ),
             ],
           ),
         );
-      }).toList(),
+      },
     );
   }
-
-  String _pretty(String name) => name[0].toUpperCase() + name.substring(1);
-  String _formatDuration(Duration d) =>
-      '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 }
 
 class NotificationPermission {

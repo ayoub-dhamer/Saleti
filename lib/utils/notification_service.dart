@@ -11,24 +11,31 @@ import 'dart:convert';
 final FlutterLocalNotificationsPlugin _notifications =
     FlutterLocalNotificationsPlugin();
 
-/// ⚠️ Must be top-level for Android Alarm Manager
 @pragma('vm:entry-point')
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
+  // 1. Critical for closed-app execution
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Properly parse the flag to prevent accidental audio during reminders
-  final dynamic playAzanRaw = params['playAzan'];
-  final bool shouldPlayAzan = (playAzanRaw == true || playAzanRaw == 'true');
+  final bool isAzan = params['playAzan'] == true;
 
-  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final notifications = FlutterLocalNotificationsPlugin();
-  await notifications.initialize(
-    const InitializationSettings(android: android),
-  );
+  if (isAzan) {
+    // 2. Check if already running to prevent overlap
+    if (await FlutterForegroundTask.isRunningService) return;
 
-  // 2. Reminder vs Azan Logic
-  if (!shouldPlayAzan) {
-    // SILENT REMINDER
+    // 3. Start the foreground service which handles the audio
+    await FlutterForegroundTask.startService(
+      notificationTitle: params['title'] ?? "Prayer Time",
+      notificationText: params['body'] ?? "Azan is playing...",
+      callback: startAzanCallback,
+    );
+  } else {
+    // Standard reminder logic
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final notifications = FlutterLocalNotificationsPlugin();
+    await notifications.initialize(
+      const InitializationSettings(android: android),
+    );
+
     await notifications.show(
       id,
       params['title'],
@@ -36,26 +43,14 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'reminder_channel',
-          'Prayer Reminders',
+          'Reminders',
           importance: Importance.high,
           priority: Priority.high,
-          playSound: false, // Ensure this is false
-          enableVibration: true,
+          playSound: false,
         ),
       ),
     );
-    return; // Stop here for reminders
   }
-
-  // 3. AZAN LOGIC (High Priority)
-  // Ensure we don't start if already running
-  if (await FlutterForegroundTask.isRunningService) return;
-
-  await FlutterForegroundTask.startService(
-    notificationTitle: params['title'],
-    notificationText: params['body'],
-    callback: startAzanCallback,
-  );
 }
 
 @pragma('vm:entry-point')
@@ -66,7 +61,6 @@ void startAzanCallback() {
 class NotificationService {
   static const _key = 'prayer_settings';
 
-  // Default prayer notification settings
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
     'dhuhr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
@@ -75,32 +69,35 @@ class NotificationService {
     'isha': {'reminder': true, 'azan': true, 'minutesBefore': 10},
   };
 
-  /// Initialize notifications and alarm manager
   static Future<void> init() async {
-    // Initialize Android Alarm Manager
     await AndroidAlarmManager.initialize();
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
-
-    await _notifications.initialize(settings);
-
-    // Create channels for Android
-    const azanChannel = AndroidNotificationChannel(
-      'azan_channel',
-      'Azan Notifications',
-      description: 'Plays azan sound at prayer time',
-      importance: Importance.max,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound('azan'),
+    // 🆕 Initialize Foreground Task Options for Android 15
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'azan_channel',
+        channelName: 'Azan Notifications',
+        channelImportance: NotificationChannelImportance.MAX,
+        priority: NotificationPriority.MAX,
+        iconData: const NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: 'launcher',
+        ),
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(),
+      foregroundTaskOptions: const ForegroundTaskOptions(
+        interval: 5000,
+        isOnceEvent: false,
+        autoRunOnBoot: true,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
     );
 
-    const reminderChannel = AndroidNotificationChannel(
-      'reminder_channel',
-      'Prayer Reminders',
-      description: 'Silent prayer reminders',
-      importance: Importance.high,
-      playSound: false,
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _notifications.initialize(
+      const InitializationSettings(android: android),
     );
 
     final androidPlugin = _notifications
@@ -108,32 +105,41 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
 
-    await androidPlugin?.createNotificationChannel(azanChannel);
-    await androidPlugin?.createNotificationChannel(reminderChannel);
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'azan_channel',
+        'Azan Notifications',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('azan'),
+      ),
+    );
+
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'reminder_channel',
+        'Prayer Reminders',
+        importance: Importance.high,
+        playSound: false,
+      ),
+    );
   }
 
   static Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
-
     if (raw == null) return;
-
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
-
     prayerSettings = decoded.map(
-      (prayer, settings) =>
-          MapEntry(prayer, Map<String, dynamic>.from(settings)),
+      (k, v) => MapEntry(k, Map<String, dynamic>.from(v)),
     );
   }
 
-  /// 🔹 SAVE SETTINGS
   static Future<void> saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = jsonEncode(prayerSettings);
-    await prefs.setString(_key, jsonString);
+    await prefs.setString(_key, jsonEncode(prayerSettings));
   }
 
-  /// Schedule a reminder notification (silent)
   static Future<void> scheduleReminder({
     required int id,
     required DateTime time,
@@ -148,17 +154,16 @@ class NotificationService {
       alarmCallback,
       exact: true,
       wakeup: true,
+      rescheduleOnReboot: true,
       params: {
         'title': 'Prayer Reminder',
-        'body': '$prayer in $minutes minutes',
-        'channel': 'reminder_channel',
-        'playSound': false,
-        'playAzan': false, // ✅ EXPLICIT
+        'body':
+            '${prayer[0].toUpperCase() + prayer.substring(1)} in $minutes minutes',
+        'playAzan': false,
       },
     );
   }
 
-  /// Schedule Azan notification with sound
   static Future<void> scheduleAzan({
     required int id,
     required DateTime time,
@@ -170,23 +175,29 @@ class NotificationService {
       time,
       id,
       alarmCallback,
-      exact: true, // Must be true
-      wakeup: true, // Must be true
-      alarmClock: true, // 💡 ADD THIS: Treats it like a system alarm
+      exact: true,
+      wakeup: true,
+      alarmClock: true, // 🚨 Critical: Wakes up phone from deep sleep
       allowWhileIdle: true,
       rescheduleOnReboot: true,
       params: {
-        'title': 'Time for $prayer Prayer',
-        'body':
-            'Salah is not a burden; it is a meeting with the One who loves you most',
-        'playAzan': true, // 👈 triggers foreground audio
+        'title': 'Time for ${prayer[0].toUpperCase() + prayer.substring(1)}',
+        'body': 'Salah is better than sleep',
+        'playAzan': true,
       },
     );
   }
 
-  /// Cancel all scheduled alarms (for rescheduling)
+  static Future<void> testAzanNow() async {
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Azan Testing',
+      notificationText: 'Testing the prayer call audio...',
+      callback: startAzanCallback,
+    );
+  }
+
   static Future<void> cancelAll() async {
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < 10000; i++) {
       await AndroidAlarmManager.cancel(i);
     }
   }
@@ -194,21 +205,23 @@ class NotificationService {
   static Future<void> scheduleDailyRescheduler() async {
     final now = DateTime.now();
 
+    // Calculate tomorrow at 00:05 AM
     final midnight = DateTime(
       now.year,
       now.month,
       now.day,
       0,
-      5, // 00:05 AM
+      5,
     ).add(const Duration(days: 1));
 
     await AndroidAlarmManager.oneShotAt(
       midnight,
-      9999, // reserved ID
-      dailyRescheduleCallback,
+      9999, // Reserved ID for the rescheduler
+      dailyRescheduleCallback, // The function in daily_rescheduler.dart
       exact: true,
       wakeup: true,
-      rescheduleOnReboot: true,
+      rescheduleOnReboot:
+          true, // Crucial: sets it back up if the phone restarts
     );
   }
 }

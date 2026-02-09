@@ -4,8 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
+  final int? initialSurah;
 
-  const MushafPageScreen({super.key, this.startPage = 1});
+  const MushafPageScreen({super.key, this.startPage = 1, this.initialSurah});
 
   @override
   State<MushafPageScreen> createState() => _MushafPageScreenState();

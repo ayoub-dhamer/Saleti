@@ -39,7 +39,7 @@
     android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
     android:permission="android.permission.FOREGROUND_SERVICE"
     android:foregroundServiceType="mediaPlayback"
-     android:stopWithTask="false"
+    android:stopWithTask="false"
     android:exported="false" />
 
         <service

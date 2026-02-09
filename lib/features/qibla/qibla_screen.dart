@@ -258,86 +258,222 @@ class _QiblaScreenState extends State<QiblaScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        /// Compass Card
-        Container(
-          width: 280,
-          height: 280,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 20,
-                offset: Offset(0, 8),
-                color: Colors.black12,
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            /// 1. Outer Glow/Shadow
+            Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: aligned
+                        ? Colors.green.withOpacity(0.15)
+                        : Colors.black.withOpacity(0.05),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              /// Compass Ring
-              Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.green.shade200, width: 6),
+            ),
+
+            /// 2. The Main Compass Plate
+            Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: aligned ? Colors.green.shade400 : Colors.grey.shade200,
+                  width: 2,
                 ),
               ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  /// 3. Static Degree Markers (The Dial)
+                  ...List.generate(36, (index) {
+                    return Transform.rotate(
+                      angle: (index * 10) * pi / 180,
+                      child: VerticalDivider(
+                        color: index % 9 == 0
+                            ? Colors.green.shade300
+                            : Colors.grey.shade300,
+                        thickness: index % 9 == 0 ? 3 : 1,
+                        indent: 0,
+                        endIndent: 260,
+                      ),
+                    );
+                  }),
 
-              /// Needle
-              AnimatedRotation(
-                turns: angle / (2 * pi),
-                duration: const Duration(milliseconds: 300),
-                child: Column(
-                  children: const [
-                    Icon(Icons.navigation, size: 90, color: Colors.green),
-                    SizedBox(height: 6),
+                  /// 4. Cardinal Directions
+                  const Positioned(
+                    top: 15,
+                    child: Text(
+                      'N',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                  const Positioned(
+                    bottom: 15,
+                    child: Text(
+                      'S',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Positioned(
+                    right: 15,
+                    child: Text(
+                      'E',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Positioned(
+                    left: 15,
+                    child: Text(
+                      'W',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            /// 5. The Rotating Needle Layer
+            AnimatedRotation(
+              turns: angle / (2 * pi),
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.decelerate, // Smooth organic movement
+              child: SizedBox(
+                width: 240,
+                height: 240,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    /// Kaaba Icon / Pointy end
+                    Positioned(
+                      top: 0,
+                      child: Column(
+                        children: [
+                          // A small Kaaba or Icon
+                          Icon(
+                            Icons.mosque,
+                            size: 34,
+                            color: aligned ? Colors.green : Colors.black87,
+                          ),
+                          // The Arrow Head
+                          Container(
+                            width: 4,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  aligned ? Colors.green : Colors.black87,
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ),
 
-              /// Center Dot
-              Container(
-                width: 14,
-                height: 14,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
+            /// 6. Center Hub
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: aligned ? Colors.green : Colors.black,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 28),
-
-        /// 🎯 Status
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-          decoration: BoxDecoration(
-            color: aligned ? Colors.green : Colors.orange,
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Text(
-            aligned ? 'Aligned with Qibla 🤲' : '$difference° to Qibla',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
             ),
-          ),
+          ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 40),
+
+        /// 🎯 Digital Readout Card
+        _buildStatusCard(difference, aligned),
+
+        const SizedBox(height: 16),
 
         const Text(
-          'Rotate your phone to align the arrow with Qibla',
-          style: TextStyle(color: Colors.black54),
+          'Ensure phone is on a flat surface',
+          style: TextStyle(
+            color: Colors.black38,
+            fontSize: 12,
+            letterSpacing: 0.5,
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStatusCard(int difference, bool aligned) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: aligned ? Colors.green : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: aligned
+                ? Colors.green.withOpacity(0.3)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            aligned ? Icons.check_circle : Icons.explore_outlined,
+            color: aligned ? Colors.white : Colors.orange,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            aligned ? 'Facing Qibla' : '$difference° Off Track',
+            style: TextStyle(
+              color: aligned ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
