@@ -62,11 +62,83 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   /// ✅ Orchestrates the launch sequence
   Future<void> _initializeApp() async {
-    // 1. Request Notification/Battery/Alarm permissions
+    // 1. Request Notification/Battery/Alarm permissions (System stuff)
     await _triggerPermissionRequests();
 
-    // 2. Initialize Location (GPS Check + Permission + Cache/Fetch)
-    await _initLocationAndPrayerTimes();
+    // 2. Location Logic (The Qibla way)
+    await _checkPermissionAndLoad();
+  }
+
+  /// ✅ Logic exactly like Qibla: Checks if we should show a dialog first
+  Future<void> _checkPermissionAndLoad() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _loading = false;
+        _permissionError = 'Location service is disabled. Please enable GPS.';
+      });
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      // Show the custom dialog before the native system prompt
+      await _showLocationDialog();
+      return;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is permanently denied. Please enable it from settings.';
+      });
+      return;
+    }
+
+    // ✅ Permission already exists, just load
+    await _refreshLocation();
+  }
+
+  Future<void> _showLocationDialog() async {
+    final allow = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('Enable Location'),
+          content: const Text(
+            'We need your location to calculate prayer times accurately for your current city.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Not Now'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('Enable'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (allow == true) {
+      // User clicked Enable, now trigger native request
+      await _refreshLocation();
+    } else {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location access is required to show local prayer times.';
+      });
+    }
   }
 
   @override
@@ -185,10 +257,28 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       _permissionError = null;
     });
 
+    // Handle native permission request here if still denied
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission denied. Prayer times cannot be calculated.';
+      });
+      return;
+    }
+
     try {
+      // Actual Position Fetching
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
@@ -205,6 +295,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         lng: position.longitude,
         locationName: location,
       );
+
       _applyPrayerTimes(cache);
     } catch (e) {
       if (mounted) {
@@ -346,7 +437,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                 child: Text(_permissionError!, textAlign: TextAlign.center),
               ),
               ElevatedButton(
-                onPressed: _initLocationAndPrayerTimes,
+                onPressed: _checkPermissionAndLoad,
                 child: const Text('Retry Permission'),
               ),
             ],
