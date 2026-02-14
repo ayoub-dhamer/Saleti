@@ -8,6 +8,11 @@ import 'utils/prayer_cache.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final now = DateTime.now();
+  final testTime = DateTime(now.year, now.month, now.day, 00, 30);
+
+  NotificationService.testAzanAt(testTime);
+
   // 🆕 Initialize Foreground Task Options for Android 15
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(

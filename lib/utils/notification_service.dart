@@ -114,8 +114,7 @@ class NotificationService {
         'azan_channel',
         'Azan Notifications',
         importance: Importance.max,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('azan'),
+        playSound: false, // 👈 IMPORTANT
       ),
     );
 
@@ -126,6 +125,22 @@ class NotificationService {
         importance: Importance.high,
         playSound: false,
       ),
+    );
+  }
+
+  static Future<void> testAzanAt(DateTime time) async {
+    await AndroidAlarmManager.oneShotAt(
+      time,
+      7777, // test ID
+      alarmCallback,
+      exact: true,
+      wakeup: true,
+      alarmClock: true,
+      params: {
+        'title': 'Azan Test',
+        'body': 'Testing azan while app is closed',
+        'playAzan': true,
+      },
     );
   }
 
