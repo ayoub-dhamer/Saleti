@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:saleti/utils/battery_optimization_helper.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
+import 'package:saleti/utils/prayer_location_service.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
@@ -23,33 +24,28 @@ class PrayerTimesScreen extends StatefulWidget {
 
 class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     with WidgetsBindingObserver {
-  // Permission Tracking Flags
-  bool _waitingForBatterySetting = false;
-  bool _waitingForAlarmSetting = false;
-  bool _isFullyConfigured = true;
-
-  // Session flags to prevent repeat snackbars
-  bool _batteryMessageShown = false;
-  bool _alarmMessageShown = false;
-
   PrayerTimes? prayerTimes;
   Timer? _timer;
   DateTime now = DateTime.now();
-  String _locationName = 'Loading...';
+
   bool _loading = true;
+  bool _isFullyConfigured = true;
+  String _locationName = 'Loading...';
   String? _permissionError;
+
+  bool _batterySnackShown = false;
+  bool _alarmSnackShown = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // ✅ Launch sequential permission and location flow
-    _initializeApp();
+    _initializeSystemPermissions();
+    _initLocationAndPrayerTimes();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => now = DateTime.now());
+      if (mounted) setState(() => now = DateTime.now());
     });
   }
 
@@ -60,84 +56,35 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     super.dispose();
   }
 
-  /// ✅ Orchestrates the launch sequence
-  Future<void> _initializeApp() async {
-    // 1. Request Notification/Battery/Alarm permissions (System stuff)
-    await _triggerPermissionRequests();
+  // ----------------------------------------------------------
+  // SYSTEM PERMISSIONS (battery / alarms / notifications)
+  // ----------------------------------------------------------
 
-    // 2. Location Logic (The Qibla way)
-    await _checkPermissionAndLoad();
+  Future<void> _initializeSystemPermissions() async {
+    await NotificationPermission.request();
+    await BatteryOptimizationHelper.requestDisable(context);
+    await ExactAlarmPermission.ensureEnabled(context);
+    _checkSystemReadiness();
   }
 
-  /// ✅ Logic exactly like Qibla: Checks if we should show a dialog first
-  Future<void> _checkPermissionAndLoad() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() {
-        _loading = false;
-        _permissionError = 'Location service is disabled. Please enable GPS.';
-      });
-      return;
-    }
+  Future<void> _checkSystemReadiness({bool showSnackbars = false}) async {
+    final batteryOk = await BatteryOptimizationHelper.isWhitelisted();
+    final alarmOk = await ExactAlarmPermission.isGranted();
 
-    var permission = await Geolocator.checkPermission();
+    if (!mounted) return;
 
-    if (permission == LocationPermission.denied) {
-      // Show the custom dialog before the native system prompt
-      await _showLocationDialog();
-      return;
-    }
+    setState(() {
+      _isFullyConfigured = batteryOk && alarmOk;
+    });
 
-    if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _loading = false;
-        _permissionError =
-            'Location permission is permanently denied. Please enable it from settings.';
-      });
-      return;
-    }
-
-    // ✅ Permission already exists, just load
-    await _refreshLocation();
-  }
-
-  Future<void> _showLocationDialog() async {
-    final allow = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text('Enable Location'),
-          content: const Text(
-            'We need your location to calculate prayer times accurately for your current city.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Not Now'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: const Text('Enable'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (allow == true) {
-      // User clicked Enable, now trigger native request
-      await _refreshLocation();
-    } else {
-      setState(() {
-        _loading = false;
-        _permissionError =
-            'Location access is required to show local prayer times.';
-      });
+    if (showSnackbars) {
+      if (batteryOk && !_batterySnackShown) {
+        _batterySnackShown = true;
+      }
+      if (alarmOk && !_alarmSnackShown) {
+        _alarmSnackShown = true;
+        _scheduleAllNotifications();
+      }
     }
   }
 
@@ -148,180 +95,116 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     }
   }
 
-  /// ✅ Checks both permissions and updates the UI banner
-  Future<void> _checkSystemReadiness({bool showSnackbars = false}) async {
-    bool batteryOk = await BatteryOptimizationHelper.isWhitelisted();
-    bool alarmOk = await ExactAlarmPermission.isGranted();
-
-    if (!mounted) return;
-
-    setState(() {
-      _isFullyConfigured = batteryOk && alarmOk;
-    });
-
-    if (showSnackbars) {
-      if (_waitingForBatterySetting && batteryOk && !_batteryMessageShown) {
-        setState(() {
-          _waitingForBatterySetting = false;
-          _batteryMessageShown = true;
-        });
-      }
-
-      if (_waitingForAlarmSetting && alarmOk && !_alarmMessageShown) {
-        setState(() {
-          _waitingForAlarmSetting = false;
-          _alarmMessageShown = true;
-        });
-        _scheduleAllNotifications();
-      }
-    }
-  }
-
-  /// ✅ Sequential Permission Flow
-  Future<void> _triggerPermissionRequests() async {
-    await NotificationPermission.request();
-
-    if (!mounted) return;
-
-    setState(() {
-      _waitingForBatterySetting = true;
-    });
-
-    await BatteryOptimizationHelper.requestDisable(context);
-
-    if (mounted) {
-      setState(() => _waitingForAlarmSetting = true);
-      await ExactAlarmPermission.ensureEnabled(context);
-    }
-  }
-
-  // --- LOCATION LOGIC ---
+  // ----------------------------------------------------------
+  // LOCATION + PRAYER TIMES (SINGLE ENTRY POINT)
+  // ----------------------------------------------------------
 
   Future<void> _initLocationAndPrayerTimes() async {
     if (!mounted) return;
-    setState(() => _loading = true);
 
-    // 1. Hardware GPS + App Permission Check
-    bool hasAccess = await _handleLocationPermission();
-    if (!hasAccess) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _permissionError = 'Location & GPS access required for prayer times.';
-        });
-      }
-      return;
-    }
-
-    // 2. Load from Cache or Refresh
-    final cache = PrayerCache();
-    await cache.load();
-
-    if (cache.hasLocation) {
-      _applyPrayerTimes(cache);
-    } else {
-      await _refreshLocation();
-    }
-  }
-
-  Future<bool> _handleLocationPermission() async {
-    // Check if GPS hardware is ON
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      bool opened = await _ensureLocationServiceEnabled();
-      if (!opened) return false;
-      // Re-verify after potential settings change
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return false;
-    }
-
-    // Check App Level Permission
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return false;
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      await Geolocator.openAppSettings();
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<void> _refreshLocation() async {
-    if (!mounted) return;
     setState(() {
       _loading = true;
       _permissionError = null;
     });
 
-    // Handle native permission request here if still denied
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+    try {
+      final result = await PrayerLocationService.loadPrayerTimes(
+        onPermissionDenied: _showLocationDialog,
+      );
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+
+      setState(() {
+        prayerTimes = result.prayerTimes;
+        _locationName = result.locationName;
+        _loading = false;
+      });
+
+      _scheduleAllNotifications();
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
-        _permissionError =
-            'Location permission denied. Prayer times cannot be calculated.';
+        _permissionError = e.toString().replaceFirst('Exception: ', '');
       });
-      return;
     }
+  }
+
+  Future<void> _refreshLocation() async {
+    if (!mounted) return;
+
+    setState(() {
+      _loading = true;
+      _permissionError = null;
+    });
 
     try {
-      // Actual Position Fetching
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      final result = await PrayerLocationService.refreshPrayerTimes();
 
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      if (!mounted) return;
 
-      final location =
-          placemarks.first.locality ??
-          placemarks.first.administrativeArea ??
-          'Unknown';
+      setState(() {
+        prayerTimes = result.prayerTimes;
+        _locationName = result.locationName;
+        _loading = false;
+      });
 
-      final cache = PrayerCache();
-      await cache.save(
-        lat: position.latitude,
-        lng: position.longitude,
-        locationName: location,
-      );
-
-      _applyPrayerTimes(cache);
+      _scheduleAllNotifications();
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _permissionError = 'Error fetching location: $e';
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _permissionError = e.toString().replaceFirst('Exception: ', '');
+      });
     }
+  }
+
+  Future<bool> _showLocationDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Enable Location'),
+            content: const Text(
+              'Your location is required to calculate accurate prayer times.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Not now'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Enable'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   void _applyPrayerTimes(PrayerCache cache) {
     final times = cache.calculatePrayerTimes();
-    if (!mounted) return;
+
     setState(() {
       prayerTimes = times;
       _locationName = cache.locationName!;
       _loading = false;
     });
+
     _scheduleAllNotifications();
   }
 
-  // --- SCHEDULING & ALARMS ---
+  // ----------------------------------------------------------
+  // NOTIFICATIONS
+  // ----------------------------------------------------------
 
   Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
+
     final map = {
       'fajr': prayerTimes!.fajr,
       'dhuhr': prayerTimes!.dhuhr,
@@ -330,23 +213,23 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'isha': prayerTimes!.isha,
     };
 
-    for (final entry in map.entries) {
-      final prayer = entry.key;
-      final time = entry.value;
+    for (final e in map.entries) {
+      final prayer = e.key;
+      final time = e.value;
       final setting = NotificationService.prayerSettings[prayer]!;
 
       await AndroidAlarmManager.cancel(_alarmId(prayer, 'reminder'));
       await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
 
       if (setting['reminder'] == true) {
-        final minutes = setting['minutesBefore'] as int;
-        final reminderTime = time.subtract(Duration(minutes: minutes));
-        if (reminderTime.isAfter(DateTime.now())) {
+        final m = setting['minutesBefore'] as int;
+        final t = time.subtract(Duration(minutes: m));
+        if (t.isAfter(DateTime.now())) {
           await NotificationService.scheduleReminder(
             id: _alarmId(prayer, 'reminder'),
-            time: reminderTime,
+            time: t,
             prayer: prayer,
-            minutes: minutes,
+            minutes: m,
           );
         }
       }
@@ -374,41 +257,74 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return base[prayer]! + (type == 'azan' ? 1 : 2);
   }
 
-  // --- UTILS ---
-
-  Future<bool> _ensureLocationServiceEnabled() async {
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (enabled) return true;
-    if (!mounted) return false;
-
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Enable Location (GPS)'),
-            content: const Text(
-              'GPS is required for precise prayer calculation.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Exit'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await Geolocator.openLocationSettings();
-                  Navigator.pop(context, true);
-                },
-                child: const Text('Open Settings'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  String _pretty(DateTime time) {
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
   }
 
-  String _pretty(String name) => name[0].toUpperCase() + name.substring(1);
-  String _formatDuration(Duration d) =>
-      '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  // ----------------------------------------------------------
+  // UI
+  // ----------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_permissionError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_off, size: 80, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(_permissionError!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _initLocationAndPrayerTimes,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final hijri = HijriCalendar.now();
+    final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
+        ? Prayer.fajr
+        : prayerTimes!.nextPrayer();
+
+    DateTime nextTime = prayerTimes!.timeForPrayer(nextPrayer)!;
+    if (nextTime.isBefore(now)) {
+      nextTime = nextTime.add(const Duration(days: 1));
+    }
+
+    updateSaletiWidget(nextPrayer.name, DateFormat('hh:mm a').format(nextTime));
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            _header(hijri),
+            const SizedBox(height: 16),
+            _clockCircle(),
+            const SizedBox(height: 16),
+            _upcomingPrayer(nextPrayer, nextTime, nextTime.difference(now)),
+            const SizedBox(height: 8),
+            Expanded(child: _prayerList()),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> updateSaletiWidget(String name, String time) async {
     await HomeWidget.saveWidgetData<String>('next_prayer_name', name);
@@ -419,95 +335,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  // --- UI BUILDING ---
+  String _formatDuration(Duration d) =>
+      '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading)
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_permissionError != null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.location_off, size: 90, color: Colors.red),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(_permissionError!, textAlign: TextAlign.center),
-              ),
-              ElevatedButton(
-                onPressed: _checkPermissionAndLoad,
-                child: const Text('Retry Permission'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final hijri = HijriCalendar.now();
-    final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
-        ? Prayer.fajr
-        : prayerTimes!.nextPrayer();
-    DateTime nextPrayerTime = prayerTimes!.timeForPrayer(nextPrayer)!;
-    if (nextPrayerTime.isBefore(now)) {
-      nextPrayerTime = nextPrayerTime.add(const Duration(days: 1));
-    }
-    final remaining = nextPrayerTime.difference(now);
-
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (!_isFullyConfigured)
-              GestureDetector(
-                onTap: _triggerPermissionRequests,
-                child: Container(
-                  width: double.infinity,
-                  color: Colors.orange.shade50,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 10,
-                    horizontal: 16,
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Background settings not optimized. Tap to fix.',
-                          style: TextStyle(
-                            color: Colors.deepOrange,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Colors.orange,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            _header(hijri),
-            const SizedBox(height: 16),
-            _clockCircle(),
-            const SizedBox(height: 16),
-            _upcomingPrayer(nextPrayer, nextPrayerTime, remaining),
-            const SizedBox(height: 8),
-            Expanded(child: _prayerList()),
-          ],
-        ),
-      ),
-    );
+  String _prettyName(String name) {
+    return name[0].toUpperCase() + name.substring(1);
   }
 
   // (Helper widgets like _header, _clockCircle, _upcomingPrayer, _prayerList, _showMinutesDialog
@@ -630,7 +462,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Next: ${_pretty(nextPrayer.name)}',
+                  'Next: ${_prettyName(nextPrayer.name)}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -716,7 +548,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _pretty(prayerKey),
+                          _prettyName(prayerKey),
                           style: TextStyle(
                             fontWeight: isNext
                                 ? FontWeight.w800

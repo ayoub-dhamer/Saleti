@@ -1,37 +1,32 @@
-import 'dart:math' as NotificationImportance;
-
-import 'package:adhan/adhan.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_foreground_task/models/android_notification_options.dart';
-import 'package:flutter_foreground_task/models/foreground_task_options.dart';
-import 'package:flutter_foreground_task/models/notification_channel_importance.dart';
-import 'package:flutter_foreground_task/models/notification_icon_data.dart';
-import 'package:flutter_foreground_task/models/notification_priority.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 🆕 Initialize Foreground Task Options for Android 15
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
-      channelId: 'azan_foreground',
-      channelName: 'Azan Playback',
-      channelDescription: 'Plays azan audio',
+      channelId: 'azan_channel',
+      channelName: 'Azan Notifications',
       channelImportance: NotificationChannelImportance.MAX,
       priority: NotificationPriority.MAX,
+      iconData: const NotificationIconData(
+        resType: ResourceType.mipmap,
+        resPrefix: ResourcePrefix.ic,
+        name: 'launcher',
+      ),
       buttons: [const NotificationButton(id: 'stop', text: 'Stop')],
-      // If foregroundServiceType isn't found here, it's because it's
-      // handled via the TaskOptions in 6.5.0
     ),
     iosNotificationOptions: const IOSNotificationOptions(),
-    foregroundTaskOptions: ForegroundTaskOptions(
-      autoRunOnBoot: false,
+    foregroundTaskOptions: const ForegroundTaskOptions(
+      interval: 5000,
+      isOnceEvent: false,
+      autoRunOnBoot: true,
       allowWakeLock: true,
       allowWifiLock: true,
     ),

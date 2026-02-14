@@ -1,5 +1,4 @@
 import 'package:flutter/widgets.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'notification_service.dart';
 import 'prayer_cache.dart';
 
@@ -20,7 +19,7 @@ Future<void> dailyRescheduleCallback() async {
   final prayerTimes = cache.calculatePrayerTimes();
 
   // 3. Clear old alarms to prevent "ghost" notifications
-  await NotificationService.cancelAll();
+  await NotificationService.cancelAllScheduledAlarms();
 
   final map = {
     'fajr': prayerTimes.fajr,

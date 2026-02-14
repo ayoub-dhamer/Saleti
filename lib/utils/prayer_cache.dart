@@ -1,5 +1,4 @@
 import 'package:adhan/adhan.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PrayerCache {

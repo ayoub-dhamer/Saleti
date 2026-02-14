@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -61,6 +60,34 @@ void startAzanCallback() {
 class NotificationService {
   static const _key = 'prayer_settings';
 
+  static const _alarmIdsKey = 'scheduled_alarm_ids';
+
+  static Future<Set<int>> _getStoredAlarmIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_alarmIdsKey) ?? [];
+    return list.map(int.parse).toSet();
+  }
+
+  static Future<void> _saveAlarmIds(Set<int> ids) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _alarmIdsKey,
+      ids.map((e) => e.toString()).toList(),
+    );
+  }
+
+  static Future<void> _registerAlarmId(int id) async {
+    final ids = await _getStoredAlarmIds();
+    ids.add(id);
+    await _saveAlarmIds(ids);
+  }
+
+  static Future<void> _unregisterAlarmId(int id) async {
+    final ids = await _getStoredAlarmIds();
+    ids.remove(id);
+    await _saveAlarmIds(ids);
+  }
+
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
     'dhuhr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
@@ -71,29 +98,6 @@ class NotificationService {
 
   static Future<void> init() async {
     await AndroidAlarmManager.initialize();
-
-    // 🆕 Initialize Foreground Task Options for Android 15
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'azan_channel',
-        channelName: 'Azan Notifications',
-        channelImportance: NotificationChannelImportance.MAX,
-        priority: NotificationPriority.MAX,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(),
-      foregroundTaskOptions: const ForegroundTaskOptions(
-        interval: 5000,
-        isOnceEvent: false,
-        autoRunOnBoot: true,
-        allowWakeLock: true,
-        allowWifiLock: true,
-      ),
-    );
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _notifications.initialize(
@@ -162,6 +166,8 @@ class NotificationService {
         'playAzan': false,
       },
     );
+
+    await _registerAlarmId(id);
   }
 
   static Future<void> scheduleAzan({
@@ -178,7 +184,7 @@ class NotificationService {
       exact: true,
       wakeup: true,
       alarmClock: true, // 🚨 Critical: Wakes up phone from deep sleep
-      allowWhileIdle: true,
+      //allowWhileIdle: true,
       rescheduleOnReboot: true,
       params: {
         'title': 'Time for ${prayer[0].toUpperCase() + prayer.substring(1)}',
@@ -186,6 +192,8 @@ class NotificationService {
         'playAzan': true,
       },
     );
+
+    await _registerAlarmId(id);
   }
 
   static Future<void> testAzanNow() async {
@@ -196,10 +204,14 @@ class NotificationService {
     );
   }
 
-  static Future<void> cancelAll() async {
-    for (int i = 0; i < 10000; i++) {
-      await AndroidAlarmManager.cancel(i);
+  static Future<void> cancelAllScheduledAlarms() async {
+    final ids = await _getStoredAlarmIds();
+
+    for (final id in ids) {
+      await AndroidAlarmManager.cancel(id);
     }
+
+    await _saveAlarmIds({});
   }
 
   static Future<void> scheduleDailyRescheduler() async {

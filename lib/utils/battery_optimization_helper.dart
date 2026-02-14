@@ -1,15 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:android_intent_plus/android_intent.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class BatteryOptimizationHelper {
   static Future<bool> isWhitelisted() async {
     return await Permission.ignoreBatteryOptimizations.isGranted;
   }
-
-  static const _askedKey = 'asked_battery_optimization';
 
   static Future<void> requestDisable(BuildContext context) async {
     // 1. Check current status
