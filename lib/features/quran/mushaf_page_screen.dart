@@ -26,9 +26,22 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   Future<void> _initPage() async {
-    final lastPage = await _loadLastPage();
-    _pageController = PageController(initialPage: lastPage - 1);
-    setState(() => _currentPage = lastPage);
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedLastPage = prefs.getInt('last_mushaf_page') ?? 1;
+
+    // 🔑 Priority:
+    // 1. startPage (from surah / bookmark)
+    // 2. saved last page
+    final initialPage = widget.startPage != 1
+        ? widget.startPage
+        : savedLastPage;
+
+    _currentPage = initialPage;
+
+    _pageController = PageController(initialPage: initialPage - 1);
+
+    setState(() {});
   }
 
   void _toggleLectureMode(bool enable) {
@@ -67,23 +80,25 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _toggleBookmark(int page) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
-    final now = DateTime.now();
-    final date =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final surahName = 'Surah';
-    final key = '$page|$surahName|$date';
 
     final existsIndex = list.indexWhere(
       (e) => e.split('|')[0] == page.toString(),
     );
+
     if (existsIndex >= 0) {
       list.removeAt(existsIndex);
     } else {
-      list.add(key);
+      final now = DateTime.now();
+      final date =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      final surahName = 'Page $page'; // safe & accurate
+
+      list.add('$page|$surahName|$date');
     }
 
     await prefs.setStringList('mushaf_bookmarks', list);
-    _loadBookmarks();
+    await _loadBookmarks();
   }
 
   AppBar _buildAppBar() {
