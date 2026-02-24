@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:saleti/data/surah_page_map.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
@@ -21,8 +23,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable();
     _initPage();
     _loadBookmarks();
+  }
+
+  @override
+  void dispose() {
+    WakelockPlus.disable();
+    _pageController?.dispose();
+    super.dispose();
   }
 
   Future<void> _initPage() async {
@@ -89,16 +99,31 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       list.removeAt(existsIndex);
     } else {
       final now = DateTime.now();
-      final date =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      final surahName = 'Page $page'; // safe & accurate
+      final dateTime =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-      list.add('$page|$surahName|$date');
+      // ✅ Replace this with real surah lookup later if you want
+      final surahName = _getSurahNameFromPage(page);
+
+      list.add('$page|$surahName|$dateTime');
     }
 
     await prefs.setStringList('mushaf_bookmarks', list);
     await _loadBookmarks();
+  }
+
+  String _getSurahNameFromPage(int page) {
+    int closestPage = 1;
+
+    for (final p in surahByPage.keys) {
+      if (p <= page && p >= closestPage) {
+        closestPage = p;
+      }
+    }
+
+    return surahByPage[closestPage] ?? 'Unknown Surah';
   }
 
   AppBar _buildAppBar() {
@@ -142,14 +167,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Page $_currentPage',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 const SizedBox(height: 6),
                 const Text(
                   'Swipe to continue reading',
