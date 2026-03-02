@@ -151,7 +151,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final isBookmarked = _bookmarkedPages.contains(_currentPage);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
