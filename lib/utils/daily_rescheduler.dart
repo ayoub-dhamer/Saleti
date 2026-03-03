@@ -19,7 +19,7 @@ Future<void> dailyRescheduleCallback() async {
   final prayerTimes = cache.calculatePrayerTimes();
 
   // 3. Clear old alarms to prevent "ghost" notifications
-  await NotificationService.cancelAllScheduledAlarms();
+  await NotificationService.cancelPrayerAlarms();
 
   final map = {
     'fajr': prayerTimes.fajr,

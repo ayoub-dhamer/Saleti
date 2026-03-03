@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
 import 'package:home_widget/home_widget.dart';
@@ -587,7 +588,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     },
                     onLongPress: () async {
                       HapticFeedback.heavyImpact();
-                      final minutes = await _showMinutesDialog(
+                      final minutes = await _showDurationPickerDialog(
                         setting['minutesBefore'] as int,
                       );
                       if (minutes != null) {
@@ -649,40 +650,172 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  Future<int?> _showMinutesDialog(int current) {
-    return showDialog<int>(
+  Future<int?> _showDurationPickerDialog(int currentMinutes) {
+    return showModalBottomSheet<int>(
       context: context,
-      builder: (context) {
-        int selected = current;
-        return StatefulBuilder(
-          builder: (context, setStateDialog) => AlertDialog(
-            title: const Text('Reminder Timer'),
-            content: DropdownButton<int>(
-              value: selected,
-              isExpanded: true,
-              items: [5, 10, 15, 20, 25, 30]
-                  .map(
-                    (m) => DropdownMenuItem(
-                      value: m,
-                      child: Text('$m Minutes before'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setStateDialog(() => selected = v ?? selected),
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => _DurationPickerSheet(initialMinutes: currentMinutes),
+    );
+  }
+}
+
+class _DurationPickerSheet extends StatefulWidget {
+  final int initialMinutes;
+
+  const _DurationPickerSheet({required this.initialMinutes});
+
+  @override
+  State<_DurationPickerSheet> createState() => _DurationPickerSheetState();
+}
+
+class _DurationPickerSheetState extends State<_DurationPickerSheet> {
+  static const int _loopCount = 10000;
+
+  late FixedExtentScrollController _hoursCtrl;
+  late FixedExtentScrollController _minutesCtrl;
+
+  int hours = 0;
+  int minutes = 0;
+
+  int _centerIndex(int value, int max) {
+    final base = (_loopCount ~/ 2);
+    return base - (base % max) + value;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    hours = widget.initialMinutes ~/ 60;
+    minutes = widget.initialMinutes % 60;
+
+    // ✅ Clamp to safe ranges
+    hours = hours.clamp(0, 23);
+    minutes = minutes.clamp(0, 59);
+
+    _hoursCtrl = FixedExtentScrollController(
+      initialItem: _centerIndex(hours, 24),
+    );
+    _minutesCtrl = FixedExtentScrollController(
+      initialItem: _centerIndex(minutes, 60),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Reminder Before Prayer',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('CANCEL'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, selected),
-                child: const Text('SAVE'),
-              ),
-            ],
           ),
-        );
-      },
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 220,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _wheel(
+                    label: 'Hours',
+                    controller: _hoursCtrl,
+                    max: 24,
+                    onChanged: (v) => setState(() => hours = v),
+                  ),
+                  _wheel(
+                    label: 'Minutes',
+                    controller: _minutesCtrl,
+                    max: 60,
+                    onChanged: (v) => setState(() => minutes = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: Colors.green,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context, hours * 60 + minutes);
+              },
+              child: const Text(
+                'SET REMINDER',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _wheel({
+    required String label,
+    required FixedExtentScrollController controller,
+    required int max,
+    required ValueChanged<int> onChanged,
+  }) {
+    return SizedBox(
+      width: 120,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: CupertinoPicker.builder(
+              scrollController: controller,
+              itemExtent: 52,
+              backgroundColor: Colors.black,
+              onSelectedItemChanged: (index) {
+                final value = index % max;
+                onChanged(value);
+              },
+              itemBuilder: (_, index) {
+                final value = index % max;
+                return Center(
+                  child: Text(
+                    value.toString().padLeft(2, '0'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
