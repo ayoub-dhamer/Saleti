@@ -372,6 +372,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               ),
             ],
           ),
+
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -416,6 +417,24 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     color: Colors.green,
                   ),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.volume_up),
+                label: const Text('TEST AZAN'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                onPressed: () async {
+                  // Pass the prayer name you want to test
+                  await NotificationService.testAzan("Fajr");
+                },
               ),
             ),
           ],

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,17 @@ final FlutterLocalNotificationsPlugin _notifications =
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final bool isAzan = params['playAzan'] == true;
+
+  if (isAzan) {
+    // ✅ START FOREGROUND SERVICE (PASS PRAYER NAME)
+    const platform = MethodChannel('azan_service');
+    final prayerName = params['prayer'] ?? 'Prayer';
+    await platform.invokeMethod('startAzan', {'prayer': prayerName});
+    return;
+  }
+
+  // 🔕 Silent reminder notification
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   final notifications = FlutterLocalNotificationsPlugin();
 
@@ -19,45 +31,20 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
     const InitializationSettings(android: androidInit),
   );
 
-  final bool isAzan = params['playAzan'] == true;
-
-  if (isAzan) {
-    // 🔊 SYSTEM ALARM (Android 16 SAFE)
-    await notifications.show(
-      id,
-      params['title'] ?? 'Prayer Time',
-      params['body'] ?? 'It is time for Salah',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'azan_channel',
-          'Azan Notifications',
-          importance: Importance.max,
-          priority: Priority.max,
-          category: AndroidNotificationCategory.alarm,
-          fullScreenIntent: true,
-          playSound: true,
-          sound: RawResourceAndroidNotificationSound('azan'),
-          visibility: NotificationVisibility.public,
-        ),
+  await notifications.show(
+    id,
+    params['title'] ?? 'Prayer Reminder',
+    params['body'] ?? '',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'reminder_channel',
+        'Prayer Reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: false,
       ),
-    );
-  } else {
-    // 🔕 Silent reminder
-    await notifications.show(
-      id,
-      params['title'] ?? 'Prayer Reminder',
-      params['body'] ?? '',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminder_channel',
-          'Prayer Reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: false,
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 class NotificationService {
@@ -70,6 +57,12 @@ class NotificationService {
     'maghrib': {'reminder': true, 'azan': true, 'minutesBefore': 10},
     'isha': {'reminder': true, 'azan': true, 'minutesBefore': 10},
   };
+
+  static const _platform = MethodChannel('azan_service');
+
+  // ----------------------------------------------------------
+  // INIT
+  // ----------------------------------------------------------
 
   static Future<void> init() async {
     await AndroidAlarmManager.initialize();
@@ -84,18 +77,7 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
 
-    // 🔔 AZAN CHANNEL (SYSTEM SOUND)
-    await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        'azan_channel',
-        'Azan Notifications',
-        importance: Importance.max,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('azan'),
-      ),
-    );
-
-    // 🔕 REMINDER CHANNEL
+    // 🔕 REMINDER CHANNEL ONLY
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         'reminder_channel',
@@ -105,6 +87,10 @@ class NotificationService {
       ),
     );
   }
+
+  // ----------------------------------------------------------
+  // SETTINGS
+  // ----------------------------------------------------------
 
   static Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -122,12 +108,20 @@ class NotificationService {
     await prefs.setString(_key, jsonEncode(prayerSettings));
   }
 
+  // ----------------------------------------------------------
+  // CANCEL
+  // ----------------------------------------------------------
+
   static Future<void> cancelPrayerAlarms() async {
     for (final base in [1000, 2000, 3000, 4000, 5000]) {
       await AndroidAlarmManager.cancel(base + 1); // azan
       await AndroidAlarmManager.cancel(base + 2); // reminder
     }
   }
+
+  // ----------------------------------------------------------
+  // REMINDER
+  // ----------------------------------------------------------
 
   static Future<void> scheduleReminder({
     required int id,
@@ -143,11 +137,15 @@ class NotificationService {
       wakeup: true,
       params: {
         'title': 'Prayer Reminder',
-        'body': '${prayer.toUpperCase()} in $minutes minutes',
+        'body': '$prayer in $minutes minutes',
         'playAzan': false,
       },
     );
   }
+
+  // ----------------------------------------------------------
+  // AZAN → FOREGROUND SERVICE
+  // ----------------------------------------------------------
 
   static Future<void> scheduleAzan({
     required int id,
@@ -161,13 +159,29 @@ class NotificationService {
       exact: true,
       wakeup: true,
       alarmClock: true,
-      params: {
-        'title': 'Time for ${prayer.toUpperCase()}',
-        'body': 'Salah is better than sleep',
-        'playAzan': true,
-      },
+      params: {'playAzan': true, 'prayer': prayer},
     );
   }
+
+  // ----------------------------------------------------------
+  // MANUAL CONTROLS
+  // ----------------------------------------------------------
+
+  static Future<void> stopAzan() async {
+    await _platform.invokeMethod('stopAzan');
+  }
+
+  static Future<void> testAzan(String prayer) async {
+    await _platform.invokeMethod('startAzan', {'prayer': prayer});
+  }
+
+  static Future<void> stopTestAzan() async {
+    await _platform.invokeMethod('stopAzan');
+  }
+
+  // ----------------------------------------------------------
+  // DAILY RESCHEDULER
+  // ----------------------------------------------------------
 
   static Future<void> scheduleDailyRescheduler() async {
     final now = DateTime.now();
