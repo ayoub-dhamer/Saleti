@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_list_screen.dart';
 import 'mushaf_page_screen.dart';
 import 'bookmarks_screen.dart';
@@ -76,6 +77,19 @@ class QuranScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => const BookmarksScreen(),
                       ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _mainCard(
+                  context,
+                  icon: Icons.track_changes_rounded,
+                  title: 'Qur’an Khatm',
+                  subtitle: 'Yearly reading plan & progress',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const KhatmScreen()),
                     );
                   },
                 ),

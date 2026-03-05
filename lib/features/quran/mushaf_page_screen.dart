@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/data/surah_page_map.dart';
+import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
   final int? initialSurah;
+  final ReadingMode readingMode; // <-- ADD THIS
 
-  const MushafPageScreen({super.key, this.startPage = 1, this.initialSurah});
+  const MushafPageScreen({
+    super.key,
+    this.startPage = 1,
+    this.initialSurah,
+    this.readingMode = ReadingMode.free, // default is free
+  });
 
   @override
   State<MushafPageScreen> createState() => _MushafPageScreenState();
