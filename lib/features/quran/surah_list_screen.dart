@@ -52,9 +52,23 @@ class _SurahListScreenState extends State<SurahListScreen> {
               itemCount: surahs.length,
               itemBuilder: (context, index) {
                 final surah = surahs[index];
-                final page = surahStartPage[surah] ?? 1;
 
-                return _surahCard(surah: surah, page: page);
+                final startPage = surahStartPage[surah] ?? 1;
+
+                final endPage = surah == 114
+                    ? 604
+                    : (surahStartPage[surah + 1] ?? 604) - 1;
+
+                final pagesCount = endPage - startPage + 1;
+
+                final ayahCount = getVerseCount(surah);
+
+                return _surahCard(
+                  surah: surah,
+                  startPage: startPage,
+                  pages: pagesCount,
+                  ayat: ayahCount,
+                );
               },
             ),
           ),
@@ -91,13 +105,23 @@ class _SurahListScreenState extends State<SurahListScreen> {
   }
 
   /// 📖 Surah Card
-  Widget _surahCard({required int surah, required int page}) {
+  Widget _surahCard({
+    required int surah,
+    required int startPage,
+    required int pages,
+    required int ayat,
+  }) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
+        /// Fix navigation with reversed PageView
+        final targetPage = 605 - startPage;
+
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => MushafPageScreen(startPage: page)),
+          MaterialPageRoute(
+            builder: (_) => MushafPageScreen(startPage: targetPage),
+          ),
         );
       },
       child: Container(
@@ -117,7 +141,10 @@ class _SurahListScreenState extends State<SurahListScreen> {
         child: Row(
           children: [
             _surahNumberBadge(surah),
+
             const SizedBox(width: 14),
+
+            /// Names
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,14 +157,25 @@ class _SurahListScreenState extends State<SurahListScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 4),
+
                   Text(
                     getSurahName(surah),
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    "$ayat Ayat • $pages Pages",
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
                 ],
               ),
             ),
+
+            /// Page Info
             Column(
               children: [
                 const Icon(
@@ -147,7 +185,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Page $page',
+                  'Page $startPage',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

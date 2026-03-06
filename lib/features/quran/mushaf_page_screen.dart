@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/utils/khatm_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -27,6 +28,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Set<int> _bookmarkedPages = {};
   bool _isLectureMode = false;
 
+  int _lastLoggedPage = 1; // Track last logged page for Khatm
+  int _pendingPages = 0;
+
+  bool _isLastPage = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,23 +45,24 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   void dispose() {
     WakelockPlus.disable();
     _pageController?.dispose();
+
+    _commitPendingPages();
+
     super.dispose();
   }
 
+  Future<void> _commitPendingPages() async {
+    if (_pendingPages > 0 && widget.readingMode == ReadingMode.khatm) {
+      await KhatmService().logPagesRead(_pendingPages);
+      _pendingPages = 0;
+    }
+  }
+
   Future<void> _initPage() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final savedLastPage = prefs.getInt('last_mushaf_page') ?? 1;
-
-    // 🔑 Priority:
-    // 1. startPage (from surah / bookmark)
-    // 2. saved last page
-    final initialPage = widget.startPage != 1
-        ? widget.startPage
-        : savedLastPage;
+    final initialPage = await _loadLastPage();
 
     _currentPage = initialPage;
-
+    _lastLoggedPage = initialPage; // For Khatm logging
     _pageController = PageController(initialPage: initialPage - 1);
 
     setState(() {});
@@ -86,12 +93,23 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   Future<void> _saveLastPage(int page) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('last_mushaf_page', page);
+
+    if (widget.readingMode == ReadingMode.khatm) {
+      await prefs.setInt('last_mushaf_page_khatm', page);
+    } else {
+      await prefs.setInt('last_mushaf_page_free', page);
+    }
   }
 
   Future<int> _loadLastPage() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('last_mushaf_page') ?? widget.startPage;
+
+    if (widget.readingMode == ReadingMode.khatm) {
+      // Start Khatm from page 1 if no saved value
+      return prefs.getInt('last_mushaf_page_khatm') ?? 1;
+    } else {
+      return prefs.getInt('last_mushaf_page_free') ?? widget.startPage;
+    }
   }
 
   Future<void> _toggleBookmark(int page) async {
@@ -131,6 +149,71 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
 
     return surahByPage[closestPage] ?? 'Unknown Surah';
+  }
+
+  void _confirmGoToFirstPage() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Finish Cycle?"),
+        content: const Text(
+          "You have reached the last page. Completing this cycle will increment your completed cycles and return to page 1.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Confirm"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    _goToFirstPage();
+  }
+
+  Future<void> _goToFirstPage() async {
+    if (widget.readingMode == ReadingMode.khatm) {
+      // Commit any pending pages before restarting
+      await _commitPendingPages();
+
+      // Log completion of a full cycle (604 pages)
+      await KhatmService().logPagesRead(604 - _lastLoggedPage + 1);
+
+      // Reset last logged page
+      _lastLoggedPage = 1;
+      _pendingPages = 0;
+
+      // Reset page controller to page 1
+      _pageController?.jumpToPage(0);
+
+      setState(() {
+        _currentPage = 1;
+        _isLastPage = false; // hide the button
+      });
+
+      // Save last page
+      await _saveLastPage(1);
+
+      // ✅ Show snackbar notification
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cycle finished! Completed cycles +1.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // For free mode, just go to page 1
+      _pageController?.jumpToPage(0);
+      setState(() => _currentPage = 1);
+    }
   }
 
   AppBar _buildAppBar() {
@@ -257,6 +340,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     return Stack(
       children: [
+        // 🔹 Go to First Page button
         Scaffold(
           // 💡 In lecture mode, we use black to blend with phone notches
           backgroundColor: _isLectureMode
@@ -293,6 +377,45 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             ),
           ),
+        // 🔹 Go to First Page Button (only on last page in Khatm mode)
+        if (_isLastPage && widget.readingMode == ReadingMode.khatm)
+          Positioned(
+            bottom: 40,
+            right: 20,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: _isLastPage ? 1 : 0,
+              child: FloatingActionButton.extended(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Finish Cycle?'),
+                      content: const Text(
+                        'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Yes'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true) {
+                    await _goToFirstPage(); // ✅ Smoothly go to first page
+                  }
+                },
+                label: const Text('Restart Cycle'),
+                icon: const Icon(Icons.restart_alt),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -305,8 +428,28 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         itemCount: 604,
         onPageChanged: (index) {
           final page = index + 1;
-          setState(() => _currentPage = page);
+
+          // Only count pages in Khatm mode
+          if (widget.readingMode == ReadingMode.khatm) {
+            if (page > _lastLoggedPage) {
+              _pendingPages += page - _lastLoggedPage;
+            }
+            _lastLoggedPage = page;
+          }
+
+          // Update current page
+          setState(() {
+            _currentPage = page;
+            _isLastPage = page == 604; // ✅ Detect last page
+          });
+
+          // Save last viewed page
           _saveLastPage(page);
+
+          // Commit pending pages every 5 pages
+          if (_pendingPages >= 5) {
+            _commitPendingPages();
+          }
         },
         itemBuilder: (context, index) {
           final pageNumber = index + 1;
@@ -315,12 +458,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              // 💡 Full-screen image
               Image.asset(
                 'assets/mushaf/$pageNumber.png',
                 fit: _isLectureMode ? BoxFit.fill : BoxFit.contain,
               ),
-
               if (highlighted)
                 Positioned(
                   top: 0,

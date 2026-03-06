@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_list_screen.dart';
-import 'mushaf_page_screen.dart';
-import 'bookmarks_screen.dart';
+import 'package:saleti/features/quran/mushaf_page_screen.dart';
+import 'package:saleti/features/quran/bookmarks_screen.dart';
 
 class QuranScreen extends StatelessWidget {
   const QuranScreen({super.key});

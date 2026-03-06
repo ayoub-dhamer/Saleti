@@ -43,6 +43,9 @@ class KhatmYear extends HiveObject {
   @HiveField(7)
   DateTime? endDate;
 
+  @HiveField(8)
+  bool startFromYearStart; // true = Jan 1, false = today
+
   KhatmYear({
     required this.year,
     required this.targetCompletions,
@@ -52,6 +55,7 @@ class KhatmYear extends HiveObject {
     this.completedCycles = 0,
     this.isActive = true,
     this.endDate,
+    this.startFromYearStart = false, // default false
   });
 }
 
@@ -87,6 +91,8 @@ class KhatmScreen extends StatefulWidget {
 class _KhatmScreenState extends State<KhatmScreen> {
   final KhatmService _service = KhatmService();
 
+  final Set<int> _expandedYears = {};
+
   KhatmYear? _activeYear;
   List<KhatmYear> _history = [];
 
@@ -97,15 +103,42 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   Future<void> _load() async {
-    _service.rolloverIfNeeded();
-
+    await _service.rolloverIfNeeded();
     final active = await _service.getActiveYear();
     final history = await _service.getHistory();
-
     setState(() {
       _activeYear = active;
       _history = history;
     });
+  }
+
+  Future<void> _confirmDeleteYear(int year) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Record'),
+        content: Text(
+          'Are you sure you want to delete the khatm record for $year?\n\n'
+          'This will permanently delete the plan and all reading logs for that year.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _service.deleteYear(year);
+      await _load();
+    }
   }
 
   @override
@@ -123,7 +156,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
       ),
       body: Column(
         children: [
-          _header(),
+          const _Header(),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -140,64 +173,92 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   /// =======================
-  /// HEADER
-  /// =======================
-
-  Widget _header() {
-    return const _Header();
-  }
-
-  /// =======================
   /// ACTIVE YEAR CARD
   /// =======================
 
   Widget _activeYearCard() {
-    final diff = _service.pagesAheadOrBehind();
-    final status = diff == 0
-        ? KhatmStatus.onTrack
-        : diff > 0
-        ? KhatmStatus.ahead
-        : KhatmStatus.behind;
+    return FutureBuilder<int>(
+      future: _service.pagesAheadOrBehind(),
+      builder: (context, snapshot) {
+        String statusText = "Calculating...";
 
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Active Year: ${_activeYear!.year}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _row('Target Khatms', _activeYear!.targetCompletions.toString()),
-          _row('Pages / Day', _activeYear!.pagesPerDay.toString()),
-          _row('Completed Cycles', _activeYear!.completedCycles.toString()),
-          _row(
-            'Status',
-            status == KhatmStatus.onTrack
-                ? 'On track'
-                : status == KhatmStatus.ahead
-                ? 'Ahead by $diff pages'
-                : 'Behind by ${diff.abs()} pages',
-          ),
-          const SizedBox(height: 16),
-          Row(
+        if (snapshot.hasData) {
+          final diff = snapshot.data!;
+
+          if (diff == 0) {
+            statusText = "On track";
+          } else if (diff > 0) {
+            statusText = "Ahead by $diff pages";
+          } else {
+            statusText = "Behind by ${diff.abs()} pages";
+          }
+        }
+
+        return _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.menu_book),
-                  label: const Text('Start Reading'),
-                  onPressed: _startReading,
-                ),
+              /// HEADER ROW
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Active Year: ${_activeYear!.year}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    color: Colors.red,
+                    tooltip: "Delete record",
+                    onPressed: () => _confirmDeleteYear(_activeYear!.year),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: _configurePlan,
+
+              const SizedBox(height: 12),
+
+              /// INFO ROWS
+              _row('Target Khatms', _activeYear!.targetCompletions.toString()),
+              _row('Pages / Day', _activeYear!.pagesPerDay.toString()),
+              _row('Completed Cycles', _activeYear!.completedCycles.toString()),
+              _row('Pages Read', _activeYear!.pagesReadTotal.toString()),
+              _row(
+                'Start Date',
+                "${_activeYear!.startDate.year}-${_activeYear!.startDate.month}-${_activeYear!.startDate.day}",
+              ),
+
+              const SizedBox(height: 6),
+
+              /// STATUS
+              _row('Status', statusText),
+
+              const SizedBox(height: 16),
+
+              /// ACTION BUTTONS
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.menu_book),
+                      label: const Text('Start Reading'),
+                      onPressed: _startReading,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    tooltip: "Edit Plan",
+                    onPressed: _configurePlan,
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -245,20 +306,72 @@ class _KhatmScreenState extends State<KhatmScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        ..._history.map(
-          (y) => _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  y.year.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                _row('Completed Khatms', y.completedCycles.toString()),
-              ],
+        ..._history.map((y) {
+          final expanded = _expandedYears.contains(y.year);
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                if (expanded) {
+                  _expandedYears.remove(y.year);
+                } else {
+                  _expandedYears.add(y.year);
+                }
+              });
+            },
+            child: _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// HEADER ROW
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        y.year.toString(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Icon(
+                            expanded ? Icons.expand_less : Icons.expand_more,
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            color: Colors.red,
+                            onPressed: () => _confirmDeleteYear(y.year),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  /// EXPANDED CONTENT
+                  if (expanded) ...[
+                    const SizedBox(height: 12),
+                    _row('Target Khatms', y.targetCompletions.toString()),
+                    _row('Pages / Day', y.pagesPerDay.toString()),
+                    _row('Completed Cycles', y.completedCycles.toString()),
+                    _row('Pages Read', y.pagesReadTotal.toString()),
+                    _row(
+                      'Start Date',
+                      '${y.startDate.year}-${y.startDate.month}-${y.startDate.day}',
+                    ),
+                    if (y.endDate != null)
+                      _row(
+                        'End Date',
+                        '${y.endDate!.year}-${y.endDate!.month}-${y.endDate!.day}',
+                      ),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -267,13 +380,16 @@ class _KhatmScreenState extends State<KhatmScreen> {
   /// ACTIONS
   /// =======================
 
-  void _startReading() {
-    Navigator.push(
+  Future<void> _startReading() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => MushafPageScreen(readingMode: ReadingMode.khatm),
       ),
     );
+
+    // Refresh active year after coming back
+    await _load();
   }
 
   Future<void> _configurePlan() async {
@@ -281,35 +397,100 @@ class _KhatmScreenState extends State<KhatmScreen> {
       text: _activeYear?.targetCompletions.toString() ?? '',
     );
 
-    final result = await showDialog<int>(
+    bool startFromYearStart = false;
+
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Khatm Plan'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Completions per year',
-            hintText: 'e.g. 1, 2, 3...',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context, int.tryParse(controller.text)),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Khatm Plan'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Completions per year',
+                      hintText: 'e.g. 1, 2, 3...',
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  /// START DATE OPTION
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Start counting from:",
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  RadioListTile<bool>(
+                    title: const Text("January 1st"),
+                    value: true,
+                    groupValue: startFromYearStart,
+                    onChanged: (value) {
+                      setState(() {
+                        startFromYearStart = value!;
+                      });
+                    },
+                  ),
+
+                  RadioListTile<bool>(
+                    title: const Text("Today"),
+                    value: false,
+                    groupValue: startFromYearStart,
+                    onChanged: (value) {
+                      setState(() {
+                        startFromYearStart = value!;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+
+                ElevatedButton(
+                  onPressed: () {
+                    final cycles = int.tryParse(controller.text);
+
+                    Navigator.pop(context, {
+                      "cycles": cycles,
+                      "startFromYearStart": startFromYearStart,
+                    });
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
 
-    if (result != null && result > 0) {
-      await _service.startYear(DateTime.now().year, result);
-      await _load();
+    if (result != null) {
+      final cycles = result["cycles"];
+      final startFromYearStart = result["startFromYearStart"];
+
+      if (cycles != null && cycles > 0) {
+        await _service.startYear(
+          DateTime.now().year,
+          cycles,
+          startFromYearStart: startFromYearStart,
+        );
+
+        await _load();
+      }
     }
   }
 
