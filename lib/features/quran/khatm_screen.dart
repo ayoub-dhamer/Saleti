@@ -99,7 +99,29 @@ class _KhatmScreenState extends State<KhatmScreen> {
   @override
   void initState() {
     super.initState();
+
+    _initializeKhatm();
+
     _load();
+  }
+
+  Future<void> _initializeKhatm() async {
+    // Generate historical years if they don't exist
+    await addHistoricalYear(
+      year: 2025,
+      targetCompletions: 2,
+      completedCycles: 1,
+      pagesReadTotal: 100,
+    );
+
+    await addHistoricalYear(
+      year: 2024,
+      targetCompletions: 1,
+      completedCycles: 1,
+      pagesReadTotal: 604,
+    );
+
+    // Load curren
   }
 
   Future<void> _load() async {
@@ -110,6 +132,35 @@ class _KhatmScreenState extends State<KhatmScreen> {
       _activeYear = active;
       _history = history;
     });
+  }
+
+  Future<void> addHistoricalYear({
+    required int year,
+    required int targetCompletions,
+    required int completedCycles,
+    required int pagesReadTotal,
+  }) async {
+    final box = await Hive.openBox<KhatmYear>('khatm_years');
+
+    // Prevent duplicate year
+    if (box.values.any((y) => y.year == year)) return;
+
+    final startDate = DateTime(year, 1, 1);
+    final endDate = DateTime(year, 12, 31);
+
+    final historical = KhatmYear(
+      year: year,
+      targetCompletions: targetCompletions,
+      pagesPerDay: ((604 * targetCompletions) / 365).ceil(),
+      pagesReadTotal: pagesReadTotal,
+      completedCycles: completedCycles,
+      isActive: false, // historical record
+      startDate: startDate,
+      endDate: endDate,
+      startFromYearStart: true,
+    );
+
+    await box.add(historical);
   }
 
   Future<void> _confirmDeleteYear(int year) async {
@@ -176,22 +227,43 @@ class _KhatmScreenState extends State<KhatmScreen> {
   /// ACTIVE YEAR CARD
   /// =======================
 
+  /// =======================
+  /// ACTIVE YEAR CARD WITH 2 PROGRESS BARS
+  /// =======================
   Widget _activeYearCard() {
+    if (_activeYear == null) return const SizedBox();
+
+    final totalTargetPages = _activeYear!.targetCompletions * 604;
+    final pagesReadInCycle =
+        (_activeYear!.completedCycles * 604) + _activeYear!.pagesReadTotal;
+    final pagesInCurrentCycle = _activeYear!.pagesReadTotal.toDouble();
+    final cyclePages = 604;
+
     return FutureBuilder<int>(
       future: _service.pagesAheadOrBehind(),
       builder: (context, snapshot) {
-        String statusText = "Calculating...";
+        int diff = 0;
+        if (snapshot.hasData) diff = snapshot.data!;
+        KhatmStatus status;
+        if (diff == 0) {
+          status = KhatmStatus.onTrack;
+        } else if (diff > 0) {
+          status = KhatmStatus.ahead;
+        } else {
+          status = KhatmStatus.behind;
+        }
 
-        if (snapshot.hasData) {
-          final diff = snapshot.data!;
-
-          if (diff == 0) {
-            statusText = "On track";
-          } else if (diff > 0) {
-            statusText = "Ahead by $diff pages";
-          } else {
-            statusText = "Behind by ${diff.abs()} pages";
-          }
+        Color statusColor;
+        switch (status) {
+          case KhatmStatus.ahead:
+            statusColor = Colors.green;
+            break;
+          case KhatmStatus.behind:
+            statusColor = Colors.red;
+            break;
+          case KhatmStatus.onTrack:
+          default:
+            statusColor = Colors.blue;
         }
 
         return _card(
@@ -229,11 +301,162 @@ class _KhatmScreenState extends State<KhatmScreen> {
                 'Start Date',
                 "${_activeYear!.startDate.year}-${_activeYear!.startDate.month}-${_activeYear!.startDate.day}",
               ),
+              _row(
+                'Status',
+                diff == 0
+                    ? 'On Track'
+                    : diff > 0
+                    ? 'Ahead by $diff pages'
+                    : 'Behind by ${diff.abs()} pages',
+              ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
 
-              /// STATUS
-              _row('Status', statusText),
+              /// ===============================
+              /// PROGRESS BARS
+              /// ===============================
+              Row(
+                children: [
+                  /// Current Cycle Progress
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Current Cycle',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: pagesInCurrentCycle / cyclePages,
+                          ),
+                          duration: const Duration(seconds: 1),
+                          builder: (context, value, child) {
+                            final textColor = value < 0.3
+                                ? Colors.black
+                                : Colors.white;
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: LinearProgressIndicator(
+                                    value: value,
+                                    minHeight: 16,
+                                    backgroundColor: Colors.transparent,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      statusColor,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  "${(value * 100).toStringAsFixed(0)}%",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pagesInCurrentCycle / $cyclePages pages',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  /// Year Progress
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Year Progress',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: pagesReadInCycle / totalTargetPages,
+                          ),
+                          duration: const Duration(seconds: 1),
+                          builder: (context, value, child) {
+                            final textColor = value < 0.3
+                                ? Colors.black
+                                : Colors.white;
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: LinearProgressIndicator(
+                                    value: value,
+                                    minHeight: 16,
+                                    backgroundColor: Colors.transparent,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      statusColor,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  "${(value * 100).toStringAsFixed(0)}%",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pagesReadInCycle / $totalTargetPages pages',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 16),
 
@@ -309,6 +532,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
         ..._history.map((y) {
           final expanded = _expandedYears.contains(y.year);
 
+          final totalTargetPages = y.targetCompletions * 604;
+          final pagesReadInYear = (y.completedCycles * 604) + y.pagesReadTotal;
+          final yearProgress = pagesReadInYear / totalTargetPages;
+
           return GestureDetector(
             onTap: () {
               setState(() {
@@ -366,6 +593,75 @@ class _KhatmScreenState extends State<KhatmScreen> {
                         'End Date',
                         '${y.endDate!.year}-${y.endDate!.month}-${y.endDate!.day}',
                       ),
+
+                    const SizedBox(height: 16),
+
+                    /// ===============================
+                    /// YEAR PROGRESS BAR (Animated)
+                    /// ===============================
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Year Progress',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: yearProgress),
+                          duration: const Duration(seconds: 1),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            final textColor = value < 0.3
+                                ? Colors.black
+                                : Colors.white;
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: LinearProgressIndicator(
+                                    value: value,
+                                    minHeight: 16,
+                                    backgroundColor: Colors.transparent,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  "${(value * 100).toStringAsFixed(0)}%",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pagesReadInYear / $totalTargetPages pages',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ],
               ),

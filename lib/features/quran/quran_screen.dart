@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/features/quran/surah_list_screen.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
 import 'package:saleti/features/quran/bookmarks_screen.dart';
@@ -90,6 +92,34 @@ class QuranScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const KhatmScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _mainCard(
+                  context,
+                  icon: Icons.flag_rounded,
+                  title: 'Surah Goals',
+                  subtitle: 'Track surah reading goals',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SurahGoalsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _mainCard(
+                  context,
+                  icon: Icons.note_alt_rounded,
+                  title: 'Du\'a Notes',
+                  subtitle: 'Save & read your personal du\'as',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DuaNotesScreen()),
                     );
                   },
                 ),

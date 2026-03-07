@@ -169,15 +169,30 @@ class KhatmService {
   /// Auto close year if needed
   Future<void> rolloverIfNeeded() async {
     final active = await getActiveYear();
-
     if (active == null) return;
 
     final now = DateTime.now();
+    final totalPages = 604 * active.targetCompletions;
+    final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
-    if (now.year != active.year && !active.startFromYearStart) {
+    bool shouldClose = false;
+
+    // Year ended naturally
+    if (now.year > active.year) {
+      shouldClose = true;
+    }
+
+    // All khatms completed
+    if (actualPages >= totalPages) {
+      shouldClose = true;
+    }
+
+    if (shouldClose) {
       active.isActive = false;
       active.endDate = now;
       await active.save();
+
+      _activeYearCached = null;
     }
   }
 

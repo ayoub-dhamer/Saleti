@@ -53,11 +53,11 @@ class _SurahListScreenState extends State<SurahListScreen> {
               itemBuilder: (context, index) {
                 final surah = surahs[index];
 
-                final startPage = surahStartPage[surah] ?? 1;
+                final startPage = surahStartPages[surah] ?? 1;
 
                 final endPage = surah == 114
                     ? 604
-                    : (surahStartPage[surah + 1] ?? 604) - 1;
+                    : (surahStartPages[surah + 1] ?? 604) - 1;
 
                 final pagesCount = endPage - startPage + 1;
 

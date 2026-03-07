@@ -3,6 +3,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
@@ -17,6 +18,10 @@ void main() async {
 
   await Hive.openBox<KhatmYear>('khatm_years');
   await Hive.openBox<DailyKhatmLog>('khatm_logs');
+
+  Hive.registerAdapter(SurahGoalAdapter());
+
+  await Hive.openBox<SurahGoal>('surah_goals');
 
   await PrayerCache().load();
   await NotificationService.loadSettings();

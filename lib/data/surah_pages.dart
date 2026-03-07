@@ -1,4 +1,4 @@
-const Map<int, int> surahStartPage = {
+const Map<int, int> surahStartPages = {
   1: 1, // Al-Fatihah
   2: 2, // Al-Baqarah
   3: 50, // Aal-Imran

@@ -9,13 +9,19 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
   final int? initialSurah;
-  final ReadingMode readingMode; // <-- ADD THIS
+  final ReadingMode readingMode;
+
+  final int initialPage; // <-- ADD THIS
+
+  final String? surahName;
 
   const MushafPageScreen({
     super.key,
     this.startPage = 1,
     this.initialSurah,
-    this.readingMode = ReadingMode.free, // default is free
+    this.readingMode = ReadingMode.free,
+    this.surahName, // default is free
+    this.initialPage = 1,
   });
 
   @override
@@ -33,12 +39,22 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   bool _isLastPage = false;
 
+  late PageController _controller;
+
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
     _initPage();
     _loadBookmarks();
+
+    _initPageController();
+  }
+
+  void _initPageController() async {
+    final page = await _loadLastPage(overridePage: widget.startPage);
+    _controller = PageController(initialPage: page - 1);
+    setState(() {});
   }
 
   @override
@@ -101,7 +117,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
-  Future<int> _loadLastPage() async {
+  Future<int> _loadLastPage({int? overridePage}) async {
     final prefs = await SharedPreferences.getInstance();
 
     if (widget.readingMode == ReadingMode.khatm) {

@@ -25,13 +25,14 @@ class KhatmYearAdapter extends TypeAdapter<KhatmYear> {
       completedCycles: fields[4] as int,
       isActive: fields[5] as bool,
       endDate: fields[7] as DateTime?,
+      startFromYearStart: fields[8] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, KhatmYear obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.year)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class KhatmYearAdapter extends TypeAdapter<KhatmYear> {
       ..writeByte(6)
       ..write(obj.startDate)
       ..writeByte(7)
-      ..write(obj.endDate);
+      ..write(obj.endDate)
+      ..writeByte(8)
+      ..write(obj.startFromYearStart);
   }
 
   @override
