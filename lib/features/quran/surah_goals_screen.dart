@@ -185,14 +185,15 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen> {
             IconButton(
               icon: const Icon(Icons.menu_book),
               onPressed: () {
-                final page = surahStartPages[goal.surahNumber] ?? 1;
+                final int goalStartPage =
+                    surahStartPages[goal.surahNumber] ?? 1;
 
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => MushafPageScreen(
-                      readingMode: ReadingMode.free,
-                      startPage: surahStartPages[goal.surahNumber]!,
+                      startPage: goalStartPage,
+                      storageKey: 'last_read_goals', // THIRD KEY
                     ),
                   ),
                 );

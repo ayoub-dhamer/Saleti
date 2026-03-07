@@ -15,6 +15,9 @@ class MushafPageScreen extends StatefulWidget {
 
   final String? surahName;
 
+  final String
+  storageKey; // Add this: e.g., 'last_read_general' or 'last_read_khatm'
+
   const MushafPageScreen({
     super.key,
     this.startPage = 1,
@@ -22,6 +25,7 @@ class MushafPageScreen extends StatefulWidget {
     this.readingMode = ReadingMode.free,
     this.surahName, // default is free
     this.initialPage = 1,
+    this.storageKey = 'last_read_general', // Default to general
   });
 
   @override
@@ -110,11 +114,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _saveLastPage(int page) async {
     final prefs = await SharedPreferences.getInstance();
 
-    if (widget.readingMode == ReadingMode.khatm) {
-      await prefs.setInt('last_mushaf_page_khatm', page);
-    } else {
-      await prefs.setInt('last_mushaf_page_free', page);
-    }
+    await prefs.setInt(widget.storageKey, page);
   }
 
   Future<int> _loadLastPage({int? overridePage}) async {

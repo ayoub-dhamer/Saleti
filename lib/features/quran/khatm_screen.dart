@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 
@@ -677,14 +678,23 @@ class _KhatmScreenState extends State<KhatmScreen> {
   /// =======================
 
   Future<void> _startReading() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. Fetch the saved page specifically for the Khatm mode
+    // If it's the first time, it defaults to page 1
+    final int lastKhatmPage = prefs.getInt('last_read_khatm') ?? 1;
+
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => MushafPageScreen(readingMode: ReadingMode.khatm),
+        builder: (_) => MushafPageScreen(
+          startPage: lastKhatmPage, // Now it is defined!
+          storageKey: 'last_read_khatm',
+        ),
       ),
     );
 
-    // Refresh active year after coming back
+    // Refresh active year after coming back to see updated progress
     await _load();
   }
 

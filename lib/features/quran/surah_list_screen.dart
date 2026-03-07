@@ -114,13 +114,16 @@ class _SurahListScreenState extends State<SurahListScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
-        /// Fix navigation with reversed PageView
-        final targetPage = 605 - startPage;
+        // Use the 'surah' variable passed into this widget, not 'index'
+        final int actualStartPage = surahStartPages[surah] ?? 1;
 
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => MushafPageScreen(startPage: targetPage),
+            builder: (_) => MushafPageScreen(
+              startPage: actualStartPage,
+              storageKey: 'last_read_general',
+            ),
           ),
         );
       },
