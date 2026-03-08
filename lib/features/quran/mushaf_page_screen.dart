@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
+import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
+  final int? endPage;
   final int? initialSurah;
   final ReadingMode readingMode;
+
+  final SurahGoal? surahGoal;
 
   final int initialPage; // <-- ADD THIS
 
@@ -21,11 +26,13 @@ class MushafPageScreen extends StatefulWidget {
   const MushafPageScreen({
     super.key,
     this.startPage = 1,
+    this.endPage,
     this.initialSurah,
     this.readingMode = ReadingMode.free,
     this.surahName, // default is free
     this.initialPage = 1,
-    this.storageKey = 'last_read_general', // Default to general
+    this.storageKey = 'last_read_general',
+    this.surahGoal, // Default to general
   });
 
   @override
@@ -38,12 +45,18 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Set<int> _bookmarkedPages = {};
   bool _isLectureMode = false;
 
+  int _currentGoalPage = 0;
+
   int _lastLoggedPage = 1; // Track last logged page for Khatm
   int _pendingPages = 0;
 
   bool _isLastPage = false;
 
   late PageController _controller;
+
+  int get _firstPage => widget.startPage;
+  int get _lastPage => widget.endPage ?? 604;
+  int get _pageCount => _lastPage - _firstPage + 1;
 
   @override
   void initState() {
@@ -81,9 +94,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _initPage() async {
     final initialPage = await _loadLastPage();
 
-    _currentPage = initialPage;
+    _currentPage = widget.startPage;
     _lastLoggedPage = initialPage; // For Khatm logging
-    _pageController = PageController(initialPage: initialPage - 1);
+    _pageController = PageController(initialPage: 0);
 
     setState(() {});
   }
@@ -120,12 +133,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<int> _loadLastPage({int? overridePage}) async {
     final prefs = await SharedPreferences.getInstance();
 
-    if (widget.readingMode == ReadingMode.khatm) {
-      // Start Khatm from page 1 if no saved value
-      return prefs.getInt('last_mushaf_page_khatm') ?? 1;
-    } else {
-      return prefs.getInt('last_mushaf_page_free') ?? widget.startPage;
-    }
+    if (overridePage != null) return overridePage;
+
+    return prefs.getInt(widget.storageKey) ?? widget.startPage;
   }
 
   Future<void> _toggleBookmark(int page) async {
@@ -153,6 +163,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     await prefs.setStringList('mushaf_bookmarks', list);
     await _loadBookmarks();
+  }
+
+  bool get _isLastSurahPage {
+    if (widget.endPage == null) return false;
+    return _currentPage == widget.endPage;
   }
 
   String _getSurahNameFromPage(int page) {
@@ -232,6 +247,39 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
+  Future<void> _confirmCompletion() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text("Complete Surah"),
+          content: Text("Mark ${widget.surahGoal!.surahName} as completed?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Confirm"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      final service = SurahGoalService();
+      await service.incrementProgress(widget.surahGoal!);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Goal progress updated")));
+    }
+  }
+
   AppBar _buildAppBar() {
     return AppBar(
       elevation: 0,
@@ -248,6 +296,30 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _completionButton({
+    required String title,
+    required VoidCallback onPressed,
+  }) {
+    return Positioned(
+      bottom: 24,
+      left: 16,
+      right: 16,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        onPressed: onPressed,
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -441,9 +513,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: PageView.builder(
         controller: _pageController,
         reverse: true,
-        itemCount: 604,
+        itemCount: _pageCount,
         onPageChanged: (index) {
-          final page = index + 1;
+          final page = _firstPage + index;
 
           // Only count pages in Khatm mode
           if (widget.readingMode == ReadingMode.khatm) {
@@ -455,6 +527,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
           // Update current page
           setState(() {
+            _currentGoalPage = index;
             _currentPage = page;
             _isLastPage = page == 604; // ✅ Detect last page
           });
@@ -463,12 +536,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           _saveLastPage(page);
 
           // Commit pending pages every 5 pages
-          if (_pendingPages >= 5) {
+          if (_pendingPages >= 1) {
             _commitPendingPages();
           }
         },
         itemBuilder: (context, index) {
-          final pageNumber = index + 1;
+          final pageNumber = _firstPage + index;
           final highlighted = _bookmarkedPages.contains(pageNumber);
 
           return Stack(
@@ -485,6 +558,53 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                   child: CustomPaint(
                     painter: _BookmarkRibbonPainter(),
                     size: const Size(60, 60),
+                  ),
+                ),
+
+              if (_isLastSurahPage && widget.surahGoal != null)
+                Positioned(
+                  bottom: 40,
+                  right: 20,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: _isLastSurahPage ? 1 : 0,
+                    child: FloatingActionButton.extended(
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Mark Surah Completed?'),
+                            content: Text(
+                              'You reached the end of ${widget.surahGoal!.surahName}. '
+                              'Do you want to count this recitation toward your goal?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Yes'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          final service = SurahGoalService();
+                          await service.incrementProgress(widget.surahGoal!);
+
+                          if (!mounted) return;
+
+                          Navigator.pop(
+                            context,
+                            true,
+                          ); // ✅ return success to previous screen
+                        }
+                      },
+                      label: const Text('Count Recitation'),
+                      icon: const Icon(Icons.check),
+                    ),
                   ),
                 ),
             ],

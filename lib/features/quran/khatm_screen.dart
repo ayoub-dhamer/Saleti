@@ -690,6 +690,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
         builder: (_) => MushafPageScreen(
           startPage: lastKhatmPage, // Now it is defined!
           storageKey: 'last_read_khatm',
+          readingMode: ReadingMode.khatm,
         ),
       ),
     );

@@ -103,7 +103,7 @@ class KhatmService {
     _activeYearCached = newYear;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('last_mushaf_page_khatm', 1);
+    await prefs.remove('last_read_khatm');
   }
 
   /// Log pages read
@@ -222,7 +222,7 @@ class KhatmService {
     if (wasActive) {
       _activeYearCached = null;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_mushaf_page_khatm', 1);
+      await prefs.remove('last_read_khatm');
     }
   }
 }
