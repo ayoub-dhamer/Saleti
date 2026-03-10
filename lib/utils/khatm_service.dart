@@ -38,6 +38,14 @@ class KhatmService {
   }) async {
     final box = await Hive.openBox<KhatmYear>(_yearsBox);
 
+    // 1️⃣ Deactivate any currently active year
+    final active = box.values.firstWhereOrNull((y) => y.isActive);
+    if (active != null) {
+      active.isActive = false;
+      active.endDate = DateTime.now();
+      await active.save();
+    }
+
     /// Determine start date
     final startDate = startFromYearStart
         ? DateTime(year, 1, 1)
@@ -60,47 +68,37 @@ class KhatmService {
     /// Calculate pages per day
     final pagesPerDay = ((604 * targetCompletions) / remainingDays).ceil();
 
-    /// Check if plan already exists
-    KhatmYear? existing;
-
-    final matches = box.values.where((y) => y.year == year);
-
-    if (matches.isNotEmpty) {
-      existing = matches.first;
-    }
+    // 3️⃣ Check if year exists (inactive only!)
+    final existing = box.values.firstWhereOrNull(
+      (y) => y.year == year && !y.isActive,
+    );
 
     if (existing != null) {
-      existing.targetCompletions = targetCompletions;
-      existing.pagesPerDay = pagesPerDay;
-      existing.startDate = startDate;
-      existing.startFromYearStart = startFromYearStart;
-      existing.isActive = true;
-      existing.endDate = null;
+      // Reuse the inactive year
+      existing
+        ..targetCompletions = targetCompletions
+        ..pagesPerDay = pagesPerDay
+        ..startDate = startDate
+        ..startFromYearStart = startFromYearStart
+        ..isActive = true
+        ..endDate = null;
 
       await existing.save();
       _activeYearCached = existing;
-      return;
+    } else {
+      // 4️⃣ Create a brand-new year
+      final newYear = KhatmYear(
+        year: year,
+        targetCompletions: targetCompletions,
+        pagesPerDay: pagesPerDay,
+        startDate: startDate,
+        startFromYearStart: startFromYearStart,
+        isActive: true,
+      );
+
+      await box.add(newYear);
+      _activeYearCached = newYear;
     }
-
-    /// Deactivate previous active
-    final active = await getActiveYear();
-    if (active != null) {
-      active.isActive = false;
-      active.endDate = DateTime.now();
-      await active.save();
-    }
-
-    /// Create new plan
-    final newYear = KhatmYear(
-      year: year,
-      targetCompletions: targetCompletions,
-      pagesPerDay: pagesPerDay,
-      startDate: startDate,
-      startFromYearStart: startFromYearStart,
-    );
-
-    await box.add(newYear);
-    _activeYearCached = newYear;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_read_khatm');

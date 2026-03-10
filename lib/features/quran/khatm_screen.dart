@@ -487,6 +487,13 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   Widget _noPlanCard() {
+    final now = DateTime.now().year;
+
+    // Check if there's an active plan OR a completed/current year plan
+    final hasCurrentYearPlan =
+        (_activeYear != null && _activeYear!.year == now) ||
+        _history.any((y) => y.year == now);
+
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -496,14 +503,21 @@ class _KhatmScreenState extends State<KhatmScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Create a yearly plan to track your Qur’an reading.',
-            style: TextStyle(color: Colors.black54),
+          Text(
+            hasCurrentYearPlan
+                ? 'You already have a Khatm record for this year ($now). You cannot create another one until next year or by deleting this record.'
+                : 'Create a yearly plan to track your Qur’an reading.',
+            style: const TextStyle(color: Colors.black54),
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _configurePlan,
-            child: const Text('Create Plan'),
+          Tooltip(
+            message: hasCurrentYearPlan
+                ? 'Finish or delete the current year record before creating a new one.'
+                : 'Create a new plan',
+            child: ElevatedButton(
+              onPressed: hasCurrentYearPlan ? null : _configurePlan,
+              child: const Text('Create Plan'),
+            ),
           ),
         ],
       ),
@@ -700,8 +714,39 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   Future<void> _configurePlan() async {
+    final activeYear = _activeYear;
+
+    // 🔹 If there's an active year that is not finished
+    if (activeYear != null) {
+      final totalPages = activeYear.targetCompletions * 604;
+      final pagesDone =
+          (activeYear.completedCycles * 604) + activeYear.pagesReadTotal;
+
+      if (pagesDone < totalPages) {
+        // Show a warning and prevent creating new plan
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Active Plan Exists"),
+            content: Text(
+              "You already have an active Khatm plan for ${activeYear.year}.\n\n"
+              "You must complete this plan before starting a new one.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+        return; // Exit early, prevent new plan creation
+      }
+    }
+
+    // 🔹 Continue with creating/editing plan
     final controller = TextEditingController(
-      text: _activeYear?.targetCompletions.toString() ?? '',
+      text: activeYear?.targetCompletions.toString() ?? '',
     );
 
     bool startFromYearStart = false;
@@ -724,10 +769,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       hintText: 'e.g. 1, 2, 3...',
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
-                  /// START DATE OPTION
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -735,9 +777,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   RadioListTile<bool>(
                     title: const Text("January 1st"),
                     value: true,
@@ -748,7 +788,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       });
                     },
                   ),
-
                   RadioListTile<bool>(
                     title: const Text("Today"),
                     value: false,
@@ -766,11 +805,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
-
                 ElevatedButton(
                   onPressed: () {
                     final cycles = int.tryParse(controller.text);
-
                     Navigator.pop(context, {
                       "cycles": cycles,
                       "startFromYearStart": startFromYearStart,
@@ -795,7 +832,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
           cycles,
           startFromYearStart: startFromYearStart,
         );
-
         await _load();
       }
     }
