@@ -4,11 +4,8 @@ import 'prayer_cache.dart';
 
 @pragma('vm:entry-point')
 Future<void> dailyRescheduleCallback() async {
-  // 1. Critical: Initialize the framework for background work
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Load the user's prayer settings (Isolate has its own memory!)
-  // This ensures the background task knows if the user turned off Fajr Azan, etc.
   await NotificationService.loadSettings();
 
   final cache = PrayerCache();
@@ -18,7 +15,6 @@ Future<void> dailyRescheduleCallback() async {
 
   final prayerTimes = cache.calculatePrayerTimes();
 
-  // 3. Clear old alarms to prevent "ghost" notifications
   await NotificationService.cancelPrayerAlarms();
 
   final map = {
@@ -29,9 +25,6 @@ Future<void> dailyRescheduleCallback() async {
     'isha': prayerTimes.isha,
   };
 
-  // 4. Use consistent IDs matching your Screen logic
-  // Consistent IDs are vital so that if the user opens the app,
-  // they can override these alarms without creating duplicates.
   int _getAlarmId(String prayer, String type) {
     const base = {
       'fajr': 1000,
@@ -48,11 +41,10 @@ Future<void> dailyRescheduleCallback() async {
     final time = entry.value;
     final setting = NotificationService.prayerSettings[prayer]!;
 
-    // Only schedule if the time is in the future
+    // Dart reminder
     if (setting['reminder'] == true) {
       final minutes = setting['minutesBefore'] as int;
       final reminderTime = time.subtract(Duration(minutes: minutes));
-
       if (reminderTime.isAfter(DateTime.now())) {
         await NotificationService.scheduleReminder(
           id: _getAlarmId(prayer, 'reminder'),
@@ -63,8 +55,9 @@ Future<void> dailyRescheduleCallback() async {
       }
     }
 
+    // Native Azan
     if (setting['azan'] == true && time.isAfter(DateTime.now())) {
-      await NotificationService.scheduleAzan(
+      await NotificationService.scheduleAzanNative(
         id: _getAlarmId(prayer, 'azan'),
         time: time,
         prayer: prayer,
@@ -72,6 +65,5 @@ Future<void> dailyRescheduleCallback() async {
     }
   }
 
-  // 5. Schedule the rescheduler for tomorrow midnight
   await NotificationService.scheduleDailyRescheduler();
 }

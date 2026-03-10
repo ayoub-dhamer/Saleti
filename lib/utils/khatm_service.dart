@@ -9,26 +9,67 @@ class KhatmService {
 
   KhatmYear? _activeYearCached;
 
+  /// ====================
+  /// Internal Box Helpers
+  /// ====================
+  Future<Box<KhatmYear>> get _yearBox async =>
+      await Hive.openBox<KhatmYear>(_yearsBox);
+  Future<Box<DailyKhatmLog>> get _logBox async =>
+      await Hive.openBox<DailyKhatmLog>(_dailyLogBox);
+
+  /// ====================
+  /// Repository Methods
+  /// ====================
+
   /// Get current active year
   Future<KhatmYear?> getActiveYear() async {
-    final box = await Hive.openBox<KhatmYear>(_yearsBox);
+    if (_activeYearCached != null) return _activeYearCached;
 
+    final box = await _yearBox;
     final active = box.values.firstWhereOrNull((y) => y.isActive);
-
     _activeYearCached = active;
     return active;
   }
 
-  /// Get history
+  /// Get history (all non-active years)
   Future<List<KhatmYear>> getHistory() async {
-    final box = await Hive.openBox<KhatmYear>(_yearsBox);
-
+    final box = await _yearBox;
     final history = box.values.where((y) => !y.isActive).toList();
-
     history.sort((a, b) => b.year.compareTo(a.year));
-
     return history;
   }
+
+  /// Save or update a year
+  Future<void> saveYear(KhatmYear year) async => await year.save();
+
+  /// Add daily log
+  Future<void> addDailyLog(DailyKhatmLog log) async {
+    final box = await _logBox;
+    await box.put('${log.year}-${log.date}', log);
+  }
+
+  /// Get daily log for a specific date
+  Future<DailyKhatmLog?> getLog(int year, String date) async {
+    final box = await _logBox;
+    return box.get('$year-$date');
+  }
+
+  /// Deactivate all active years
+  Future<void> deactivateAll() async {
+    final box = await _yearBox;
+    for (final y in box.values) {
+      if (y.isActive) {
+        y.isActive = false;
+        y.endDate = DateTime.now();
+        await y.save();
+      }
+    }
+    _activeYearCached = null;
+  }
+
+  /// ====================
+  /// Service Methods
+  /// ====================
 
   /// Start or update a khatm year
   Future<void> startYear(
@@ -36,45 +77,24 @@ class KhatmService {
     int targetCompletions, {
     bool startFromYearStart = false,
   }) async {
-    final box = await Hive.openBox<KhatmYear>(_yearsBox);
+    final box = await _yearBox;
 
-    // 1️⃣ Deactivate any currently active year
-    final active = box.values.firstWhereOrNull((y) => y.isActive);
-    if (active != null) {
-      active.isActive = false;
-      active.endDate = DateTime.now();
-      await active.save();
-    }
-
-    /// Determine start date
     final startDate = startFromYearStart
         ? DateTime(year, 1, 1)
         : DateTime.now();
-
-    /// Calculate remaining days
     final endOfYear = DateTime(year, 12, 31);
 
-    int remainingDays;
-
-    if (startFromYearStart) {
-      final firstDay = DateTime(year, 1, 1);
-      remainingDays = endOfYear.difference(firstDay).inDays + 1;
-    } else {
-      remainingDays = endOfYear.difference(startDate).inDays + 1;
-    }
+    int remainingDays = startFromYearStart
+        ? endOfYear.difference(DateTime(year, 1, 1)).inDays + 1
+        : endOfYear.difference(startDate).inDays + 1;
 
     if (remainingDays <= 0) remainingDays = 1;
 
-    /// Calculate pages per day
     final pagesPerDay = ((604 * targetCompletions) / remainingDays).ceil();
 
-    // 3️⃣ Check if year exists (inactive only!)
-    final existing = box.values.firstWhereOrNull(
-      (y) => y.year == year && !y.isActive,
-    );
+    KhatmYear? existing = box.values.firstWhereOrNull((y) => y.year == year);
 
     if (existing != null) {
-      // Reuse the inactive year
       existing
         ..targetCompletions = targetCompletions
         ..pagesPerDay = pagesPerDay
@@ -82,23 +102,28 @@ class KhatmService {
         ..startFromYearStart = startFromYearStart
         ..isActive = true
         ..endDate = null;
-
       await existing.save();
       _activeYearCached = existing;
-    } else {
-      // 4️⃣ Create a brand-new year
-      final newYear = KhatmYear(
-        year: year,
-        targetCompletions: targetCompletions,
-        pagesPerDay: pagesPerDay,
-        startDate: startDate,
-        startFromYearStart: startFromYearStart,
-        isActive: true,
-      );
-
-      await box.add(newYear);
-      _activeYearCached = newYear;
+      return;
     }
+
+    final active = await getActiveYear();
+    if (active != null) {
+      active.isActive = false;
+      active.endDate = DateTime.now();
+      await active.save();
+    }
+
+    final newYear = KhatmYear(
+      year: year,
+      targetCompletions: targetCompletions,
+      pagesPerDay: pagesPerDay,
+      startDate: startDate,
+      startFromYearStart: startFromYearStart,
+    );
+
+    await box.add(newYear);
+    _activeYearCached = newYear;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_read_khatm');
@@ -107,26 +132,20 @@ class KhatmService {
   /// Log pages read
   Future<void> logPagesRead(int pagesRead) async {
     final active = await getActiveYear();
-
     if (active == null) return;
 
     active.pagesReadTotal += pagesRead;
 
     const totalPages = 604;
-
-    /// completed cycles
     while (active.pagesReadTotal >= totalPages) {
       active.pagesReadTotal -= totalPages;
       active.completedCycles += 1;
     }
 
     await active.save();
-
     _activeYearCached = active;
 
-    /// log daily
-    final logBox = await Hive.openBox<DailyKhatmLog>(_dailyLogBox);
-
+    final logBox = await _logBox;
     final today = DateTime.now();
     final todayStr = '${today.year}-${today.month}-${today.day}';
 
@@ -147,18 +166,14 @@ class KhatmService {
   /// Pages ahead or behind
   Future<int> pagesAheadOrBehind() async {
     final active = await getActiveYear();
-
     if (active == null) return 0;
 
     final today = DateTime.now();
-    final start = active.startDate;
-
-    final daysElapsed = today.isBefore(start)
+    final daysElapsed = today.isBefore(active.startDate)
         ? 0
-        : today.difference(start).inDays + 1;
+        : today.difference(active.startDate).inDays + 1;
 
     final expectedPages = daysElapsed * active.pagesPerDay;
-
     final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
     return actualPages - expectedPages.clamp(0, 604 * active.targetCompletions);
@@ -173,50 +188,31 @@ class KhatmService {
     final totalPages = 604 * active.targetCompletions;
     final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
-    bool shouldClose = false;
-
-    // Year ended naturally
-    if (now.year > active.year) {
-      shouldClose = true;
-    }
-
-    // All khatms completed
-    if (actualPages >= totalPages) {
-      shouldClose = true;
-    }
-
-    if (shouldClose) {
+    if (now.year > active.year || actualPages >= totalPages) {
       active.isActive = false;
       active.endDate = now;
       await active.save();
-
       _activeYearCached = null;
     }
   }
 
+  /// Delete a year and its logs
   Future<void> deleteYear(int year) async {
-    final yearsBox = await Hive.openBox<KhatmYear>(_yearsBox);
-    final logsBox = await Hive.openBox<DailyKhatmLog>(_dailyLogBox);
+    final yearsBox = await _yearBox;
+    final logsBox = await _logBox;
 
     final yearEntry = yearsBox.values.firstWhereOrNull((y) => y.year == year);
-
     if (yearEntry == null) return;
 
     final wasActive = yearEntry.isActive;
 
-    // Delete the year entry
     await yearEntry.delete();
 
-    // Delete all logs related to that year
-    final logsToDelete = logsBox.values
-        .where((log) => log.year == year)
-        .toList();
-
+    final logsToDelete = logsBox.values.where((l) => l.year == year).toList();
     for (final log in logsToDelete) {
       await log.delete();
     }
 
-    // Clear cache if needed
     if (wasActive) {
       _activeYearCached = null;
       final prefs = await SharedPreferences.getInstance();

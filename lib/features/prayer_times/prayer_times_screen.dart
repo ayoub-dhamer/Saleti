@@ -236,7 +236,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       }
 
       if (setting['azan'] == true && time.isAfter(DateTime.now())) {
-        await NotificationService.scheduleAzan(
+        await NotificationService.scheduleAzanNative(
           id: _alarmId(prayer, 'azan'),
           time: time,
           prayer: prayer,

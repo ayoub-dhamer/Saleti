@@ -58,9 +58,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   int get _lastPage => widget.endPage ?? 604;
   int get _pageCount => _lastPage - _firstPage + 1;
 
-  int _sessionStartPage = 1; // page where current reading segment started
-  int _lastKnownPage = 1; // last page user reached (any method)
-
   @override
   void initState() {
     super.initState();
@@ -79,9 +76,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   @override
   void dispose() {
-    _commitPagesRead();
     WakelockPlus.disable();
     _pageController?.dispose();
+
+    _commitPendingPages();
 
     super.dispose();
   }
@@ -98,37 +96,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     _currentPage = widget.startPage;
     _lastLoggedPage = initialPage; // For Khatm logging
-    _pageController = PageController(initialPage: initialPage - _firstPage);
-    _lastKnownPage = initialPage;
+    _pageController = PageController(initialPage: 0);
 
     setState(() {});
-  }
-
-  Future<void> _commitPagesRead() async {
-    if (widget.readingMode != ReadingMode.khatm) return;
-
-    final from = _sessionStartPage;
-    final to = _lastKnownPage;
-
-    if (to <= from) return;
-
-    final pagesRead = to - from;
-
-    await KhatmService().logPagesRead(pagesRead);
-
-    // 🔒 CRITICAL: move the checkpoint forward
-    _sessionStartPage = to;
-  }
-
-  void _onPageReached(int page) {
-    _lastKnownPage = page;
-
-    setState(() {
-      _currentPage = page;
-      _isLastPage = page == 604;
-    });
-
-    _saveLastPage(page);
   }
 
   void _toggleLectureMode(bool enable) {
@@ -240,31 +210,40 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   Future<void> _goToFirstPage() async {
     if (widget.readingMode == ReadingMode.khatm) {
-      // Finish remaining pages in this cycle
-      _lastKnownPage = 604;
-      await _commitPagesRead();
+      // Commit any pending pages before restarting
+      await _commitPendingPages();
 
-      // Log full cycle
-      await KhatmService().logPagesRead(0); // optional safeguard
+      // Log completion of a full cycle (604 pages)
+      await KhatmService().logPagesRead(604 - _lastLoggedPage + 1);
 
-      // Reset for next cycle
-      _sessionStartPage = 1;
-      _lastKnownPage = 1;
+      // Reset last logged page
+      _lastLoggedPage = 1;
+      _pendingPages = 0;
 
+      // Reset page controller to page 1
       _pageController?.jumpToPage(0);
 
       setState(() {
         _currentPage = 1;
-        _isLastPage = false;
+        _isLastPage = false; // hide the button
       });
 
+      // Save last page
       await _saveLastPage(1);
 
+      // ✅ Show snackbar notification
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cycle finished! Completed cycles +1.')),
+          const SnackBar(
+            content: Text('Cycle finished! Completed cycles +1.'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
+    } else {
+      // For free mode, just go to page 1
+      _pageController?.jumpToPage(0);
+      setState(() => _currentPage = 1);
     }
   }
 
@@ -312,56 +291,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     // We are ABOUT to finish one more cycle
     return (actualPages + (604 - _lastLoggedPage + 1)) >= totalPagesTarget;
-  }
-
-  Future<void> _showGoToPageDialog() async {
-    final controller = TextEditingController();
-    final selectedPage = await showDialog<int>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Go to Page'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: 'Enter page number (1-604)',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final page = int.tryParse(controller.text);
-                if (page != null && page >= 1 && page <= 604) {
-                  Navigator.pop(context, page);
-                } else {
-                  // Optional: show error
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid page (1-604)')),
-                  );
-                }
-              },
-              child: const Text('Go'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (selectedPage != null) {
-      _goToPage(selectedPage);
-    }
-  }
-
-  void _goToPage(int page) {
-    page = page.clamp(_firstPage, _lastPage);
-
-    _pageController?.jumpToPage(page - _firstPage);
-    _onPageReached(page);
   }
 
   AppBar _buildAppBar() {
@@ -499,12 +428,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          IconButton(
-            onPressed: _showGoToPageDialog,
-            icon: const Icon(Icons.menu_book, color: Colors.white, size: 28),
-            tooltip: 'Go to page',
-          ),
         ],
       ),
     );
@@ -620,7 +543,28 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         onPageChanged: (index) {
           final page = _firstPage + index;
 
-          _onPageReached(page);
+          // Only count pages in Khatm mode
+          if (widget.readingMode == ReadingMode.khatm) {
+            if (page > _lastLoggedPage) {
+              _pendingPages += page - _lastLoggedPage;
+            }
+            _lastLoggedPage = page;
+          }
+
+          // Update current page
+          setState(() {
+            _currentGoalPage = index;
+            _currentPage = page;
+            _isLastPage = page == 604; // ✅ Detect last page
+          });
+
+          // Save last viewed page
+          _saveLastPage(page);
+
+          // Commit pending pages every 5 pages
+          if (_pendingPages >= 1) {
+            _commitPendingPages();
+          }
         },
         itemBuilder: (context, index) {
           final pageNumber = _firstPage + index;
