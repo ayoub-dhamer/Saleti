@@ -6,13 +6,10 @@ import 'package:adhan/adhan.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:saleti/utils/battery_optimization_helper.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/prayer_location_service.dart';
 import '../../utils/notification_service.dart';
-import '../../utils/prayer_cache.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -187,18 +184,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         false;
   }
 
-  void _applyPrayerTimes(PrayerCache cache) {
-    final times = cache.calculatePrayerTimes();
-
-    setState(() {
-      prayerTimes = times;
-      _locationName = cache.locationName!;
-      _loading = false;
-    });
-
-    _scheduleAllNotifications();
-  }
-
   // ----------------------------------------------------------
   // NOTIFICATIONS
   // ----------------------------------------------------------
@@ -256,13 +241,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'isha': 5000,
     };
     return base[prayer]! + (type == 'azan' ? 1 : 2);
-  }
-
-  String _pretty(DateTime time) {
-    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.hour >= 12 ? 'PM' : 'AM';
-    return '$hour:$minute $period';
   }
 
   // ----------------------------------------------------------

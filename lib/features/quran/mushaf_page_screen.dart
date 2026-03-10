@@ -182,32 +182,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return surahByPage[closestPage] ?? 'Unknown Surah';
   }
 
-  void _confirmGoToFirstPage() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Finish Cycle?"),
-        content: const Text(
-          "You have reached the last page. Completing this cycle will increment your completed cycles and return to page 1.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Confirm"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    _goToFirstPage();
-  }
-
   Future<void> _goToFirstPage() async {
     if (widget.readingMode == ReadingMode.khatm) {
       // Commit any pending pages before restarting
@@ -247,39 +221,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
-  Future<void> _confirmCompletion() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text("Complete Surah"),
-          content: Text("Mark ${widget.surahGoal!.surahName} as completed?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Confirm"),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true) {
-      final service = SurahGoalService();
-      await service.incrementProgress(widget.surahGoal!);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Goal progress updated")));
-    }
-  }
-
   Future<bool> _isLastKhatmCycle() async {
     final service = KhatmService();
     final active = await service.getActiveYear();
@@ -309,30 +250,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _completionButton({
-    required String title,
-    required VoidCallback onPressed,
-  }) {
-    return Positioned(
-      bottom: 24,
-      left: 16,
-      right: 16,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        onPressed: onPressed,
-        child: Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );

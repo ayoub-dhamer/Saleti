@@ -263,7 +263,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
             statusColor = Colors.red;
             break;
           case KhatmStatus.onTrack:
-          default:
             statusColor = Colors.blue;
         }
 

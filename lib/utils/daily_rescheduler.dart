@@ -25,7 +25,7 @@ Future<void> dailyRescheduleCallback() async {
     'isha': prayerTimes.isha,
   };
 
-  int _getAlarmId(String prayer, String type) {
+  int getAlarmId(String prayer, String type) {
     const base = {
       'fajr': 1000,
       'dhuhr': 2000,
@@ -47,7 +47,7 @@ Future<void> dailyRescheduleCallback() async {
       final reminderTime = time.subtract(Duration(minutes: minutes));
       if (reminderTime.isAfter(DateTime.now())) {
         await NotificationService.scheduleReminder(
-          id: _getAlarmId(prayer, 'reminder'),
+          id: getAlarmId(prayer, 'reminder'),
           time: reminderTime,
           prayer: prayer,
           minutes: minutes,
@@ -58,7 +58,7 @@ Future<void> dailyRescheduleCallback() async {
     // Native Azan
     if (setting['azan'] == true && time.isAfter(DateTime.now())) {
       await NotificationService.scheduleAzanNative(
-        id: _getAlarmId(prayer, 'azan'),
+        id: getAlarmId(prayer, 'azan'),
         time: time,
         prayer: prayer,
       );
