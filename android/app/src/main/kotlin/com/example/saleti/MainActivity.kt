@@ -42,9 +42,11 @@ class MainActivity : FlutterActivity() {
                         val id = args?.get("id") as? Int ?: 0
                         val timestamp = args?.get("timestamp") as? Long ?: 0L
                         val prayer = args?.get("prayer") as? String ?: "Prayer"
+                        val volume = args?.get("volume") as? Double ?: 1.0
 
                         val intent = Intent(this, AzanService::class.java)
                         intent.putExtra("prayer", prayer)
+                        intent.putExtra("volume", volume.toFloat())
 
                         val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             PendingIntent.getForegroundService(

@@ -45,8 +45,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Set<int> _bookmarkedPages = {};
   bool _isLectureMode = false;
 
-  int _currentGoalPage = 0;
-
   int _lastLoggedPage = 1; // Track last logged page for Khatm
   int _pendingPages = 0;
 
@@ -487,7 +485,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
           // Update current page
           setState(() {
-            _currentGoalPage = index;
             _currentPage = page;
             _isLastPage = page == 604; // ✅ Detect last page
           });

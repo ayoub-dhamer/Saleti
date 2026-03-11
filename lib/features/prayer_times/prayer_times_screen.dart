@@ -225,6 +225,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           id: _alarmId(prayer, 'azan'),
           time: time,
           prayer: prayer,
+          volume: _getVolume(setting),
         );
       }
     }
@@ -319,6 +320,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   String _prettyName(String name) {
     return name[0].toUpperCase() + name.substring(1);
+  }
+
+  double _getVolume(Map<String, dynamic> setting) {
+    final v = setting['volume'];
+    if (v is double) return v;
+    if (v is int) return v.toDouble(); // safety
+    return 1.0; // default volume
   }
 
   // (Helper widgets like _header, _clockCircle, _upcomingPrayer, _prayerList, _showMinutesDialog
@@ -551,6 +559,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       ],
                     ),
                   ),
+
+                  Slider(
+                    value: _getVolume(setting),
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 10,
+                    label: '${((setting['volume'] as double) * 100).round()}%',
+                    onChanged: (v) async {
+                      setState(() => setting['volume'] = v);
+                      await NotificationService.saveSettings();
+                      _scheduleAllNotifications();
+                    },
+                  ),
                   // Compact Action Buttons
                   _actionIcon(
                     icon: setting['reminder'] == true
@@ -583,8 +604,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   const SizedBox(width: 8),
                   _actionIcon(
                     icon: setting['azan'] == true
-                        ? Icons.notifications_active_outlined
-                        : Icons.notifications_off_outlined,
+                        ? Icons.mosque
+                        : Icons.mosque_outlined,
                     activeColor: Colors.blue,
                     isActive: setting['azan'] == true,
                     onTap: () async {

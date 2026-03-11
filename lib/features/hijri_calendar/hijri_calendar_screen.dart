@@ -111,10 +111,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  bool get _hasHoliday =>
-      _holidayName(_selectedDay!) != null &&
-      _holidayName(_selectedDay!)!.isNotEmpty;
-
   // 💜 Purple Info Card
   Widget _purpleCard() {
     final holiday = _holidayName(_selectedDay!);

@@ -9,15 +9,73 @@ import 'daily_rescheduler.dart';
 final FlutterLocalNotificationsPlugin _notifications =
     FlutterLocalNotificationsPlugin();
 
+@pragma('vm:entry-point')
+Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final bool isAzan = params['playAzan'] == true;
+
+  if (isAzan) {
+    // ✅ START FOREGROUND SERVICE (PASS PRAYER NAME)
+    const platform = MethodChannel('azan_service');
+    final prayerName = params['prayer'] ?? 'Prayer';
+    await platform.invokeMethod('startAzan', {'prayer': prayerName});
+    return;
+  }
+
+  // 🔕 Silent reminder notification
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  final notifications = FlutterLocalNotificationsPlugin();
+
+  await notifications.initialize(
+    const InitializationSettings(android: androidInit),
+  );
+
+  await notifications.show(
+    id,
+    params['title'] ?? 'Prayer Reminder',
+    params['body'] ?? '',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'reminder_channel',
+        'Prayer Reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: false,
+      ),
+    ),
+  );
+}
+
 class NotificationService {
   static const _key = 'prayer_settings';
 
   static Map<String, Map<String, dynamic>> prayerSettings = {
-    'fajr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
-    'dhuhr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
-    'asr': {'reminder': true, 'azan': true, 'minutesBefore': 10},
-    'maghrib': {'reminder': true, 'azan': true, 'minutesBefore': 10},
-    'isha': {'reminder': true, 'azan': true, 'minutesBefore': 10},
+    'fajr': {
+      'reminder': true,
+      'azan': true,
+      'minutesBefore': 10,
+      'volume': 1.0,
+    },
+    'dhuhr': {
+      'reminder': true,
+      'azan': true,
+      'minutesBefore': 10,
+      'volume': 1.0,
+    },
+    'asr': {'reminder': true, 'azan': true, 'minutesBefore': 10, 'volume': 1.0},
+    'maghrib': {
+      'reminder': true,
+      'azan': true,
+      'minutesBefore': 10,
+      'volume': 1.0,
+    },
+    'isha': {
+      'reminder': true,
+      'azan': true,
+      'minutesBefore': 10,
+      'volume': 1.0,
+    },
   };
 
   static const MethodChannel _platform = MethodChannel('azan_service');
@@ -104,28 +162,6 @@ class NotificationService {
     );
   }
 
-  @pragma('vm:entry-point')
-  static Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
-    WidgetsFlutterBinding.ensureInitialized();
-
-    if (params['playAzan'] == true) return; // Azan handled natively
-
-    await _notifications.show(
-      id,
-      params['title'] ?? 'Prayer Reminder',
-      params['body'] ?? '',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminder_channel',
-          'Prayer Reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: false,
-        ),
-      ),
-    );
-  }
-
   // ----------------------------------------------------------
   // AZAN → NATIVE SCHEDULING
   // ----------------------------------------------------------
@@ -134,12 +170,14 @@ class NotificationService {
     required int id,
     required DateTime time,
     required String prayer,
+    required double volume,
   }) async {
     try {
       await _platform.invokeMethod('scheduleAzanNative', {
         'id': id,
         'timestamp': time.millisecondsSinceEpoch,
         'prayer': prayer,
+        'volume': volume,
       });
     } on PlatformException catch (e) {
       debugPrint('Failed to schedule native Azan: ${e.message}');

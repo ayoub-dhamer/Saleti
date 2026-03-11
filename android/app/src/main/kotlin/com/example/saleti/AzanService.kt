@@ -15,6 +15,7 @@ class AzanService : Service() {
     private val CHANNEL_ID = "azan_foreground_channel"
     private val STOP_ACTION = "com.example.saleti.STOP_AZAN"
     private var prayerName: String = "Prayer"
+    private var volume: Float = 1.0f
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
@@ -25,6 +26,7 @@ class AzanService : Service() {
         }
 
         prayerName = intent?.getStringExtra("prayer") ?: "Prayer"
+        volume = intent?.getFloatExtra("volume", 1.0f) ?: 1.0f
 
         createNotificationChannel()
 
@@ -62,7 +64,7 @@ class AzanService : Service() {
         afd.close()
 
         mediaPlayer?.isLooping = false
-        mediaPlayer?.setVolume(1.0f, 1.0f)
+        mediaPlayer?.setVolume(volume, volume)
         mediaPlayer?.setAudioStreamType(AudioManager.STREAM_ALARM) // Use alarm stream
         mediaPlayer?.setOnPreparedListener {
             it.start() // Start only when fully prepared

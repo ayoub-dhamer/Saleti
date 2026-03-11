@@ -61,6 +61,7 @@ Future<void> dailyRescheduleCallback() async {
         id: getAlarmId(prayer, 'azan'),
         time: time,
         prayer: prayer,
+        volume: (setting['volume'] is double) ? setting['volume'] : 1.0,
       );
     }
   }
