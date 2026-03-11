@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
 import 'package:saleti/data/surah_pages.dart';
@@ -251,6 +252,8 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                               builder: (_) => MushafPageScreen(
                                 startPage: startPage,
                                 endPage: endPage,
+                                readingMode:
+                                    ReadingMode.goal, // ✅ RESTRICTED MODE
                                 storageKey: 'last_read_goals',
                                 surahGoal: goal,
                               ),

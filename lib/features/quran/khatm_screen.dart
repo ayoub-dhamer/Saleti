@@ -12,7 +12,7 @@ part 'khatm_screen.g.dart';
 
 enum KhatmStatus { ahead, onTrack, behind }
 
-enum ReadingMode { free, khatm }
+enum ReadingMode { free, khatm, pointer, goal }
 
 /// =======================
 /// MODELS

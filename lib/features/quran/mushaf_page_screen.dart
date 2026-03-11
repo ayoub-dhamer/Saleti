@@ -52,10 +52,22 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   bool _isLastPage = false;
 
-  late PageController _controller;
+  int get _firstPage {
+    if (widget.readingMode == ReadingMode.free) {
+      return 1;
+    }
+    // pointer and other modes start from startPage
+    return widget.startPage;
+  }
 
-  int get _firstPage => widget.startPage;
-  int get _lastPage => widget.endPage ?? 604;
+  int get _lastPage {
+    if (widget.readingMode == ReadingMode.free ||
+        widget.readingMode == ReadingMode.pointer) {
+      return 604;
+    }
+    return widget.endPage ?? 604;
+  }
+
   int get _pageCount => _lastPage - _firstPage + 1;
 
   @override
@@ -69,8 +81,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   void _initPageController() async {
-    final page = await _loadLastPage(overridePage: widget.startPage);
-    _controller = PageController(initialPage: page - 1);
+    final initialIndex = widget.readingMode == ReadingMode.free
+        ? widget.startPage -
+              1 // jump to surah start
+        : 0;
+
+    _pageController = PageController(initialPage: initialIndex);
+
+    // ✅ Set current page correctly
+    _currentPage = _firstPage + initialIndex;
+
     setState(() {});
   }
 
@@ -94,10 +114,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _initPage() async {
     final initialPage = await _loadLastPage();
 
-    _currentPage = widget.startPage;
     _lastLoggedPage = initialPage; // For Khatm logging
-    _pageController = PageController(initialPage: 0);
-
     setState(() {});
   }
 

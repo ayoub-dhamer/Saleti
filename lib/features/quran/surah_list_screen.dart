@@ -117,6 +117,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
         // Use the 'surah' variable passed into this widget, not 'index'
         final int actualStartPage = surahStartPages[surah] ?? 1;
 
+        print(actualStartPage);
+
         Navigator.push(
           context,
           MaterialPageRoute(
