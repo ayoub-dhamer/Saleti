@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
+import 'package:saleti/utils/prayer_cache.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -35,13 +36,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   bool _batterySnackShown = false;
   bool _alarmSnackShown = false;
 
+  final PrayerCache _cache = PrayerCache();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
     _initializeSystemPermissions();
-    _checkPermissionAndLoad();
+    _loadFromCacheOrRequest();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
@@ -53,6 +56,26 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadFromCacheOrRequest() async {
+    await _cache.load();
+
+    if (_cache.hasLocation) {
+      // ✅ Use cached data (NO GPS REQUIRED)
+      final cachedPrayerTimes = _cache.calculatePrayerTimes();
+
+      setState(() {
+        prayerTimes = cachedPrayerTimes;
+        _locationName = _cache.locationName!;
+        _loading = false;
+      });
+
+      _scheduleAllNotifications();
+    } else {
+      // ❌ No cache → need location once
+      await _checkPermissionAndLoad();
+    }
   }
 
   // ----------------------------------------------------------
@@ -192,6 +215,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
       if (!mounted) return;
 
+      await _cache.save(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        locationName: cityName,
+      );
+
       setState(() {
         prayerTimes = prayerTimesCalculated;
         _locationName = cityName;
@@ -289,8 +318,27 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
 
     if (allow == true) {
+      // User accepted → request GPS
       await _loadLocation();
+      return;
+    }
+
+    // ❗ User said NO → fallback to cache if possible
+    await _cache.load();
+
+    if (_cache.hasLocation) {
+      final cachedPrayerTimes = _cache.calculatePrayerTimes();
+
+      setState(() {
+        prayerTimes = cachedPrayerTimes;
+        _locationName = _cache.locationName!;
+        _loading = false;
+        _permissionError = null;
+      });
+
+      _scheduleAllNotifications();
     } else {
+      // ❌ No cache → real error
       setState(() {
         _loading = false;
         _permissionError =
@@ -361,6 +409,23 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return base[prayer]! + (type == 'azan' ? 1 : 2);
   }
 
+  Future<void> _useCachedLocation() async {
+    await _cache.load();
+
+    if (!_cache.hasLocation) return;
+
+    final cachedPrayerTimes = _cache.calculatePrayerTimes();
+
+    setState(() {
+      prayerTimes = cachedPrayerTimes;
+      _locationName = _cache.locationName!;
+      _permissionError = null;
+      _loading = false;
+    });
+
+    _scheduleAllNotifications();
+  }
+
   // ----------------------------------------------------------
   // UI
   // ----------------------------------------------------------
@@ -406,19 +471,45 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     style: const TextStyle(color: Colors.black54, height: 1.4),
                   ),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _loadLocation,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1FA45B),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _loadLocation,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1FA45B),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('Retry'),
                         ),
                       ),
-                      child: const Text('Retry'),
-                    ),
+
+                      // ✅ Cache-only button
+                      if (_cache.hasLocation) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _useCachedLocation,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              side: BorderSide(color: Colors.green.shade600),
+                            ),
+                            child: const Text(
+                              'Use previous location',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
