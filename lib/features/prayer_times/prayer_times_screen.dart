@@ -3,6 +3,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
@@ -60,7 +61,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   Future<void> _initializeSystemPermissions() async {
     await NotificationPermission.request();
-    await BatteryOptimizationHelper.requestDisable(context);
+    await BatteryOptimizationHelper.requestDisable();
     await ExactAlarmPermission.ensureEnabled(context);
     _checkSystemReadiness();
   }
@@ -267,7 +268,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                 Text(_permissionError!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: _initLocationAndPrayerTimes,
+                  onPressed: () async {
+                    // Open system location settings
+                    await Geolocator.openLocationSettings();
+                    // Retry loading location and prayer times
+                    _initLocationAndPrayerTimes();
+                  },
                   child: const Text('Retry'),
                 ),
               ],

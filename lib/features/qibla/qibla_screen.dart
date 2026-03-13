@@ -146,6 +146,72 @@ class _QiblaScreenState extends State<QiblaScreen> {
     }
   }
 
+  Widget _errorView({
+    required IconData icon,
+    required String title,
+    required String message,
+    required VoidCallback onRetry,
+    String retryText = 'Try Again',
+  }) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 72, color: Colors.orange),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black54, height: 1.4),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: onRetry,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1FA45B),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(retryText),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -153,32 +219,16 @@ class _QiblaScreenState extends State<QiblaScreen> {
     }
 
     if (_errorMessage != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Qibla Direction')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.location_off, size: 80, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(_errorMessage!, textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    await Geolocator.openAppSettings();
-                  },
-                  child: const Text('Open Settings'),
-                ),
-                TextButton(
-                  onPressed: _loadLocation,
-                  child: const Text('Try Again'),
-                ),
-              ],
-            ),
-          ),
-        ),
+      final gpsDisabled = _errorMessage!.toLowerCase().contains('gps');
+
+      return _errorView(
+        icon: gpsDisabled ? Icons.gps_off : Icons.location_disabled,
+        title: gpsDisabled
+            ? "GPS is turned off"
+            : "Location permission required",
+        message: _errorMessage!,
+        onRetry: _loadLocation, // your function that retries fetching location
+        retryText: "Try Again",
       );
     }
 

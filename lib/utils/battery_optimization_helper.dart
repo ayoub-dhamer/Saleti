@@ -2,61 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class BatteryOptimizationHelper {
+  /// Check if the app is already whitelisted
   static Future<bool> isWhitelisted() async {
     return await Permission.ignoreBatteryOptimizations.isGranted;
   }
 
-  static Future<void> requestDisable(BuildContext context) async {
-    // 1. Check current status
+  /// Directly request battery optimization permission without showing a dialog
+  static Future<void> requestDisable() async {
     final status = await Permission.ignoreBatteryOptimizations.status;
 
-    // 2. If already granted, do nothing
-    if (status.isGranted) {
-      debugPrint("Battery Optimization already disabled ✅");
-      return;
-    }
+    if (!status.isGranted) {
+      final requestStatus = await Permission.ignoreBatteryOptimizations
+          .request();
 
-    // 3. Show a user-friendly explanation (Android requirements)
-    if (context.mounted) {
-      bool? proceed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.battery_saver, color: Colors.orange),
-              SizedBox(width: 10),
-              Text('Battery Optimization'),
-            ],
-          ),
-          content: const Text(
-            'To ensure the Azan plays exactly on time while your phone is locked, '
-            'please set Saleti to "Don\'t Optimize" in the next screen.\n\n'
-            'This is required by Android for apps that use Alarms.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Later'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Open Settings'),
-            ),
-          ],
-        ),
-      );
-
-      // 4. If user agrees, request the permission
-      if (proceed == true) {
-        // This triggers the system "Allow app to stay active in background?" popup
-        final requestStatus = await Permission.ignoreBatteryOptimizations
-            .request();
-
-        if (requestStatus.isDenied) {
-          debugPrint("User denied battery optimization whitelist.");
-        }
+      if (requestStatus.isDenied) {
+        debugPrint("User denied battery optimization whitelist.");
+      } else {
+        debugPrint("Battery optimization disabled ✅");
       }
+    } else {
+      debugPrint("Battery Optimization already disabled ✅");
     }
   }
 }

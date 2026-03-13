@@ -21,23 +21,6 @@ class PrayerLocationService {
       throw Exception('Location service (GPS) is disabled.');
     }
 
-    // 2️⃣ Permission check
-    var permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      final allow = await onPermissionDenied();
-      if (!allow) {
-        throw Exception('Location permission denied by user.');
-      }
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission permanently denied. Enable it from settings.',
-      );
-    }
-
     // 3️⃣ Cache-first
     final cache = PrayerCache();
     await cache.load();
