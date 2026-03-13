@@ -3,6 +3,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +42,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     WidgetsBinding.instance.addObserver(this);
 
     _initializeSystemPermissions();
-    _initLocationAndPrayerTimes();
+    _checkPermissionAndLoad();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
@@ -98,33 +99,111 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   // LOCATION + PRAYER TIMES (SINGLE ENTRY POINT)
   // ----------------------------------------------------------
 
-  Future<void> _initLocationAndPrayerTimes() async {
-    if (!mounted) return;
+  Future<void> _checkPermissionAndLoad() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _loading = false;
+        _permissionError = 'Location service is disabled. Please enable GPS.';
+      });
+      return;
+    }
 
+    var permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      await _showLocationDialog();
+      return;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is permanently denied. Please enable it from settings.';
+      });
+      return;
+    }
+
+    // ✅ Permission already granted
+    await _loadLocation();
+  }
+
+  Future<void> _loadLocation() async {
     setState(() {
       _loading = true;
       _permissionError = null;
     });
 
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is required to calculate prayer times.';
+      });
+      return;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is permanently denied. Please enable it from settings.';
+      });
+      return;
+    }
+
     try {
-      final result = await PrayerLocationService.loadPrayerTimes(
-        onPermissionDenied: _showLocationDialog,
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
+
+      // 🔹 Calculate PrayerTimes
+      final params = CalculationMethod.muslim_world_league.getParameters();
+      params.madhab = Madhab.shafi;
+
+      final coordinates = Coordinates(pos.latitude, pos.longitude);
+      final date = DateComponents.from(DateTime.now());
+
+      final prayerTimesCalculated = PrayerTimes(coordinates, date, params);
+
+      // 🔹 Reverse geocode to get city name
+      String cityName = 'Unknown Location';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          cityName =
+              place.locality ??
+              place.subAdministrativeArea ??
+              'Unknown Location';
+        }
+      } catch (_) {
+        cityName = 'Unknown Location';
+      }
 
       if (!mounted) return;
 
       setState(() {
-        prayerTimes = result.prayerTimes;
-        _locationName = result.locationName;
+        prayerTimes = prayerTimesCalculated;
+        _locationName = cityName;
         _loading = false;
       });
 
       _scheduleAllNotifications();
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         _loading = false;
-        _permissionError = e.toString().replaceFirst('Exception: ', '');
+        _permissionError = 'Unable to get your location. Please try again.';
       });
     }
   }
@@ -138,13 +217,42 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     });
 
     try {
-      final result = await PrayerLocationService.refreshPrayerTimes();
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // 🔹 Calculate PrayerTimes
+      final params = CalculationMethod.muslim_world_league.getParameters();
+      params.madhab = Madhab.shafi;
+
+      final coordinates = Coordinates(pos.latitude, pos.longitude);
+      final date = DateComponents.from(DateTime.now());
+
+      final refreshedPrayerTimes = PrayerTimes(coordinates, date, params);
+
+      // 🔹 Reverse geocode to get city name
+      String cityName = 'Unknown Location';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          cityName =
+              place.locality ??
+              place.subAdministrativeArea ??
+              'Unknown Location';
+        }
+      } catch (_) {
+        cityName = 'Unknown Location';
+      }
 
       if (!mounted) return;
 
       setState(() {
-        prayerTimes = result.prayerTimes;
-        _locationName = result.locationName;
+        prayerTimes = refreshedPrayerTimes;
+        _locationName = cityName;
         _loading = false;
       });
 
@@ -153,36 +261,43 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _permissionError = e.toString().replaceFirst('Exception: ', '');
+        _permissionError = 'Unable to get your location. Please try again.';
       });
     }
   }
 
-  Future<bool> _showLocationDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text('Enable Location'),
-            content: const Text(
-              'Your location is required to calculate accurate prayer times.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Not now'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Enable'),
-              ),
-            ],
+  Future<void> _showLocationDialog() async {
+    final allow = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Enable Location'),
+        content: const Text(
+          'Your location is required to calculate accurate prayer times.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not now'),
           ),
-        ) ??
-        false;
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (allow == true) {
+      await _loadLocation();
+    } else {
+      setState(() {
+        _loading = false;
+        _permissionError =
+            'Location permission is required to calculate prayer times.';
+      });
+    }
   }
 
   // ----------------------------------------------------------
@@ -257,26 +372,55 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
     if (_permissionError != null) {
       return Scaffold(
+        backgroundColor: const Color(0xFFF4F6F8),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.location_off, size: 80, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(_permissionError!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () async {
-                    // Open system location settings
-                    await Geolocator.openLocationSettings();
-                    // Retry loading location and prayer times
-                    _initLocationAndPrayerTimes();
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.location_off, size: 72, color: Colors.red),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Location Required',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _permissionError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.black54, height: 1.4),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _loadLocation,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1FA45B),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -355,6 +499,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                 ),
               ),
               const SizedBox(width: 10),
+              // Display city name instead of coordinates
               Text(
                 _locationName,
                 style: const TextStyle(

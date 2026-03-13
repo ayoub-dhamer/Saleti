@@ -51,6 +51,13 @@ class _PermissionOnboardingScreenState
             'This is required for precise prayer notifications on Android.',
         requestPermission: _requestExactAlarm,
       ),
+
+      // ✅ NEW FINAL STEP
+      _OnboardingStep(
+        title: 'Confirm Setup',
+        description: 'Everything is ready. You can start using Saleti.',
+        isConfirmation: true, // ✅ dummy function for confirmation step
+      ),
     ]);
 
     _skipGrantedSteps();
@@ -58,35 +65,60 @@ class _PermissionOnboardingScreenState
 
   /// Skip steps that are already granted
   Future<void> _skipGrantedSteps() async {
-    for (int i = 0; i < _steps.length; i++) {
-      final granted = await _steps[i].isAlreadyGranted();
-      if (granted) _currentStep++;
+    int stepIndex = 0;
+    for (final step in _steps) {
+      final granted = await step.isAlreadyGranted();
+      if (granted)
+        stepIndex++;
+      else
+        break;
     }
-    if (_currentStep > 0) _controller.jumpToPage(_currentStep);
+
+    // Clamp to last valid index
+    _currentStep = stepIndex.clamp(0, _steps.length - 1);
+
+    // Wait until the first frame is built before jumping
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_controller.hasClients && _currentStep > 0) {
+        _controller.jumpToPage(_currentStep);
+      }
+    });
   }
 
-  /// Move to next step after requesting permission
   Future<void> _nextStep() async {
-    final granted = await _steps[_currentStep].requestPermission();
+    final current = _steps[_currentStep];
+
+    bool granted = true;
+
+    // Only request permission if not a confirmation step
+    if (!current.isConfirmation) {
+      if (current.requestPermission == null) return;
+      granted = await current.requestPermission!();
+    }
 
     if (!granted) return; // Mandatory: cannot proceed if denied
 
     int nextStep = _currentStep + 1;
 
+    // Skip already granted steps
     while (nextStep < _steps.length) {
-      if (await _steps[nextStep].isAlreadyGranted())
+      if (await _steps[nextStep].isAlreadyGranted()) {
         nextStep++;
-      else
+      } else {
         break;
+      }
     }
 
     if (nextStep < _steps.length) {
       setState(() => _currentStep = nextStep);
-      _controller.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
+      if (_controller.hasClients) {
+        _controller.nextPage(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
     } else {
+      // Completed all steps including confirmation
       await setOnboardingCompleted();
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -113,44 +145,64 @@ class _PermissionOnboardingScreenState
   }
 
   Future<bool> _requestLocation() async {
-    // 1️⃣ Ensure device location service is enabled
-    var serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    // 1️⃣ Check if location service (GPS) is enabled
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (context.mounted) {
-        // Open system location settings
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Enable GPS'),
-            content: const Text(
-              'Saleti needs your location. Please enable GPS in the next screen.',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await Geolocator.openLocationSettings(); // <-- SYSTEM SETTINGS
-                },
-                child: const Text('Open Settings'),
-              ),
-            ],
-          ),
-        );
-      }
+      if (!context.mounted) return false;
 
-      // After returning from settings, check again
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return false;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Location Services Disabled'),
+          content: const Text(
+            'Please enable GPS on your device to allow Saleti to determine prayer times accurately.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      // ❗ Do NOT open settings automatically
+      return false;
     }
 
-    // 2️⃣ Request system location permission (foreground)
+    // 2️⃣ Check location permission
     var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+
+    if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
 
+    // 3️⃣ Handle permanently denied
+    if (permission == LocationPermission.deniedForever) {
+      if (!context.mounted) return false;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Location Permission Required'),
+          content: const Text(
+            'Location access has been permanently denied. Please enable it from system settings to continue.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      return false;
+    }
+
+    // 4️⃣ Final granted check
     final granted =
         permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
@@ -162,7 +214,7 @@ class _PermissionOnboardingScreenState
         builder: (_) => AlertDialog(
           title: const Text('Location Required'),
           content: const Text(
-            'You must allow Saleti to access your location to continue.',
+            'You must allow location access to continue using Saleti.',
           ),
           actions: [
             ElevatedButton(
@@ -180,57 +232,131 @@ class _PermissionOnboardingScreenState
   @override
   Widget build(BuildContext context) {
     final step = _steps[_currentStep];
+    final progress = (_currentStep + 1) / _steps.length;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FA),
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _steps.length,
-                itemBuilder: (_, index) {
-                  final s = _steps[index];
-                  return Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          s.title,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          s.description,
-                          style: const TextStyle(fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+            // ───────────── Progress Bar ─────────────
+            // ───────────── Animated Progress Bar ─────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(
+                  begin: 0,
+                  end: (_currentStep + 1) / _steps.length,
+                ),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: LinearProgressIndicator(
+                      value: value,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade300,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF1FA45B),
+                      ),
                     ),
                   );
                 },
               ),
             ),
+
+            // ───────────── Animated Content ─────────────
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                transitionBuilder: (child, animation) {
+                  final slide =
+                      Tween<Offset>(
+                        begin: const Offset(0.2, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: _OnboardingPage(
+                  step: step,
+                  isLastStep: _currentStep == _steps.length - 1,
+                ),
+              ),
+            ),
+
+            // ───────────── Step Indicators ─────────────
             Padding(
-              padding: const EdgeInsets.all(24),
-              child: ElevatedButton(
-                onPressed: _nextStep,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _steps.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    width: _currentStep == index ? 14 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentStep >= index
+                          ? const Color(0xFF1FA45B) // active step
+                          : Colors.grey.shade400, // inactive step
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
-                child: const Text(
-                  'Continue',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+
+            // ───────────── Continue Button ─────────────
+            // ───────────── Animated Continue Button ─────────────
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                switchInCurve: Curves.easeOutBack,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) {
+                  return ScaleTransition(
+                    scale: Tween<double>(
+                      begin: 0.9,
+                      end: 1.0,
+                    ).animate(animation),
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+                child: ElevatedButton(
+                  key: ValueKey(_currentStep),
+                  onPressed: _nextStep,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: const Color(0xFF1FA45B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    elevation: 3,
+                  ),
+                  child: Text(
+                    _currentStep == _steps.length - 1
+                        ? 'Confirm & Start'
+                        : 'Continue',
+
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      letterSpacing: .3,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -244,14 +370,17 @@ class _PermissionOnboardingScreenState
 class _OnboardingStep {
   final String title;
   final String description;
-  final Future<bool> Function() requestPermission;
+  final Future<bool> Function()? requestPermission;
+  final bool isConfirmation;
 
   _OnboardingStep({
     required this.title,
     required this.description,
-    required this.requestPermission,
+    this.requestPermission,
+    this.isConfirmation = false,
   });
 
+  /// Check if permission for this step is already granted
   Future<bool> isAlreadyGranted() async {
     if (title.contains('Location')) {
       if (!await Geolocator.isLocationServiceEnabled()) return false;
@@ -266,5 +395,158 @@ class _OnboardingStep {
       return await ExactAlarmPermission.isGranted();
     }
     return false;
+  }
+}
+
+class _OnboardingPage extends StatelessWidget {
+  final _OnboardingStep step;
+  final bool isLastStep;
+
+  const _OnboardingPage({
+    super.key,
+    required this.step,
+    required this.isLastStep,
+  });
+
+  IconData _iconForStep(String title) {
+    if (title.contains('Location')) return Icons.location_on_rounded;
+    if (title.contains('Notification')) return Icons.notifications_active;
+    if (title.contains('Battery')) return Icons.battery_saver;
+    if (title.contains('Exact')) return Icons.alarm;
+    if (title.contains('Confirm')) return Icons.check_circle_rounded;
+    return Icons.check_circle;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // If last step is the confirmation, show custom UI
+    if (step.isConfirmation) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _iconForStep(step.title),
+              size: 120,
+              color: const Color(0xFF1FA45B),
+            ),
+            const SizedBox(height: 28),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                step.description,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black54,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Default onboarding step UI
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1FA45B).withOpacity(.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _iconForStep(step.title),
+              size: 56,
+              color: const Color(0xFF1FA45B),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            step.title,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            step.description,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black54,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuccessAnimation extends StatefulWidget {
+  @override
+  State<_SuccessAnimation> createState() => _SuccessAnimationState();
+}
+
+class _SuccessAnimationState extends State<_SuccessAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+
+    _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(
+              Icons.check_circle_rounded,
+              size: 120,
+              color: Color(0xFF1FA45B),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'All Set!',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Saleti is ready to help you stay on time with your prayers.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
