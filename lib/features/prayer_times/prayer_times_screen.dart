@@ -8,9 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
-import 'package:saleti/utils/battery_optimization_helper.dart';
+import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
-import 'package:saleti/utils/prayer_location_service.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -343,6 +342,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           prayer: prayer,
           volume: _getVolume(setting),
         );
+      } else {
+        await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
       }
     }
 
@@ -762,7 +763,16 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     onTap: () async {
                       setState(() => setting['azan'] = !setting['azan']);
                       await NotificationService.saveSettings();
-                      _scheduleAllNotifications();
+
+                      if (setting['azan'] == true) {
+                        // Schedule azan
+                        _scheduleAllNotifications();
+                      } else {
+                        // Cancel existing azan alarm for this prayer
+                        await AndroidAlarmManager.cancel(
+                          _alarmId(prayerKey, 'azan'),
+                        );
+                      }
                     },
                   ),
                 ],

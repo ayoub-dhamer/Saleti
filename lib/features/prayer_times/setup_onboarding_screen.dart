@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:hive/hive.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../utils/battery_optimization_helper.dart';
+import '../../utils/battery_optimization_permission.dart';
 import '../../utils/exact_alarm_permission.dart';
-import '../../utils/onboarding_helper.dart';
 import '../home/home_screen.dart';
 
 class PermissionOnboardingScreen extends StatefulWidget {
@@ -147,29 +148,6 @@ class _PermissionOnboardingScreenState
   Future<bool> _requestLocation() async {
     // 1️⃣ Check if location service (GPS) is enabled
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!context.mounted) return false;
-
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          title: const Text('Location Services Disabled'),
-          content: const Text(
-            'Please enable GPS on your device to allow Saleti to determine prayer times accurately.',
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-
-      // ❗ Do NOT open settings automatically
-      return false;
-    }
 
     // 2️⃣ Check location permission
     var permission = await Geolocator.checkPermission();
@@ -182,7 +160,7 @@ class _PermissionOnboardingScreenState
     if (permission == LocationPermission.deniedForever) {
       if (!context.mounted) return false;
 
-      await showDialog(
+      final retry = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
@@ -192,12 +170,23 @@ class _PermissionOnboardingScreenState
           ),
           actions: [
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context, false), // Cancel
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true), // Retry
+              child: const Text('Retry'),
             ),
           ],
         ),
       );
+
+      if (retry == true) {
+        // Open app settings to reask permission
+        await Geolocator.openAppSettings();
+        // Then try requesting permission again recursively
+        return _requestLocation();
+      }
 
       return false;
     }
@@ -208,7 +197,8 @@ class _PermissionOnboardingScreenState
         permission == LocationPermission.always;
 
     if (!granted && context.mounted) {
-      await showDialog(
+      // If not granted, show dialog and allow retry
+      final retry = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
@@ -218,12 +208,21 @@ class _PermissionOnboardingScreenState
           ),
           actions: [
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context, false), // Cancel
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true), // Retry
+              child: const Text('Retry'),
             ),
           ],
         ),
       );
+
+      if (retry == true) {
+        // Re-request permission
+        return _requestLocation();
+      }
     }
 
     return granted;
@@ -383,10 +382,38 @@ class _OnboardingStep {
   /// Check if permission for this step is already granted
   Future<bool> isAlreadyGranted() async {
     if (title.contains('Location')) {
-      if (!await Geolocator.isLocationServiceEnabled()) return false;
-      var perm = await Geolocator.checkPermission();
-      return perm == LocationPermission.always ||
-          perm == LocationPermission.whileInUse;
+      // 1️⃣ Check if GPS is enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
+
+      // 2️⃣ Check location permission
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return false;
+      }
+
+      // 3️⃣ Try to get current position
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+
+        // 4️⃣ Optional: reverse geocode (not strictly required for granting)
+        try {
+          final placemarks = await placemarkFromCoordinates(
+            pos.latitude,
+            pos.longitude,
+          );
+          if (placemarks.isEmpty) return false;
+        } catch (_) {
+          return false;
+        }
+
+        return true; // ✅ GPS + permission + position success
+      } catch (_) {
+        return false;
+      }
     } else if (title.contains('Notification')) {
       return await Permission.notification.isGranted;
     } else if (title.contains('Battery')) {
@@ -549,4 +576,16 @@ class _SuccessAnimationState extends State<_SuccessAnimation>
       ),
     );
   }
+}
+
+/// Returns true if the user has completed onboarding
+Future<bool> hasCompletedOnboarding() async {
+  final box = Hive.box('app');
+  return box.get('onboardingCompleted', defaultValue: false);
+}
+
+/// Marks onboarding as completed
+Future<void> setOnboardingCompleted() async {
+  final box = Hive.box('app');
+  await box.put('onboardingCompleted', true);
 }
