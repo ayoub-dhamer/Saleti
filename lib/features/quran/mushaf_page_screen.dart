@@ -82,24 +82,36 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   Future<void> _initPageController() async {
-    final int initialPage;
+    if (widget.readingMode != ReadingMode.goal) {
+      final int initialPage;
 
-    if (widget.readingMode == ReadingMode.khatm) {
-      initialPage = await _loadLastPage();
+      if (widget.readingMode == ReadingMode.khatm) {
+        initialPage = await _loadLastPage();
+      } else {
+        initialPage = widget.startPage;
+      }
+
+      final initialIndex = initialPage - 1;
+
+      _pageController = PageController(initialPage: initialIndex);
+
+      _currentPage = initialPage;
+      _sessionStartPage = initialPage;
+      _sessionEndPage = initialPage;
+
+      _isLastPage =
+          widget.readingMode == ReadingMode.khatm && _currentPage == 604;
     } else {
-      initialPage = widget.startPage;
+      final initialIndex = widget.readingMode == ReadingMode.free
+          ? widget.startPage -
+                1 // jump to surah start
+          : 0;
+
+      _pageController = PageController(initialPage: initialIndex);
+
+      // ✅ Set current page correctly
+      _currentPage = _firstPage + initialIndex;
     }
-
-    final initialIndex = initialPage - 1;
-
-    _pageController = PageController(initialPage: initialIndex);
-
-    _currentPage = initialPage;
-    _sessionStartPage = initialPage;
-    _sessionEndPage = initialPage;
-
-    _isLastPage =
-        widget.readingMode == ReadingMode.khatm && _currentPage == 604;
 
     setState(() {});
   }
@@ -507,6 +519,20 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           if (widget.readingMode == ReadingMode.khatm &&
               page < _sessionStartPage) {
             final safeIndex = _sessionStartPage - _firstPage;
+
+            // 🔔 Show toaster message
+            ScaffoldMessenger.of(context).removeCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'You cannot go before your Khatm starting page',
+                  textAlign: TextAlign.center,
+                ),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+
             _pageController?.jumpToPage(safeIndex);
             return;
           }

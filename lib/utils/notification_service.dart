@@ -171,6 +171,7 @@ class NotificationService {
     required DateTime time,
     required String prayer,
     required double volume,
+    required bool azanEnabled, // default true
   }) async {
     try {
       await _platform.invokeMethod('scheduleAzanNative', {
@@ -178,6 +179,7 @@ class NotificationService {
         'timestamp': time.millisecondsSinceEpoch,
         'prayer': prayer,
         'volume': volume,
+        'azanEnabled': azanEnabled, // pass to native
       });
     } on PlatformException catch (e) {
       debugPrint('Failed to schedule native Azan: ${e.message}');
@@ -194,6 +196,15 @@ class NotificationService {
 
   static Future<void> stopTestAzan() async {
     await _platform.invokeMethod('stopAzan');
+  }
+
+  static Future<void> cancelAzan(int id) async {
+    const platform = MethodChannel('azan_service');
+    try {
+      await platform.invokeMethod('cancelAzanNative', {'id': id});
+    } on PlatformException catch (e) {
+      debugPrint('Failed to cancel Azan: ${e.message}');
+    }
   }
 
   // ----------------------------------------------------------

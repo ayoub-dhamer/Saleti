@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DuaNotesScreen extends StatefulWidget {
@@ -14,6 +13,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   List<String> _duaList = [];
   bool _isGalleryMode = false;
 
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
+  // Fonts (no Google Fonts)
+  static const String arabicFont = 'Amiri';
+
+  // Gallery tracking
+  PageController? _pageController;
+  int _currentIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -21,13 +30,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   Future<void> _loadDuaNotes() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
       _duaList = prefs.getStringList('dua_notes') ?? [];
     });
   }
 
-  // --- MISSING DIALOG LOGIC ---
+  // ───────────── Dialogs ─────────────
 
   void _showAddDialog() {
     _addController.clear();
@@ -42,13 +51,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   void _showEditDialog(int index) {
-    final editController = TextEditingController(text: _duaList[index]);
+    final controller = TextEditingController(text: _duaList[index]);
     showDialog(
       context: context,
       builder: (_) => _duaEditorDialog(
         title: "Edit Du'a",
-        controller: editController,
-        onSave: () => _updateDua(index, editController.text),
+        controller: controller,
+        onSave: () => _updateDua(index, controller.text),
       ),
     );
   }
@@ -59,24 +68,27 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     required VoidCallback onSave,
   }) {
     return AlertDialog(
-      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(
         title,
-        style: GoogleFonts.philosopher(
-          color: const Color(0xFF0F593E),
+        style: const TextStyle(
+          fontFamily: arabicFont,
           fontWeight: FontWeight.bold,
+          color: primaryGreen,
         ),
       ),
       content: TextField(
         controller: controller,
         maxLines: 6,
         autofocus: true,
-        textDirection: TextDirection.rtl, // Keeps the input aligned for Arabic
-        style: GoogleFonts.amiri(fontSize: 18),
+        textDirection: TextDirection.rtl,
+        style: const TextStyle(
+          fontFamily: arabicFont,
+          fontSize: 18,
+          height: 1.8,
+        ),
         decoration: InputDecoration(
           hintText: "Enter your prayer here...",
-          hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
           filled: true,
           fillColor: const Color(0xFFF4F7F5),
           border: OutlineInputBorder(
@@ -88,7 +100,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          child: const Text("Cancel", style: TextStyle(fontFamily: arabicFont)),
         ),
         ElevatedButton(
           onPressed: () {
@@ -96,74 +108,59 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             Navigator.pop(context);
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1FA45B),
+            backgroundColor: primaryGreen,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           ),
-          child: const Text(
-            "Save to Journal",
-            style: TextStyle(color: Colors.white),
-          ),
+          child: const Text("Save", style: TextStyle(fontFamily: arabicFont)),
         ),
       ],
     );
   }
 
-  // --- REFINED SAVE/UPDATE LOGIC ---
+  // ───────────── Storage Logic ─────────────
 
   Future<void> _saveDua(String dua) async {
     if (dua.trim().isEmpty) return;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _duaList.insert(0, dua.trim());
-    });
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _duaList.insert(0, dua.trim()));
     await prefs.setStringList('dua_notes', _duaList);
   }
 
-  Future<void> _updateDua(int index, String newDua) async {
-    if (newDua.trim().isEmpty) return;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _duaList[index] = newDua.trim();
-    });
+  Future<void> _updateDua(int index, String dua) async {
+    if (dua.trim().isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _duaList[index] = dua.trim());
     await prefs.setStringList('dua_notes', _duaList);
-  }
-
-  // Logic for saving, updating, deleting remains the same as your previous version...
-  // (Assuming _saveDua, _updateDua, _deleteDua are implemented)
-
-  void _toggleGalleryMode() {
-    if (_duaList.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Add some du'as first to enter gallery!")),
-      );
-      return;
-    }
-    setState(() => _isGalleryMode = !_isGalleryMode);
   }
 
   Future<void> _deleteDua(int index) async {
-    // Show a confirmation dialog before deleting
-    bool? confirm = await showDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Delete Du'a?"),
+        title: const Text(
+          "Delete Du'a?",
+          style: TextStyle(fontFamily: arabicFont),
+        ),
         content: const Text(
-          "Are you sure you want to remove this prayer from your journal?",
+          "Remove this prayer from your journal?",
+          style: TextStyle(fontFamily: arabicFont),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(fontFamily: arabicFont),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text(
               "Delete",
-              style: TextStyle(color: Colors.redAccent),
+              style: TextStyle(fontFamily: arabicFont, color: Colors.redAccent),
             ),
           ),
         ],
@@ -171,67 +168,89 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
 
     if (confirm == true) {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _duaList.removeAt(index);
-      });
+      final prefs = await SharedPreferences.getInstance();
+      setState(() => _duaList.removeAt(index));
       await prefs.setStringList('dua_notes', _duaList);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Du'a deleted"),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
+  }
+
+  // Open gallery at specific index
+  void _openGalleryAt(int index) {
+    if (_duaList.isEmpty) return;
+    setState(() {
+      _currentIndex = index;
+      _isGalleryMode = true;
+      _pageController = PageController(
+        initialPage: index,
+        viewportFraction: 0.9,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F5), // Soft Islamic Mint/Grey
-      appBar: AppBar(
-        title: Text(
-          "Du'a Journal",
-          style: GoogleFonts.philosopher(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF0F593E), Color(0xFF1FA45B)],
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isGalleryMode) {
+          setState(() {
+            _isGalleryMode = false; // exit gallery mode
+          });
+          return false; // prevent exiting the screen
+        }
+        return true; // allow normal back behavior
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F7F5),
+        appBar: AppBar(
+          elevation: 0,
+          centerTitle: true,
+          title: const Text(
+            "Du'a Journal",
+            style: TextStyle(
+              fontFamily: arabicFont,
+              fontWeight: FontWeight.bold,
             ),
           ),
-        ),
-        actions: [
-          if (_isGalleryMode)
-            IconButton(
-              icon: const Icon(Icons.grid_view_rounded),
-              onPressed: () => setState(() => _isGalleryMode = false),
+          leading: _isGalleryMode
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    setState(() => _isGalleryMode = false);
+                  },
+                )
+              : null,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [primaryGreen, secondaryGreen],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (!_isGalleryMode) _headerWithActions(),
-          Expanded(
-            child: _isGalleryMode ? _buildGalleryView() : _buildListView(),
           ),
-        ],
+          actions: [
+            if (_isGalleryMode)
+              IconButton(
+                icon: const Icon(Icons.list_rounded),
+                onPressed: () => setState(() => _isGalleryMode = false),
+              ),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (!_isGalleryMode) _header(),
+            Expanded(child: _isGalleryMode ? _galleryView() : _listView()),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _headerWithActions() {
+  Widget _header() {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0F593E), Color(0xFF1FA45B)],
-        ),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Row(
@@ -243,6 +262,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               Text(
                 "Personal Du'as",
                 style: TextStyle(
+                  fontFamily: arabicFont,
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -250,18 +270,15 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               ),
               Text(
                 "Heartfelt whispers",
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(fontFamily: arabicFont, color: Colors.white70),
               ),
             ],
           ),
           Row(
             children: [
-              _headerCircleButton(
-                icon: Icons.auto_stories_rounded, // Gallery icon
-                onTap: _toggleGalleryMode,
-              ),
+              _headerButton(Icons.auto_stories_rounded, () {}),
               const SizedBox(width: 12),
-              _headerCircleButton(icon: Icons.add, onTap: _showAddDialog),
+              _headerButton(Icons.add, _showAddDialog),
             ],
           ),
         ],
@@ -269,224 +286,133 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _headerCircleButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _headerButton(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
+          color: Colors.white.withOpacity(.15),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white30),
         ),
-        child: Icon(icon, color: Colors.white, size: 26),
+        child: Icon(icon, color: Colors.white),
       ),
     );
   }
 
-  // --- LIST VIEW ---
-  Widget _buildListView() {
-    return _duaList.isEmpty
-        ? _buildEmptyState()
-        : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _duaList.length,
-            itemBuilder: (context, index) => _duaContentCard(index),
-          );
-  }
-
-  // --- GALLERY VIEW (Swipe Mode) ---
-  Widget _buildGalleryView() {
-    return PageView.builder(
+  Widget _listView() {
+    if (_duaList.isEmpty) return _emptyState();
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
       itemCount: _duaList.length,
-      controller: PageController(viewportFraction: 0.9),
-      itemBuilder: (context, index) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 40),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            image: const DecorationImage(
-              image: AssetImage(
-                'assets/images/pattern_subtle.png',
-              ), // Add a light Islamic pattern here
-              opacity: 0.03,
-              repeat: ImageRepeat.repeat,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Decorative Corner
-              Positioned(
-                top: -10,
-                right: -10,
-                child: Icon(
-                  Icons.wb_sunny_outlined,
-                  size: 100,
-                  color: Colors.green.withOpacity(0.05),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(30),
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: Text(
-                      _duaList[index],
-                      textAlign: TextAlign.center,
-                      textDirection: TextDirection.rtl,
-                      style: GoogleFonts.amiri(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        height: 1.8,
-                        color: const Color(0xFF2D3142),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 20,
-                left: 0,
-                right: 0,
-                child: Text(
-                  "${index + 1} / ${_duaList.length}",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      itemBuilder: (_, i) => _duaCard(i),
     );
   }
 
-  Widget _duaContentCard(int index) {
+  Widget _duaCard(int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green.withOpacity(0.1)),
+        border: Border.all(color: primaryGreen.withOpacity(.1)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          children: [
-            Container(
-              height: 4,
-              color: const Color(0xFF1FA45B),
-            ), // Top Accent Bar
-            ListTile(
-              contentPadding: const EdgeInsets.all(20),
-              title: Text(
-                _duaList[index],
-                textDirection: TextDirection.rtl,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.amiri(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  height: 1.5,
-                ),
-              ),
-              subtitle: const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Text(
-                  "Tap to view full du'a",
-                  style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-                ),
-              ),
-              onTap: () {
-                // Open Gallery mode at specific index
-                setState(() {
-                  _isGalleryMode = true;
-                });
-              },
-            ),
-            _cardActionButtons(index),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _cardActionButtons(int index) {
-    return Container(
-      color: Colors.grey.shade50,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
         children: [
-          IconButton(
-            icon: const Icon(Icons.edit_note, color: Colors.blueGrey),
-            onPressed: () => _showEditDialog(index),
-          ),
-          const VerticalDivider(width: 1),
-          IconButton(
-            icon: const Icon(Icons.share_rounded, color: Colors.green),
-            onPressed: () {},
-          ),
-          const VerticalDivider(width: 1),
-          IconButton(
-            icon: const Icon(
-              Icons.delete_sweep_outlined,
-              color: Colors.redAccent,
+          Container(height: 4, color: primaryGreen),
+          ListTile(
+            contentPadding: const EdgeInsets.all(20),
+            title: Text(
+              _duaList[index],
+              textDirection: TextDirection.rtl,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: arabicFont,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                height: 1.7,
+              ),
             ),
-            onPressed: () => _deleteDua(index),
+            onTap: () => _openGalleryAt(index),
           ),
+          _cardActions(index),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40), // Moved padding here
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.menu_book_outlined, // Fixed the lowercase 'm' here too
-              size: 100,
-              color: const Color(0xFF0F593E).withOpacity(0.1),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              "Your Du'a Journal is Empty",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.philosopher(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF0F593E).withOpacity(0.5),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "“And your Lord says, 'Call upon Me; I will respond to you.'” (40:60)",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.amiri(
-                fontSize: 16,
-                color: Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
+  Widget _cardActions(int index) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.edit_note),
+          onPressed: () => _showEditDialog(index),
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+          onPressed: () => _deleteDua(index),
+        ),
+      ],
+    );
+  }
+
+  Widget _galleryView() {
+    if (_pageController == null) return const SizedBox.shrink();
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: _duaList.length,
+      itemBuilder: (_, i) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
+        padding: const EdgeInsets.all(30),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.08),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Text(
+              _duaList[i],
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: const TextStyle(
+                fontFamily: arabicFont,
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                height: 1.9,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.menu_book_outlined,
+            size: 100,
+            color: primaryGreen.withOpacity(.12),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            "Your Du'a Journal is Empty",
+            style: TextStyle(fontFamily: arabicFont, color: Colors.black54),
+          ),
+        ],
       ),
     );
   }

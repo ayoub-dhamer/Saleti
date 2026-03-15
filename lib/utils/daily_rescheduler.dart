@@ -62,6 +62,7 @@ Future<void> dailyRescheduleCallback() async {
         time: time,
         prayer: prayer,
         volume: (setting['volume'] is double) ? setting['volume'] : 1.0,
+        azanEnabled: setting['azan'],
       );
     }
   }

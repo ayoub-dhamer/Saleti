@@ -391,6 +391,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           time: time,
           prayer: prayer,
           volume: _getVolume(setting),
+          azanEnabled: setting['azan'],
         );
       }
     }
@@ -759,113 +760,140 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final prayerTime = prayers.values.elementAt(index);
             final setting = NotificationService.prayerSettings[prayerKey]!;
             final isNext = next.name == prayerKey;
+            final alarmId = _alarmId(prayerKey, 'azan');
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                children: [
-                  // Highlight indicator for the next prayer
-                  Container(
-                    width: 4,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: isNext ? Colors.green : Colors.transparent,
-                      borderRadius: BorderRadius.circular(2),
+              child: IntrinsicHeight(
+                // <-- ensures vertical bar stretches full row height
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ✅ Vertical green bar for next prayer
+                    Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        color: isNext
+                            ? Colors.green.shade700
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _prettyName(prayerKey),
-                          style: TextStyle(
-                            fontWeight: isNext
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            fontSize: 17,
-                            color: isNext
-                                ? Colors.green.shade700
-                                : Colors.black87,
+                    const SizedBox(width: 16),
+                    // Prayer text and time
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _prettyName(prayerKey),
+                            style: TextStyle(
+                              fontWeight: isNext
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              fontSize: 17,
+                              color: isNext
+                                  ? Colors.green.shade700
+                                  : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            DateFormat('hh:mm a').format(prayerTime),
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Volume slider
+                    SizedBox(
+                      width: 120,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 12,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          DateFormat('hh:mm a').format(prayerTime),
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
+                        child: Slider(
+                          value: _getVolume(setting),
+                          min: 0.0,
+                          max: 1.0,
+                          divisions: 10,
+                          label: '${((_getVolume(setting)) * 100).round()}%',
+                          onChanged: (v) async {
+                            setState(() => setting['volume'] = v);
+                            await NotificationService.saveSettings();
+                            _scheduleAllNotifications();
+                          },
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-
-                  Slider(
-                    value: _getVolume(setting),
-                    min: 0.0,
-                    max: 1.0,
-                    divisions: 10,
-                    label: '${((setting['volume'] as double) * 100).round()}%',
-                    onChanged: (v) async {
-                      setState(() => setting['volume'] = v);
-                      await NotificationService.saveSettings();
-                      _scheduleAllNotifications();
-                    },
-                  ),
-                  // Compact Action Buttons
-                  _actionIcon(
-                    icon: setting['reminder'] == true
-                        ? Icons.alarm_on
-                        : Icons.alarm_off,
-                    activeColor: Colors.green,
-                    isActive: setting['reminder'] == true,
-                    onTap: () async {
-                      setState(
-                        () => setting['reminder'] = !setting['reminder'],
-                      );
-                      await NotificationService.saveSettings();
-                      _scheduleAllNotifications();
-                    },
-                    onLongPress: () async {
-                      HapticFeedback.heavyImpact();
-                      final minutes = await _showDurationPickerDialog(
-                        setting['minutesBefore'] as int,
-                      );
-                      if (minutes != null) {
-                        setState(() {
-                          setting['minutesBefore'] = minutes;
-                          setting['reminder'] = true;
-                        });
+                    const SizedBox(width: 8),
+                    // Reminder toggle
+                    _actionIcon(
+                      icon: setting['reminder'] == true
+                          ? Icons.alarm_on
+                          : Icons.alarm_off,
+                      activeColor: Colors.green,
+                      isActive: setting['reminder'] == true,
+                      onTap: () async {
+                        setState(
+                          () => setting['reminder'] = !setting['reminder'],
+                        );
                         await NotificationService.saveSettings();
                         _scheduleAllNotifications();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _actionIcon(
-                    icon: setting['azan'] == true
-                        ? Icons.mosque
-                        : Icons.mosque_outlined,
-                    activeColor: Colors.blue,
-                    isActive: setting['azan'] == true,
-                    onTap: () async {
-                      setState(() => setting['azan'] = !setting['azan']);
-                      await NotificationService.saveSettings();
-
-                      onTap:
-                      () async {
+                      },
+                      onLongPress: () async {
+                        HapticFeedback.heavyImpact();
+                        final minutes = await _showDurationPickerDialog(
+                          setting['minutesBefore'] as int,
+                        );
+                        if (minutes != null) {
+                          setState(() {
+                            setting['minutesBefore'] = minutes;
+                            setting['reminder'] = true;
+                          });
+                          await NotificationService.saveSettings();
+                          _scheduleAllNotifications();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    // Azan toggle
+                    _actionIcon(
+                      icon: setting['azan'] == true
+                          ? Icons.mosque
+                          : Icons.mosque_outlined,
+                      activeColor: Colors.blue,
+                      isActive: setting['azan'] == true,
+                      onTap: () async {
                         setState(() => setting['azan'] = !setting['azan']);
                         await NotificationService.saveSettings();
 
-                        // 🔥 Always reschedule everything cleanly
-                        await _scheduleAllNotifications();
-                      };
-                    },
-                  ),
-                ],
+                        if (setting['azan'] == true) {
+                          await NotificationService.scheduleAzanNative(
+                            id: alarmId,
+                            time: prayers[prayerKey]!,
+                            prayer: prayerKey,
+                            volume: _getVolume(setting),
+                            azanEnabled: setting['azan'],
+                          );
+                        } else {
+                          await NotificationService.cancelAzan(alarmId);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
             );
           },

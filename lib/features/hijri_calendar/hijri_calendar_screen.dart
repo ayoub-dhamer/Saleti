@@ -52,10 +52,12 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true, // ✅ REQUIRED
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent, // Android 12+
         centerTitle: true,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -79,16 +81,20 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
 
   // 🟢 BIG HEADER (same feel as Bookmarks)
   Widget _bigHeader() {
+    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 28),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(28), // ✅ only bottom
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

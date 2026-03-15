@@ -45,7 +45,6 @@ dependencies:
   permission_handler: ^11.3.0
   flutter_local_notifications: ^17.1.0
 
-  google_fonts: ^6.2.1
   android_alarm_manager_plus: ^4.0.8
   flutter_compass: ^0.8.0
 
@@ -123,3 +122,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri-Bold.ttf
+          weight: 700

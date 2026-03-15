@@ -3,11 +3,14 @@ package com.example.saleti
 import android.app.*
 import android.content.Context
 import android.content.Intent
-import android.media.MediaPlayer
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import org.json.JSONObject
 
 class AzanService : Service() {
 
@@ -17,19 +20,53 @@ class AzanService : Service() {
     private var prayerName: String = "Prayer"
     private var volume: Float = 1.0f
 
+    private var telephonyManager: TelephonyManager? = null
+    private var phoneStateListener: PhoneStateListener? = null
+    private var shouldResumeAfterCall = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
-        // Handle STOP action from notification
-        if (intent?.action == STOP_ACTION) {
-            stopAzan()
-            return START_NOT_STICKY
+    // Handle STOP action from notification
+    if (intent?.action == STOP_ACTION) {
+        stopAzan()
+        return START_NOT_STICKY
+    }
+
+    prayerName = intent?.getStringExtra("prayer") ?: "Prayer"
+    volume = intent?.getFloatExtra("volume", 1.0f) ?: 1.0f
+
+    // ❗ Check if this prayer's azan is enabled
+    val azanEnabled = intent?.getBooleanExtra("azanEnabled", true) ?: true
+
+    createNotificationChannel()
+    startForegroundNotification()
+
+    telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+    phoneStateListener = object : PhoneStateListener() {
+        override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+            super.onCallStateChanged(state, phoneNumber)
+            when (state) {
+                TelephonyManager.CALL_STATE_RINGING,
+                TelephonyManager.CALL_STATE_OFFHOOK -> {
+                    if (mediaPlayer?.isPlaying == true) shouldResumeAfterCall = true
+                    stopAzan()
+                }
+                TelephonyManager.CALL_STATE_IDLE -> {
+                    if (shouldResumeAfterCall && azanEnabled) {
+                        shouldResumeAfterCall = false
+                        startAzan()
+                    }
+                }
+            }
         }
+    }
+    telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
 
-        prayerName = intent?.getStringExtra("prayer") ?: "Prayer"
-        volume = intent?.getFloatExtra("volume", 1.0f) ?: 1.0f
+    if (azanEnabled) startAzan() // Only start Azan if this prayer has it enabled
+    return START_STICKY
+}
 
-        createNotificationChannel()
-
+    private fun startForegroundNotification() {
         val stopIntent = Intent(this, AzanService::class.java).apply {
             action = STOP_ACTION
         }
@@ -40,43 +77,35 @@ class AzanService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Time for $prayerName Prayer")
-            .setContentText("Salah is not a burden; it is a meeting with the One who loves you most")
+            .setContentText("Salah is a meeting with the One who loves you most")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .addAction(R.mipmap.ic_launcher, "STOP", stopPendingIntent)
             .build()
 
         startForeground(1, notification)
-
-        startAzan()
-
-        return START_STICKY
     }
 
-    private fun startAzan() {
-    try {
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer()
+    fun startAzan() {
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer()
 
-        // Load audio without startup pop
-        val afd = resources.openRawResourceFd(R.raw.azan) ?: return
-        mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-        afd.close()
+            val afd = resources.openRawResourceFd(R.raw.azan) ?: return
+            mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            afd.close()
 
-        mediaPlayer?.isLooping = false
-        mediaPlayer?.setVolume(volume, volume)
-        mediaPlayer?.setAudioStreamType(AudioManager.STREAM_ALARM) // Use alarm stream
-        mediaPlayer?.setOnPreparedListener {
-            it.start() // Start only when fully prepared
+            mediaPlayer?.isLooping = false
+            mediaPlayer?.setVolume(volume, volume)
+            mediaPlayer?.setAudioStreamType(AudioManager.STREAM_ALARM)
+            mediaPlayer?.setOnPreparedListener { it.start() }
+            mediaPlayer?.setOnCompletionListener { stopAzan() }
+            mediaPlayer?.prepareAsync()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopAzan()
         }
-        mediaPlayer?.setOnCompletionListener { stopAzan() }
-
-        mediaPlayer?.prepareAsync() // Async preparation avoids the pop
-    } catch (e: Exception) {
-        e.printStackTrace()
-        stopAzan()
     }
-}
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -90,19 +119,26 @@ class AzanService : Service() {
         }
     }
 
-    private fun stopAzan() {
+    fun stopAzan() {
         mediaPlayer?.let {
             if (it.isPlaying) it.stop()
             it.release()
         }
         mediaPlayer = null
         stopForeground(true)
-        stopSelf()
     }
 
     override fun onDestroy() {
+        telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
         stopAzan()
         super.onDestroy()
+    }
+
+    private fun isAzanEnabled(): Boolean {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val raw = prefs.getString("flutter.prayer_settings", null) ?: return true
+        val decoded = JSONObject(raw)
+        return decoded.optJSONObject(prayerName)?.optBoolean("azan", true) ?: true
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
