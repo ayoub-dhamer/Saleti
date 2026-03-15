@@ -134,17 +134,32 @@ class KhatmService {
     final active = await getActiveYear();
     if (active == null) return;
 
+    const int cyclePages = 604;
+
     active.pagesReadTotal += pagesRead;
 
-    const totalPages = 604;
-    while (active.pagesReadTotal >= totalPages) {
-      active.pagesReadTotal -= totalPages;
+    // Handle cycle completion
+    while (active.pagesReadTotal >= cyclePages) {
+      active.pagesReadTotal -= cyclePages;
       active.completedCycles += 1;
+    }
+
+    // If all cycles are done, mark year as completed
+    final totalPagesInYear = active.targetCompletions * cyclePages;
+    final pagesSoFar =
+        (active.completedCycles * cyclePages) + active.pagesReadTotal;
+
+    if (pagesSoFar >= totalPagesInYear) {
+      active.pagesReadTotal = 0; // ✅ IMPORTANT
+      active.completedCycles = active.targetCompletions; // safety clamp
+      active.isActive = false;
+      active.endDate = DateTime.now();
     }
 
     await active.save();
     _activeYearCached = active;
 
+    // Save daily log
     final logBox = await _logBox;
     final today = DateTime.now();
     final todayStr = '${today.year}-${today.month}-${today.day}';

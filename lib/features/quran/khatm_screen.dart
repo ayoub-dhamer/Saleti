@@ -193,6 +193,79 @@ class _KhatmScreenState extends State<KhatmScreen> {
     }
   }
 
+  Future<void> _confirmAddCycle() async {
+    final active = _activeYear;
+    if (active == null) return;
+
+    const int cyclePages = 604;
+
+    final totalCycles = active.targetCompletions;
+    final currentCycles = active.completedCycles;
+
+    final isLastCycle = currentCycles + 1 >= totalCycles;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirm Cycle Completion'),
+        content: Text(
+          isLastCycle
+              ? 'This will finish the FINAL cycle and complete the year.\n\nContinue?'
+              : 'This will move you to the next cycle while keeping your current page.\n\nContinue?',
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // ✅ Apply changes
+    await _addCycleToActiveYear();
+  }
+
+  Future<void> _addCycleToActiveYear() async {
+    final active = _activeYear;
+    if (active == null) return;
+
+    const int cyclePages = 604;
+
+    final int currentPage = active.pagesReadTotal;
+    final int currentCycle = active.completedCycles;
+    final int totalCycles = active.targetCompletions;
+
+    final bool isLastCycle = currentCycle + 1 >= totalCycles;
+
+    if (!isLastCycle) {
+      // 🔹 CASE 1: Not last cycle
+      // Move to next cycle, keep page number
+      active.completedCycles += 1;
+      // pagesReadTotal stays EXACTLY the same
+    } else {
+      // 🔹 CASE 2: Last cycle
+      // Add only remaining pages to finish the cycle
+      final int remainingPages = cyclePages - currentPage;
+
+      active.pagesReadTotal += remainingPages;
+
+      // Finish year
+      active.isActive = false;
+      active.endDate = DateTime.now();
+    }
+
+    await active.save();
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -234,17 +307,17 @@ class _KhatmScreenState extends State<KhatmScreen> {
   Widget _activeYearCard() {
     if (_activeYear == null) return const SizedBox();
 
-    final totalTargetPages = _activeYear!.targetCompletions * 604;
-    final pagesReadInCycle =
-        (_activeYear!.completedCycles * 604) + _activeYear!.pagesReadTotal;
+    const int cyclePages = 604;
+    final totalTargetPages = _activeYear!.targetCompletions * cyclePages;
+    final pagesReadInYear =
+        (_activeYear!.completedCycles * cyclePages) +
+        _activeYear!.pagesReadTotal;
     final pagesInCurrentCycle = _activeYear!.pagesReadTotal.toDouble();
-    final cyclePages = 604;
 
     return FutureBuilder<int>(
       future: _service.pagesAheadOrBehind(),
       builder: (context, snapshot) {
-        int diff = 0;
-        if (snapshot.hasData) diff = snapshot.data!;
+        int diff = snapshot.data ?? 0;
         KhatmStatus status;
         if (diff == 0) {
           status = KhatmStatus.onTrack;
@@ -266,11 +339,20 @@ class _KhatmScreenState extends State<KhatmScreen> {
             statusColor = Colors.blue;
         }
 
+        // Calculate progress ratios
+        final currentCycleProgress = (pagesInCurrentCycle / cyclePages).clamp(
+          0.0,
+          1.0,
+        );
+        final yearProgress = (pagesReadInYear / totalTargetPages).clamp(
+          0.0,
+          1.0,
+        );
+
         return _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// HEADER ROW
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -289,10 +371,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
-              /// INFO ROWS
               _row('Target Khatms', _activeYear!.targetCompletions.toString()),
               _row('Pages / Day', _activeYear!.pagesPerDay.toString()),
               _row('Completed Cycles', _activeYear!.completedCycles.toString()),
@@ -309,15 +388,14 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ? 'Ahead by $diff pages'
                     : 'Behind by ${diff.abs()} pages',
               ),
-
               const SizedBox(height: 16),
 
-              /// ===============================
-              /// PROGRESS BARS
-              /// ===============================
+              // ===================
+              // Progress Bars
+              // ===================
               Row(
                 children: [
-                  /// Current Cycle Progress
+                  // Current Cycle
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,63 +409,17 @@ class _KhatmScreenState extends State<KhatmScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween<double>(
-                            begin: 0,
-                            end: pagesInCurrentCycle / cyclePages,
-                          ),
-                          duration: const Duration(seconds: 1),
-                          builder: (context, value, child) {
-                            final textColor = value < 0.3
-                                ? Colors.black
-                                : Colors.white;
-                            return Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: LinearProgressIndicator(
-                                    value: value,
-                                    minHeight: 16,
-                                    backgroundColor: Colors.transparent,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      statusColor,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  "${(value * 100).toStringAsFixed(0)}%",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$pagesInCurrentCycle / $cyclePages pages',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        _buildProgressBar(
+                          currentCycleProgress,
+                          statusColor,
+                          pagesInCurrentCycle.toInt(),
+                          cyclePages,
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 16),
-
-                  /// Year Progress
+                  // Year Progress
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,80 +433,44 @@ class _KhatmScreenState extends State<KhatmScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween<double>(
-                            begin: 0,
-                            end: pagesReadInCycle / totalTargetPages,
-                          ),
-                          duration: const Duration(seconds: 1),
-                          builder: (context, value, child) {
-                            final textColor = value < 0.3
-                                ? Colors.black
-                                : Colors.white;
-                            return Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: LinearProgressIndicator(
-                                    value: value,
-                                    minHeight: 16,
-                                    backgroundColor: Colors.transparent,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      statusColor,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  "${(value * 100).toStringAsFixed(0)}%",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$pagesReadInCycle / $totalTargetPages pages',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        _buildProgressBar(
+                          yearProgress,
+                          statusColor,
+                          pagesReadInYear,
+                          totalTargetPages,
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
 
-              /// ACTION BUTTONS
+              // Action Buttons
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.menu_book),
-                      label: const Text('Start Reading'),
-                      onPressed: _startReading,
+                      label: Text(
+                        pagesReadInYear >= totalTargetPages
+                            ? 'Year Complete'
+                            : 'Start Reading',
+                      ),
+                      onPressed: pagesReadInYear >= totalTargetPages
+                          ? null
+                          : _startReading,
                     ),
                   ),
                   const SizedBox(width: 12),
                   IconButton(
-                    icon: const Icon(Icons.settings),
-                    tooltip: "Edit Plan",
-                    onPressed: _configurePlan,
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip:
+                        _activeYear!.completedCycles + 1 >=
+                            _activeYear!.targetCompletions
+                        ? "Finish Final Cycle"
+                        : "Add Cycle",
+                    onPressed: _confirmAddCycle,
                   ),
                 ],
               ),
@@ -485,13 +481,75 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
+  /// Helper for progress bars
+  Widget _buildProgressBar(
+    double progress,
+    Color color,
+    int pages,
+    int totalPages,
+  ) {
+    final textColor = progress < 0.3 ? Colors.black : Colors.white;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              height: 16,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.grey.shade300,
+              ),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 16,
+                backgroundColor: Colors.transparent,
+                valueColor: AlwaysStoppedAnimation(color),
+              ),
+            ),
+            Text(
+              "${(progress * 100).toStringAsFixed(0)}%",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$pages / $totalPages pages',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+
   Widget _noPlanCard() {
     final now = DateTime.now().year;
 
-    // Check if there's an active plan OR a completed/current year plan
+    // Check if there's an active year OR a completed/current year plan
     final hasCurrentYearPlan =
         (_activeYear != null && _activeYear!.year == now) ||
         _history.any((y) => y.year == now);
+
+    // Check if current year is finished
+    bool currentYearFinished = false;
+    if (_activeYear != null && _activeYear!.year == now) {
+      const int cyclePages = 604;
+      final totalPagesInYear = _activeYear!.targetCompletions * cyclePages;
+      final pagesReadInYear =
+          (_activeYear!.completedCycles * cyclePages) +
+          _activeYear!.pagesReadTotal;
+      currentYearFinished = pagesReadInYear >= totalPagesInYear;
+    }
+
+    final canCreatePlan = !hasCurrentYearPlan || currentYearFinished;
 
     return _card(
       child: Column(
@@ -503,18 +561,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            hasCurrentYearPlan
-                ? 'You already have a Khatm record for this year ($now). You cannot create another one until next year or by deleting this record.'
-                : 'Create a yearly plan to track your Qur’an reading.',
+            canCreatePlan
+                ? 'Create a yearly plan to track your Qur’an reading.'
+                : 'You already have a Khatm record for this year ($now). You cannot create another one until next year or by deleting this record.',
             style: const TextStyle(color: Colors.black54),
           ),
           const SizedBox(height: 12),
           Tooltip(
-            message: hasCurrentYearPlan
-                ? 'Finish or delete the current year record before creating a new one.'
-                : 'Create a new plan',
+            message: canCreatePlan
+                ? 'Create a new plan'
+                : 'Finish or delete the current year record before creating a new one.',
             child: ElevatedButton(
-              onPressed: hasCurrentYearPlan ? null : _configurePlan,
+              onPressed: canCreatePlan ? _configurePlan : null,
               child: const Text('Create Plan'),
             ),
           ),
@@ -546,9 +604,14 @@ class _KhatmScreenState extends State<KhatmScreen> {
         ..._history.map((y) {
           final expanded = _expandedYears.contains(y.year);
 
-          final totalTargetPages = y.targetCompletions * 604;
-          final pagesReadInYear = (y.completedCycles * 604) + y.pagesReadTotal;
-          final yearProgress = pagesReadInYear / totalTargetPages;
+          const int cyclePages = 604;
+          final pagesReadInYear =
+              (y.completedCycles * cyclePages) + y.pagesReadTotal;
+          final totalTargetPages = y.targetCompletions * cyclePages;
+          final yearProgress = (pagesReadInYear / totalTargetPages)
+              .clamp(0, 1)
+              .toDouble();
+          ;
 
           return GestureDetector(
             onTap: () {
@@ -591,7 +654,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ],
                   ),
 
-                  /// EXPANDED CONTENT
                   if (expanded) ...[
                     const SizedBox(height: 12),
                     _row('Target Khatms', y.targetCompletions.toString()),
@@ -610,9 +672,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
                     const SizedBox(height: 16),
 
-                    /// ===============================
-                    /// YEAR PROGRESS BAR (Animated)
-                    /// ===============================
+                    /// YEAR PROGRESS BAR
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -695,21 +755,22 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
     // 1. Fetch the saved page specifically for the Khatm mode
     // If it's the first time, it defaults to page 1
-    final int lastKhatmPage = prefs.getInt('last_read_khatm') ?? 1;
+    final int lastKhatmPage =
+        prefs.getInt('last_read_khatm')?.clamp(1, 604) ?? 1;
 
-    await Navigator.push(
+    final refreshNeeded = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => MushafPageScreen(
-          startPage: lastKhatmPage, // Now it is defined!
           storageKey: 'last_read_khatm',
           readingMode: ReadingMode.khatm,
         ),
       ),
     );
 
-    // Refresh active year after coming back to see updated progress
-    await _load();
+    if (refreshNeeded == true) {
+      _load(); // Refresh your Khatm stats immediately
+    }
   }
 
   Future<void> _configurePlan() async {

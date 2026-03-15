@@ -383,6 +383,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         }
       }
 
+      await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
+
       if (setting['azan'] == true && time.isAfter(DateTime.now())) {
         await NotificationService.scheduleAzanNative(
           id: _alarmId(prayer, 'azan'),
@@ -390,8 +392,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           prayer: prayer,
           volume: _getVolume(setting),
         );
-      } else {
-        await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
       }
     }
 
@@ -855,15 +855,14 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       setState(() => setting['azan'] = !setting['azan']);
                       await NotificationService.saveSettings();
 
-                      if (setting['azan'] == true) {
-                        // Schedule azan
-                        _scheduleAllNotifications();
-                      } else {
-                        // Cancel existing azan alarm for this prayer
-                        await AndroidAlarmManager.cancel(
-                          _alarmId(prayerKey, 'azan'),
-                        );
-                      }
+                      onTap:
+                      () async {
+                        setState(() => setting['azan'] = !setting['azan']);
+                        await NotificationService.saveSettings();
+
+                        // 🔥 Always reschedule everything cleanly
+                        await _scheduleAllNotifications();
+                      };
                     },
                   ),
                 ],
