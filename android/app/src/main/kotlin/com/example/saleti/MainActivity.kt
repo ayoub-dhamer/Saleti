@@ -41,9 +41,14 @@ class MainActivity : FlutterActivity() {
                         val timestamp = args?.get("timestamp") as? Long ?: 0L
                         val prayer = args?.get("prayer") as? String ?: "Prayer"
                         val volume = (args?.get("volume") as? Double ?: 1.0).toFloat()
-                        val azanEnabled = true // we only schedule if toggle is ON
+                        val azanEnabled = args?.get("azanEnabled") as? Boolean ?: true
 
-                        scheduleAzan(id, prayer, timestamp, volume, azanEnabled)
+                        if (azanEnabled) {
+                            scheduleAzan(id, prayer, timestamp, volume, azanEnabled)
+                        } else {
+                            cancelAzan(id)
+                        }
+
                         result.success(null)
                     }
 

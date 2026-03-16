@@ -134,6 +134,36 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   Widget _goalCard(SurahGoal goal) {
     final progress = goal.progress;
 
+    String? buildDeadlineIndicator(SurahGoal goal) {
+      if (goal.deadline == null || goal.isCompleted) return null;
+
+      final now = DateTime.now();
+      final daysLeft =
+          goal.deadline!
+              .difference(DateTime(now.year, now.month, now.day))
+              .inDays +
+          1;
+
+      if (daysLeft <= 0) return "Deadline passed";
+
+      final remaining = goal.targetCount - goal.completedCount;
+
+      if (remaining <= 0) return null;
+
+      // Case 1: multiple per day
+      if (remaining >= daysLeft) {
+        final perDay = (remaining / daysLeft).ceil();
+        return "$perDay time${perDay > 1 ? 's' : ''} per day";
+      }
+
+      // Case 2: once every X days
+      final everyDays = (daysLeft / remaining).ceil();
+      return "1 time every $everyDays day${everyDays > 1 ? 's' : ''}";
+    }
+
+    // ✅ Declare indicator before return
+    final deadlineIndicator = buildDeadlineIndicator(goal);
+
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,6 +203,25 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
               "Deadline",
               "${goal.deadline!.year}-${goal.deadline!.month}-${goal.deadline!.day}",
             ),
+
+          // ✅ Use the indicator here
+          if (deadlineIndicator != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.schedule, size: 16, color: Colors.blueGrey),
+                const SizedBox(width: 6),
+                Text(
+                  deadlineIndicator,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blueGrey,
+                  ),
+                ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 14),
 
@@ -252,15 +301,14 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                               builder: (_) => MushafPageScreen(
                                 startPage: startPage,
                                 endPage: endPage,
-                                readingMode:
-                                    ReadingMode.goal, // ✅ RESTRICTED MODE
+                                readingMode: ReadingMode.goal,
                                 storageKey: 'last_read_goals',
                                 surahGoal: goal,
                               ),
                             ),
                           );
                           if (result == true) {
-                            _loadGoals(); // refresh UI
+                            _loadGoals();
                           }
                         },
                 ),

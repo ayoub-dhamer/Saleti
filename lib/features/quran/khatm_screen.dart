@@ -314,6 +314,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
         _activeYear!.pagesReadTotal;
     final pagesInCurrentCycle = _activeYear!.pagesReadTotal.toDouble();
 
+    final remainingPages = totalTargetPages - pagesReadInYear;
+    final now = DateTime.now();
+    final endDate = _activeYear!.startFromYearStart
+        ? DateTime(_activeYear!.year, 12, 31)
+        : DateTime(
+            _activeYear!.startDate.year + 1,
+            _activeYear!.startDate.month,
+            _activeYear!.startDate.day,
+          );
+    final daysRemaining = endDate.difference(now).inDays.clamp(1, 9999);
+    final catchUpPagesPerDay = (remainingPages / daysRemaining).ceil();
+
     return FutureBuilder<int>(
       future: _service.pagesAheadOrBehind(),
       builder: (context, snapshot) {
@@ -374,6 +386,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
               const SizedBox(height: 12),
               _row('Target Khatms', _activeYear!.targetCompletions.toString()),
               _row('Pages / Day', _activeYear!.pagesPerDay.toString()),
+
               _row('Completed Cycles', _activeYear!.completedCycles.toString()),
               _row('Pages Read', _activeYear!.pagesReadTotal.toString()),
               _row(
@@ -388,6 +401,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ? 'Ahead by $diff pages'
                     : 'Behind by ${diff.abs()} pages',
               ),
+              if (status == KhatmStatus.behind) ...[
+                const SizedBox(height: 6),
+                _row('Catch-up Pace', '$catchUpPagesPerDay pages/day'),
+              ],
               const SizedBox(height: 16),
 
               // ===================
@@ -611,7 +628,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
           final yearProgress = (pagesReadInYear / totalTargetPages)
               .clamp(0, 1)
               .toDouble();
-          ;
 
           return GestureDetector(
             onTap: () {

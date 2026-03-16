@@ -69,10 +69,11 @@ class _PermissionOnboardingScreenState
     int stepIndex = 0;
     for (final step in _steps) {
       final granted = await step.isAlreadyGranted();
-      if (granted)
+      if (granted) {
         stepIndex++;
-      else
+      } else {
         break;
+      }
     }
 
     // Clamp to last valid index

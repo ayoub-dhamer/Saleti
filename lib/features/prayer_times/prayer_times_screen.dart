@@ -885,7 +885,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                             time: prayers[prayerKey]!,
                             prayer: prayerKey,
                             volume: _getVolume(setting),
-                            azanEnabled: setting['azan'],
+                            azanEnabled: true,
                           );
                         } else {
                           await NotificationService.cancelAzan(alarmId);
