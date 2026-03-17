@@ -75,6 +75,7 @@ class MainActivity : FlutterActivity() {
         azanEnabled: Boolean
     ): PendingIntent {
         val intent = Intent(this, AzanService::class.java).apply {
+            action = AzanService.ACTION_PLAY_AZAN
             putExtra("prayer", prayer)
             putExtra("volume", volume)
             putExtra("azanEnabled", azanEnabled)
@@ -113,13 +114,24 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun cancelAzan(id: Int) {
-        val dummyPrayer = "dummy" // prayer string doesn’t matter for cancelling
-        val dummyVolume = 1.0f
-        val dummyAzan = true
+        val intent = Intent(this, AzanService::class.java).apply {
+            action = AzanService.ACTION_PLAY_AZAN
+        }
 
-        val pendingIntent = getAzanPendingIntent(id, dummyPrayer, dummyVolume, dummyAzan)
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
     }
+
+    val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        PendingIntent.getForegroundService(this, id, intent, flags)
+    } else {
+        PendingIntent.getService(this, id, intent, flags)
+    }
+
+    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    alarmManager.cancel(pendingIntent)
+    pendingIntent.cancel()
+}
 }

@@ -46,7 +46,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   bool _isLectureMode = false;
 
   int _lastLoggedPage = 1; // Track last logged page for Khatm
-  int _pendingPages = 0;
 
   bool _isLastPage = false;
 
@@ -121,13 +120,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     WakelockPlus.disable();
     _pageController?.dispose();
     super.dispose();
-  }
-
-  Future<void> _commitPendingPages() async {
-    if (_pendingPages > 0 && widget.readingMode == ReadingMode.khatm) {
-      await KhatmService().logPagesRead(_pendingPages);
-      _pendingPages = 0;
-    }
   }
 
   Future<void> _initPage() async {

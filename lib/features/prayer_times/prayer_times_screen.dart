@@ -29,7 +29,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   DateTime now = DateTime.now();
 
   bool _loading = true;
-  bool _isFullyConfigured = true;
   String _locationName = 'Loading...';
   String? _permissionError;
 
@@ -95,9 +94,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
     if (!mounted) return;
 
-    setState(() {
-      _isFullyConfigured = batteryOk && alarmOk;
-    });
+    setState(() {});
 
     if (showSnackbars) {
       if (batteryOk && !_batterySnackShown) {
@@ -726,6 +723,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   }
 
   Widget _prayerList() {
+    final now = DateTime.now();
+
+    // ---------------- PRAYER TIMES ----------------
     final prayers = {
       'fajr': prayerTimes!.fajr,
       'dhuhr': prayerTimes!.dhuhr,
@@ -734,8 +734,43 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'isha': prayerTimes!.isha,
     };
 
-    final next = prayerTimes!.nextPrayer();
+    // ---------------- NEXT PRAYER ----------------
+    Prayer next = prayerTimes!.nextPrayer();
+    DateTime nextTime;
 
+    if (next == Prayer.none) {
+      // Isha has passed → next is Fajr tomorrow
+      next = Prayer.fajr;
+
+      final tomorrow = now.add(const Duration(days: 1));
+      final params = CalculationMethod.muslim_world_league.getParameters();
+      params.madhab = Madhab.shafi;
+
+      final tomorrowPrayerTimes = PrayerTimes(
+        Coordinates(_cache.lat!, _cache.lng!),
+        DateComponents.from(tomorrow),
+        params,
+      );
+
+      nextTime = tomorrowPrayerTimes.fajr;
+    } else {
+      nextTime = prayerTimes!.timeForPrayer(next)!;
+      if (nextTime.isBefore(now)) {
+        // Safety: if somehow nextTime is in the past, roll to tomorrow
+        final tomorrow = now.add(const Duration(days: 1));
+        final params = CalculationMethod.muslim_world_league.getParameters();
+        params.madhab = Madhab.shafi;
+        final tomorrowPrayerTimes = PrayerTimes(
+          Coordinates(_cache.lat!, _cache.lng!),
+          DateComponents.from(tomorrow),
+          params,
+        );
+        nextTime = tomorrowPrayerTimes.fajr;
+        next = Prayer.fajr;
+      }
+    }
+
+    // ---------------- BUILD LIST ----------------
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: const BoxDecoration(
@@ -759,17 +794,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final prayerKey = prayers.keys.elementAt(index);
             final prayerTime = prayers.values.elementAt(index);
             final setting = NotificationService.prayerSettings[prayerKey]!;
-            final isNext = next.name == prayerKey;
+
+            // ✅ Check if this prayer is the next one
+            final isNext = next.name.toLowerCase() == prayerKey;
+
             final alarmId = _alarmId(prayerKey, 'azan');
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: IntrinsicHeight(
-                // <-- ensures vertical bar stretches full row height
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ✅ Vertical green bar for next prayer
+                    // Vertical green bar
                     Container(
                       width: 4,
                       decoration: BoxDecoration(
@@ -780,7 +817,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       ),
                     ),
                     const SizedBox(width: 16),
-                    // Prayer text and time
+
+                    // Prayer name & time
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,6 +848,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         ],
                       ),
                     ),
+
                     // Volume slider
                     SizedBox(
                       width: 120,
@@ -837,7 +876,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         ),
                       ),
                     ),
+
                     const SizedBox(width: 8),
+
                     // Reminder toggle
                     _actionIcon(
                       icon: setting['reminder'] == true
@@ -867,7 +908,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         }
                       },
                     ),
+
                     const SizedBox(width: 8),
+
                     // Azan toggle
                     _actionIcon(
                       icon: setting['azan'] == true

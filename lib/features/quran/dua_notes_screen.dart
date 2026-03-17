@@ -21,7 +21,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   // Gallery tracking
   PageController? _pageController;
-  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -178,7 +177,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   void _openGalleryAt(int index) {
     if (_duaList.isEmpty) return;
     setState(() {
-      _currentIndex = index;
       _isGalleryMode = true;
       _pageController = PageController(
         initialPage: index,

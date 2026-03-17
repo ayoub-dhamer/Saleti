@@ -148,7 +148,7 @@ class _PermissionOnboardingScreenState
 
   Future<bool> _requestLocation() async {
     // 1️⃣ Check if location service (GPS) is enabled
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    await Geolocator.isLocationServiceEnabled();
 
     // 2️⃣ Check location permission
     var permission = await Geolocator.checkPermission();
@@ -244,10 +244,7 @@ class _PermissionOnboardingScreenState
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                  begin: 0,
-                  end: (_currentStep + 1) / _steps.length,
-                ),
+                tween: Tween<double>(begin: 0, end: progress),
                 duration: const Duration(milliseconds: 500),
                 curve: Curves.easeOutCubic,
                 builder: (context, value, _) {
@@ -430,11 +427,7 @@ class _OnboardingPage extends StatelessWidget {
   final _OnboardingStep step;
   final bool isLastStep;
 
-  const _OnboardingPage({
-    super.key,
-    required this.step,
-    required this.isLastStep,
-  });
+  const _OnboardingPage({required this.step, required this.isLastStep});
 
   IconData _iconForStep(String title) {
     if (title.contains('Location')) return Icons.location_on_rounded;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 
@@ -96,6 +95,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
   KhatmYear? _activeYear;
   List<KhatmYear> _history = [];
+
+  int cyclePages = 604;
 
   @override
   void initState() {
@@ -197,8 +198,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final active = _activeYear;
     if (active == null) return;
 
-    const int cyclePages = 604;
-
     final totalCycles = active.targetCompletions;
     final currentCycles = active.completedCycles;
 
@@ -236,8 +235,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
   Future<void> _addCycleToActiveYear() async {
     final active = _activeYear;
     if (active == null) return;
-
-    const int cyclePages = 604;
 
     final int currentPage = active.pagesReadTotal;
     final int currentCycle = active.completedCycles;
@@ -307,7 +304,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
   Widget _activeYearCard() {
     if (_activeYear == null) return const SizedBox();
 
-    const int cyclePages = 604;
     final totalTargetPages = _activeYear!.targetCompletions * cyclePages;
     final pagesReadInYear =
         (_activeYear!.completedCycles * cyclePages) +
@@ -558,7 +554,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
     // Check if current year is finished
     bool currentYearFinished = false;
     if (_activeYear != null && _activeYear!.year == now) {
-      const int cyclePages = 604;
       final totalPagesInYear = _activeYear!.targetCompletions * cyclePages;
       final pagesReadInYear =
           (_activeYear!.completedCycles * cyclePages) +
@@ -621,7 +616,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
         ..._history.map((y) {
           final expanded = _expandedYears.contains(y.year);
 
-          const int cyclePages = 604;
           final pagesReadInYear =
               (y.completedCycles * cyclePages) + y.pagesReadTotal;
           final totalTargetPages = y.targetCompletions * cyclePages;
@@ -767,13 +761,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
   /// =======================
 
   Future<void> _startReading() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // 1. Fetch the saved page specifically for the Khatm mode
-    // If it's the first time, it defaults to page 1
-    final int lastKhatmPage =
-        prefs.getInt('last_read_khatm')?.clamp(1, 604) ?? 1;
-
     final refreshNeeded = await Navigator.push(
       context,
       MaterialPageRoute(

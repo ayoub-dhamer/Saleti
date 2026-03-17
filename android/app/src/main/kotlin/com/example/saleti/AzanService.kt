@@ -14,6 +14,11 @@ import org.json.JSONObject
 
 class AzanService : Service() {
 
+    companion object {
+        const val ACTION_PLAY_AZAN = "com.example.saleti.action.PLAY_AZAN"
+        const val ACTION_STOP_AZAN = "com.example.saleti.action.STOP_AZAN"
+    }
+
     private var mediaPlayer: MediaPlayer? = null
     private val CHANNEL_ID = "azan_foreground_channel"
     private val STOP_ACTION = "com.example.saleti.STOP_AZAN"
@@ -27,21 +32,33 @@ class AzanService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
     // Handle STOP action from notification
-    if (intent?.action == STOP_ACTION) {
-        stopAzan()
-        return START_NOT_STICKY
+     when (intent?.action) {
+        ACTION_STOP_AZAN -> {
+            stopAzan()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        ACTION_PLAY_AZAN -> {
+            // continue below
+        }
+
+        else -> {
+            // Safety: unknown intent
+            stopSelf()
+            return START_NOT_STICKY
+        }
     }
 
-    prayerName = intent?.getStringExtra("prayer") ?: "Prayer"
-    volume = intent?.getFloatExtra("volume", 1.0f) ?: 1.0f
+    prayerName = intent.getStringExtra("prayer") ?: "Prayer"
+    volume = intent.getFloatExtra("volume", 1.0f)
 
     // ❗ Check if this prayer's azan is enabled
-    val azanEnabled = intent?.getBooleanExtra("azanEnabled", true) ?: true
+    val azanEnabled = intent.getBooleanExtra("azanEnabled", true)
 
     createNotificationChannel()
     startForegroundNotification()
 
-    telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+    /*telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
     phoneStateListener = object : PhoneStateListener() {
         override fun onCallStateChanged(state: Int, phoneNumber: String?) {
             super.onCallStateChanged(state, phoneNumber)
@@ -60,7 +77,7 @@ class AzanService : Service() {
             }
         }
     }
-    telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
+    telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)*/
 
     if (azanEnabled) startAzan() // Only start Azan if this prayer has it enabled
     return START_STICKY

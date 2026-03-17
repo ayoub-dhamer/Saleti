@@ -57,7 +57,7 @@ class SurahGoalService {
 
   /// Increment progress of a goal by 1
   Future<void> incrementProgress(SurahGoal goal) async {
-    final box = await Hive.openBox<SurahGoal>(_boxName);
+    await Hive.openBox<SurahGoal>(_boxName);
 
     // If goal is completed or expired, do nothing
     if (goal.isCompleted || goal.isExpired) return;

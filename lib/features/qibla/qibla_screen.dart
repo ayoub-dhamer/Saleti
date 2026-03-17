@@ -14,7 +14,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
   double? _qiblaDirection;
   double _heading = 0;
 
-  bool _permissionGranted = false;
   bool _loading = true;
   String? _errorMessage;
 
@@ -108,7 +107,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
     if (permission == LocationPermission.denied) {
       setState(() {
-        _permissionGranted = false;
         _loading = false;
         _errorMessage =
             'Location permission is required to calculate Qibla direction.';
@@ -118,7 +116,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
     if (permission == LocationPermission.deniedForever) {
       setState(() {
-        _permissionGranted = false;
         _loading = false;
         _errorMessage =
             'Location permission is permanently denied. Please enable it from settings.';
@@ -133,7 +130,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
       if (mounted) {
         setState(() {
           _qiblaDirection = qibla;
-          _permissionGranted = true;
           _loading = false;
         });
       }
