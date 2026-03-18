@@ -24,12 +24,16 @@ class SurahGoal extends HiveObject {
   @HiveField(4)
   DateTime? deadline;
 
+  @HiveField(5)
+  String label; // ✅ NEW
+
   SurahGoal({
     required this.surahNumber,
     required this.surahName,
     required this.targetCount,
     this.completedCount = 0,
     this.deadline,
+    required this.label,
   });
 
   bool get isExpired => deadline != null && DateTime.now().isAfter(deadline!);
@@ -119,16 +123,17 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       builder: (_) => const _AddSurahGoalDialog(),
     );
 
-    if (result != null) {
-      await _service.addGoal(
-        result['surahNumber'],
-        result['surahName'],
-        result['targetCount'],
-        deadline: result['deadline'],
-      );
+    if (result == null) return;
 
-      await _loadGoals();
-    }
+    await _service.addGoal(
+      result['surahNumber'],
+      result['surahName'],
+      result['targetCount'],
+      deadline: result['deadline'],
+      label: result['label'],
+    );
+
+    await _loadGoals();
   }
 
   Widget _goalCard(SurahGoal goal) {
@@ -536,6 +541,8 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
   final TextEditingController _targetController = TextEditingController();
   DateTime? _deadline;
 
+  final TextEditingController _labelController = TextEditingController();
+
   /// Simple Surah list
   final List<Map<String, dynamic>> _surahs = [
     {"number": 1, "name": "Al-Fatiha"},
@@ -665,12 +672,33 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     if (picked != null) {
       setState(() {
         _deadline = picked;
+        _labelController.text = _buildLabel();
       });
     }
   }
 
+  String _buildLabel() {
+    if (_selectedSurah == null) return "";
+
+    final surah = _surahs.firstWhere((s) => s["number"] == _selectedSurah);
+
+    if (_deadline == null) {
+      return surah["name"];
+    }
+
+    final d = _deadline!;
+    final date =
+        "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
+    return "${surah["name"]} · $date";
+  }
+
   void _submit() {
-    if (_selectedSurah == null || _targetController.text.isEmpty) return;
+    if (_selectedSurah == null ||
+        _targetController.text.isEmpty ||
+        _labelController.text.trim().isEmpty) {
+      return;
+    }
 
     final surah = _surahs.firstWhere((s) => s["number"] == _selectedSurah);
 
@@ -679,7 +707,22 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
       "surahName": surah["name"],
       "targetCount": int.parse(_targetController.text),
       "deadline": _deadline,
+      "label": _labelController.text.trim(),
     });
+  }
+
+  Future<void> _pickSurah() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _SurahSearchDialog(surahs: _surahs),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedSurah = result["number"];
+        _labelController.text = _buildLabel();
+      });
+    }
   }
 
   @override
@@ -691,24 +734,21 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
         child: Column(
           children: [
             /// SURAH DROPDOWN
-            DropdownButtonFormField<int>(
-              decoration: const InputDecoration(
-                labelText: "Surah",
-                border: OutlineInputBorder(),
+            InkWell(
+              onTap: _pickSurah,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: "Surah",
+                  border: OutlineInputBorder(),
+                ),
+                child: Text(
+                  _selectedSurah == null
+                      ? "Select Surah"
+                      : _surahs.firstWhere(
+                          (s) => s["number"] == _selectedSurah,
+                        )["name"],
+                ),
               ),
-              items: _surahs
-                  .map(
-                    (s) => DropdownMenuItem<int>(
-                      value: s["number"],
-                      child: Text(s["name"]),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                setState(() {
-                  _selectedSurah = v;
-                });
-              },
             ),
 
             const SizedBox(height: 16),
@@ -751,6 +791,59 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
         ),
         ElevatedButton(onPressed: _submit, child: const Text("Add Goal")),
       ],
+    );
+  }
+}
+
+class _SurahSearchDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> surahs;
+
+  const _SurahSearchDialog({required this.surahs});
+
+  @override
+  State<_SurahSearchDialog> createState() => _SurahSearchDialogState();
+}
+
+class _SurahSearchDialogState extends State<_SurahSearchDialog> {
+  String _query = "";
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.surahs
+        .where((s) => s["name"].toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    return AlertDialog(
+      title: const Text("Select Surah"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: "Search surah...",
+              prefixIcon: Icon(Icons.search),
+            ),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 300,
+            width: double.maxFinite,
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final surah = filtered[i];
+                return ListTile(
+                  title: Text(surah["name"]),
+                  trailing: Text("${surah["number"]}"),
+                  onTap: () => Navigator.pop(context, surah),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

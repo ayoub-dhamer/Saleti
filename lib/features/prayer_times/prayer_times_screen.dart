@@ -855,6 +855,17 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 3,
+
+                          activeTrackColor: const Color(0xFF6EC6FF),
+                          inactiveTrackColor: const Color(
+                            0xFF6EC6FF,
+                          ).withOpacity(0.3),
+
+                          thumbColor: const Color(0xFF6EC6FF),
+                          overlayColor: const Color(
+                            0xFF6EC6FF,
+                          ).withOpacity(0.2),
+
                           thumbShape: const RoundSliderThumbShape(
                             enabledThumbRadius: 6,
                           ),

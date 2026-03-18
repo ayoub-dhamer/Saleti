@@ -1,85 +1,53 @@
-import 'package:collection/collection.dart';
 import 'package:hive/hive.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 
 class SurahGoalService {
   static const String _boxName = 'surah_goals';
 
-  /// Get all goals from Hive
+  Future<Box<SurahGoal>> _box() async {
+    return Hive.openBox<SurahGoal>(_boxName);
+  }
+
   Future<List<SurahGoal>> getGoals() async {
-    final box = await Hive.openBox<SurahGoal>(_boxName);
+    final box = await _box();
     return box.values.toList();
   }
 
-  Future<void> registerSurahCompletion(int surahNumber) async {
-    final box = Hive.box<SurahGoal>('surah_goals');
-
-    final goal = box.values.firstWhereOrNull(
-      (g) => g.surahNumber == surahNumber,
-    );
-
-    if (goal == null || goal.isCompleted || goal.isExpired) return;
-
-    goal.completedCount++;
-
-    await goal.save();
-  }
-
-  /// Add a new goal
+  /// ✅ Allows same surah + same deadline if label differs
   Future<void> addGoal(
     int surahNumber,
     String surahName,
     int targetCount, {
     DateTime? deadline,
+    required String label,
   }) async {
-    final box = Hive.box<SurahGoal>('surah_goals');
-
-    final existing = box.values.firstWhereOrNull(
-      (g) => g.surahNumber == surahNumber,
-    );
-
-    if (existing != null) {
-      existing.targetCount = targetCount;
-      existing.deadline = deadline;
-      await existing.save();
-      return;
-    }
+    final box = await _box();
 
     final goal = SurahGoal(
       surahNumber: surahNumber,
       surahName: surahName,
       targetCount: targetCount,
       deadline: deadline,
+      label: label,
     );
 
-    await box.add(goal);
+    await box.add(goal); // ✅ ALWAYS adds a new goal
   }
 
-  /// Increment progress of a goal by 1
   Future<void> incrementProgress(SurahGoal goal) async {
-    await Hive.openBox<SurahGoal>(_boxName);
-
-    // If goal is completed or expired, do nothing
     if (goal.isCompleted || goal.isExpired) return;
-
-    goal.completedCount += 1;
+    goal.completedCount++;
     await goal.save();
   }
 
-  /// Delete a goal
   Future<void> deleteGoal(SurahGoal goal) async {
     await goal.delete();
   }
 
-  /// Optional: find goal by surah name
-  Future<SurahGoal?> getGoal(String surahName) async {
-    final box = await Hive.openBox<SurahGoal>(_boxName);
-    return box.values.firstWhereOrNull((g) => g.surahName == surahName);
-  }
-
-  /// Optional: clear all goals
   Future<void> clearAll() async {
-    final box = await Hive.openBox<SurahGoal>(_boxName);
+    final box = await _box();
     await box.clear();
   }
 }
+
+class DuplicateGoalException implements Exception {}

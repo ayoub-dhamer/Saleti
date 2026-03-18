@@ -22,13 +22,14 @@ class SurahGoalAdapter extends TypeAdapter<SurahGoal> {
       targetCount: fields[2] as int,
       completedCount: fields[3] as int,
       deadline: fields[4] as DateTime?,
+      label: fields[5] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, SurahGoal obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.surahNumber)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class SurahGoalAdapter extends TypeAdapter<SurahGoal> {
       ..writeByte(3)
       ..write(obj.completedCount)
       ..writeByte(4)
-      ..write(obj.deadline);
+      ..write(obj.deadline)
+      ..writeByte(5)
+      ..write(obj.label);
   }
 
   @override

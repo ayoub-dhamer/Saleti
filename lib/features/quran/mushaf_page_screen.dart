@@ -512,6 +512,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               page < _sessionStartPage) {
             final safeIndex = _sessionStartPage - _firstPage;
 
+            _pageController?.jumpToPage(safeIndex);
+
             // 🔔 Show toaster message
             ScaffoldMessenger.of(context).removeCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
@@ -525,7 +527,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             );
 
-            _pageController?.jumpToPage(safeIndex);
             return;
           }
 
