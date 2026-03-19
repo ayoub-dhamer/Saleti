@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:saleti/features/quran/dua_notes_screen.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 
@@ -172,17 +173,17 @@ class _KhatmScreenState extends State<KhatmScreen> {
         title: const Text('Delete Record'),
         content: Text(
           'Are you sure you want to delete the khatm record for $year?\n\n'
-          'This will permanently delete the plan and all reading logs for that year.',
+          'Hold the delete button to confirm. This will permanently delete the plan and all reading logs for that year.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+          Expanded(
+            child: HoldToDeleteButton(
+              onConfirmed: () => Navigator.pop(context, true),
+            ),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'mushaf_page_screen.dart';
 
@@ -126,16 +127,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete'),
+                      child: HoldToDeleteButton(
+                        onConfirmed: () {
+                          Navigator.pop(context, true);
+                        },
                       ),
                     ),
                   ],

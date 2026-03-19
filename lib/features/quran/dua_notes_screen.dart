@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -143,9 +144,23 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           "Delete Du'a?",
           style: TextStyle(fontFamily: arabicFont),
         ),
-        content: const Text(
-          "Remove this prayer from your journal?",
-          style: TextStyle(fontFamily: arabicFont),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text(
+              "Remove this prayer from your journal?",
+              style: TextStyle(fontFamily: arabicFont),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Hold to delete",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.redAccent,
+                fontFamily: arabicFont,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -155,12 +170,10 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               style: TextStyle(fontFamily: arabicFont),
             ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              "Delete",
-              style: TextStyle(fontFamily: arabicFont, color: Colors.redAccent),
-            ),
+          HoldToDeleteButton(
+            onConfirmed: () {
+              Navigator.pop(context, true); // triggers deletion
+            },
           ),
         ],
       ),
@@ -314,82 +327,140 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primaryGreen.withOpacity(.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: Column(
-        children: [
-          Container(height: 4, color: primaryGreen),
-          ListTile(
-            contentPadding: const EdgeInsets.all(20),
-            title: Text(
-              _duaList[index],
-              textDirection: TextDirection.rtl,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: arabicFont,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                height: 1.7,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _openGalleryAt(index),
+        child: Column(
+          children: [
+            Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: primaryGreen,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
             ),
-            onTap: () => _openGalleryAt(index),
-          ),
-          _cardActions(index),
-        ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Text(
+                _duaList[index],
+                textDirection: TextDirection.rtl,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: arabicFont,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  height: 1.7,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            _cardActions(index),
+          ],
+        ),
       ),
     );
   }
 
   Widget _cardActions(int index) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.edit_note),
-          onPressed: () => _showEditDialog(index),
-        ),
-        IconButton(
-          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-          onPressed: () => _deleteDua(index),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          IconButton(
+            icon: Icon(Icons.edit_note, color: primaryGreen.withOpacity(0.8)),
+            onPressed: () => _showEditDialog(index),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: () => _deleteDua(index),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _galleryView() {
     if (_pageController == null) return const SizedBox.shrink();
+
     return PageView.builder(
       controller: _pageController,
       itemCount: _duaList.length,
-      itemBuilder: (_, i) => Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(.08),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Text(
-              _duaList[i],
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(
-                fontFamily: arabicFont,
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                height: 1.9,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        child: Stack(
+          children: [
+            // Card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: primaryGreen.withOpacity(0.08)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 30,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Center(
+                        child: AutoSizeText(
+                          _duaList[i],
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
+                          maxLines: null, // 👈 IMPORTANT: unlimited lines
+                          minFontSize: 14, // allow smaller for very long duʿāʾ
+                          maxFontSize: 28,
+                          stepGranularity: 1,
+                          overflow: TextOverflow.visible,
+                          softWrap: true,
+                          style: const TextStyle(
+                            fontFamily: arabicFont,
+                            fontWeight: FontWeight.w700,
+                            height: 1.9,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-          ),
+
+            // Islamic Watermark
+            Positioned(
+              top: -10,
+              right: -10,
+              child: Icon(
+                Icons.wb_sunny_outlined,
+                size: 100,
+                color: Colors.green.withOpacity(0.05),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -411,6 +482,87 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             style: TextStyle(fontFamily: arabicFont, color: Colors.black54),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class HoldToDeleteButton extends StatefulWidget {
+  final VoidCallback onConfirmed;
+
+  const HoldToDeleteButton({super.key, required this.onConfirmed});
+
+  @override
+  State<HoldToDeleteButton> createState() => _HoldToDeleteButtonState();
+}
+
+class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  bool _isHolding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1))
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) {
+              widget.onConfirmed();
+              _reset();
+            }
+          });
+  }
+
+  void _reset() {
+    _controller.reset();
+    setState(() => _isHolding = false);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startHold() {
+    setState(() => _isHolding = true);
+    _controller.forward();
+  }
+
+  void _cancelHold() {
+    _controller.reset();
+    setState(() => _isHolding = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPressStart: (_) => _startHold(),
+      onLongPressEnd: (_) => _cancelHold(),
+      child: SizedBox(
+        width: 100,
+        height: 50,
+        child: Center(
+          child: _isHolding
+              ? AnimatedBuilder(
+                  animation: _controller,
+                  builder: (_, __) => CircularProgressIndicator(
+                    value: _controller.value,
+                    strokeWidth: 3,
+                    color: Colors.redAccent,
+                    backgroundColor: Colors.redAccent.withOpacity(0.2),
+                  ),
+                )
+              : const Text(
+                  "Delete",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.redAccent,
+                    fontSize: 16,
+                  ),
+                ),
+        ),
       ),
     );
   }

@@ -185,13 +185,21 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                 ),
               ),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (goal.isExpired)
-                    const Icon(Icons.timer_off, color: Colors.red, size: 18),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    color: Colors.red,
-                    onPressed: () => _confirmDelete(goal),
+                  Text(
+                    goal.surahName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  // Wrap the delete icon in GestureDetector for long press
+                  GestureDetector(
+                    onLongPress: () =>
+                        _confirmDelete(goal), // ✅ Long press triggers delete
+                    child: const Icon(Icons.delete_outline, color: Colors.red),
                   ),
                 ],
               ),
