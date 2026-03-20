@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
@@ -36,7 +37,8 @@ class SurahGoal extends HiveObject {
     required this.label,
   });
 
-  bool get isExpired => deadline != null && DateTime.now().isAfter(deadline!);
+  bool get isExpired =>
+      !isCompleted && deadline != null && DateTime.now().isAfter(deadline!);
 
   bool get isCompleted => completedCount >= targetCount;
 
@@ -79,25 +81,72 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          title: const Text("Delete Goal"),
-          content: Text(
-            "Are you sure you want to delete the goal for ${goal.surahName}?",
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                /// Icon
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_forever_rounded,
+                    size: 36,
+                    color: Colors.red,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                /// Title
+                const Text(
+                  "Delete Goal",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 8),
+
+                /// Message
+                Text(
+                  "Are you sure you want to delete the goal for ${goal.surahName}?",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+
+                const SizedBox(height: 8),
+                const Text(
+                  "Hold to delete",
+                  style: TextStyle(fontSize: 12, color: Colors.redAccent),
+                ),
+
+                const SizedBox(height: 24),
+
+                /// Buttons (aligned right, closer together)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("Cancel"),
+                    ),
+                    const SizedBox(width: 8), // smaller gap
+                    HoldToDeleteButton(
+                      onConfirmed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () => Navigator.pop(context, false),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text("Delete"),
-              onPressed: () => Navigator.pop(context, true),
-            ),
-          ],
         );
       },
     );
@@ -185,21 +234,13 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                 ),
               ),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    goal.surahName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  // Wrap the delete icon in GestureDetector for long press
-                  GestureDetector(
-                    onLongPress: () =>
-                        _confirmDelete(goal), // ✅ Long press triggers delete
-                    child: const Icon(Icons.delete_outline, color: Colors.red),
+                  if (goal.isExpired)
+                    const Icon(Icons.timer_off, color: Colors.red, size: 18),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    color: Colors.red,
+                    onPressed: () => _confirmDelete(goal),
                   ),
                 ],
               ),

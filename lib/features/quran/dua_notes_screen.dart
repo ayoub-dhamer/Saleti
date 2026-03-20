@@ -138,44 +138,81 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   Future<void> _deleteDua(int index) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Delete Du'a?",
-          style: TextStyle(fontFamily: arabicFont),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Text(
-              "Remove this prayer from your journal?",
-              style: TextStyle(fontFamily: arabicFont),
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Hold to delete",
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.redAccent,
-                fontFamily: arabicFont,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              /// Icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_forever_rounded,
+                  size: 36,
+                  color: Colors.red,
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 16),
+
+              /// Title
+              const Text(
+                "Delete Du'a?",
+                style: TextStyle(
+                  fontFamily: arabicFont,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              /// Message
+              const Text(
+                "Remove this prayer from your journal?",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: arabicFont, color: Colors.black54),
+              ),
+
+              const SizedBox(height: 8),
+              const Text(
+                "Hold to delete",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.redAccent,
+                  fontFamily: arabicFont,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              /// Buttons (aligned right, closer together)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text(
+                      "Cancel",
+                      style: TextStyle(fontFamily: arabicFont),
+                    ),
+                  ),
+                  const SizedBox(width: 8), // smaller gap
+                  HoldToDeleteButton(
+                    onConfirmed: () => Navigator.pop(context, true),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              "Cancel",
-              style: TextStyle(fontFamily: arabicFont),
-            ),
-          ),
-          HoldToDeleteButton(
-            onConfirmed: () {
-              Navigator.pop(context, true); // triggers deletion
-            },
-          ),
-        ],
       ),
     );
 
@@ -287,7 +324,28 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           ),
           Row(
             children: [
-              _headerButton(Icons.auto_stories_rounded, () {}),
+              // Gallery toggle button
+              _headerButton(
+                _isGalleryMode
+                    ? Icons.list_rounded
+                    : Icons.auto_stories_rounded,
+                () {
+                  if (_duaList.isEmpty) return;
+                  setState(() {
+                    if (_isGalleryMode) {
+                      // Exit gallery
+                      _isGalleryMode = false;
+                    } else {
+                      // Enter gallery at the last du'a
+                      _isGalleryMode = true;
+                      _pageController = PageController(
+                        initialPage: _duaList.length - 1, // start at last du'a
+                        viewportFraction: 0.9,
+                      );
+                    }
+                  });
+                },
+              ),
               const SizedBox(width: 12),
               _headerButton(Icons.add, _showAddDialog),
             ],

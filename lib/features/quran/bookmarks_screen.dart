@@ -108,30 +108,25 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                   style: const TextStyle(color: Colors.black54),
                 ),
 
+                const SizedBox(height: 8),
+                const Text(
+                  "Hold to delete",
+                  style: TextStyle(fontSize: 12, color: Colors.redAccent),
+                ),
+
                 const SizedBox(height: 24),
 
-                /// Buttons
+                /// Buttons (aligned to right, closer together)
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: HoldToDeleteButton(
-                        onConfirmed: () {
-                          Navigator.pop(context, true);
-                        },
-                      ),
+                    const SizedBox(width: 8), // smaller gap
+                    HoldToDeleteButton(
+                      onConfirmed: () => Navigator.pop(context, true),
                     ),
                   ],
                 ),

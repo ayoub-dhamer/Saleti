@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:saleti/data/ayahs_by_page.dart';
+import 'package:saleti/data/surah_by_number.dart';
 import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
-import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -404,14 +405,17 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         children: [
           // 🔹 Your main Scaffold
           Scaffold(
-            backgroundColor: _isLectureMode
-                ? Colors.black
-                : const Color(0xfff7f3ea),
+            backgroundColor: _isLectureMode ? Colors.black : Colors.white,
             appBar: _isLectureMode ? null : _buildAppBar(),
             body: Column(
               children: [
                 if (!_isLectureMode) _buildSecondHeader(),
-                _buildReadingArea(),
+                Expanded(
+                  child: Container(
+                    color: Colors.white, // prevents background gap
+                    child: _buildReadingArea(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -499,117 +503,129 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   Widget _buildReadingArea() {
-    return Expanded(
-      child: PageView.builder(
-        controller: _pageController,
-        reverse: true,
-        itemCount: _pageCount,
-        onPageChanged: (index) {
-          final page = _firstPage + index;
+    return Stack(
+      children: [
+        // Swipable pages
+        PageView.builder(
+          controller: _pageController,
+          reverse: true,
+          itemCount: _pageCount,
+          onPageChanged: (index) {
+            final page = _firstPage + index;
 
-          // 🚫 Prevent going below session start page in Khatm mode
-          if (widget.readingMode == ReadingMode.khatm &&
-              page < _sessionStartPage) {
-            final safeIndex = _sessionStartPage - _firstPage;
+            if (widget.readingMode == ReadingMode.khatm &&
+                page < _sessionStartPage) {
+              final safeIndex = _sessionStartPage - _firstPage;
+              _pageController?.jumpToPage(safeIndex);
 
-            _pageController?.jumpToPage(safeIndex);
-
-            // 🔔 Show toaster message
-            ScaffoldMessenger.of(context).removeCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'You cannot go before your Khatm starting page',
-                  textAlign: TextAlign.center,
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'You cannot go before your Khatm starting page',
+                    textAlign: TextAlign.center,
+                  ),
+                  duration: Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
                 ),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+              );
+              return;
+            }
 
-            return;
-          }
+            setState(() {
+              _currentPage = page;
+              _sessionEndPage = page;
+              _isLastPage = page == 604;
+            });
 
-          // Update current page
-          setState(() {
-            _currentPage = page;
-            _sessionEndPage = page;
-            _isLastPage = page == 604; // ✅ Detect last page
-          });
+            _saveLastPage(page);
+          },
+          itemBuilder: (context, index) {
+            final pageNumber = _firstPage + index;
+            final highlighted = _bookmarkedPages.contains(pageNumber);
 
-          // Save last viewed page
-          _saveLastPage(page);
-        },
-        itemBuilder: (context, index) {
-          final pageNumber = _firstPage + index;
-          final highlighted = _bookmarkedPages.contains(pageNumber);
-
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                'assets/mushaf/$pageNumber.png',
-                fit: _isLectureMode ? BoxFit.fill : BoxFit.contain,
-              ),
-              if (highlighted)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: CustomPaint(
-                    painter: _BookmarkRibbonPainter(),
-                    size: const Size(60, 60),
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 60), // footer space
+                  child: Image.asset(
+                    'assets/mushaf/$pageNumber.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
 
-              if (_isLastSurahPage && widget.surahGoal != null)
-                Positioned(
-                  bottom: 40,
-                  right: 20,
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: _isLastSurahPage ? 1 : 0,
-                    child: FloatingActionButton.extended(
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text('Mark Surah Completed?'),
-                            content: Text(
-                              'You reached the end of ${widget.surahGoal!.surahName}. '
-                              'Do you want to count this recitation toward your goal?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Yes'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          final service = SurahGoalService();
-                          await service.incrementProgress(widget.surahGoal!);
-
-                          if (!mounted) return;
-
-                          Navigator.pop(
-                            context,
-                            true,
-                          ); // ✅ return success to previous screen
-                        }
-                      },
-                      label: const Text('Count Recitation'),
-                      icon: const Icon(Icons.check),
+                if (highlighted)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: CustomPaint(
+                      painter: _BookmarkRibbonPainter(),
+                      size: const Size(60, 60),
                     ),
                   ),
-                ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
+
+        // Fixed footer
+        Positioned(left: 0, right: 0, bottom: 0, child: _buildFooter()),
+      ],
+    );
+  }
+
+  Widget _buildFooter() {
+    // Get all surahs on this page
+    final ayahs = ayahsByPage[_currentPage];
+    if (ayahs == null || ayahs.isEmpty) return const SizedBox();
+
+    // Extract unique surah numbers on this page
+    final surahNumbers = ayahs.map((a) => a['surah']!).toSet().toList();
+
+    // Map to names
+    final surahNames = surahNumbers
+        .map((num) => surahByNumber[num] ?? 'Unknown')
+        .join(' - ');
+
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+        ),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(18),
+          topRight: Radius.circular(18),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Page number
+          Text(
+            'Page $_currentPage',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+
+          // Surah names
+          Expanded(
+            child: Text(
+              surahNames,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

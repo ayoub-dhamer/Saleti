@@ -169,23 +169,61 @@ class _KhatmScreenState extends State<KhatmScreen> {
   Future<void> _confirmDeleteYear(int year) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Record'),
-        content: Text(
-          'Are you sure you want to delete the khatm record for $year?\n\n'
-          'Hold the delete button to confirm. This will permanently delete the plan and all reading logs for that year.',
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              /// Icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_forever_rounded,
+                  size: 36,
+                  color: Colors.red,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              /// Title
+              const Text(
+                'Delete Record',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 8),
+              const Text(
+                "Hold to delete",
+                style: TextStyle(fontSize: 12, color: Colors.redAccent),
+              ),
+
+              const SizedBox(height: 24),
+
+              /// Buttons (aligned right, closer together)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8), // smaller gap
+                  HoldToDeleteButton(
+                    onConfirmed: () => Navigator.pop(context, true),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          Expanded(
-            child: HoldToDeleteButton(
-              onConfirmed: () => Navigator.pop(context, true),
-            ),
-          ),
-        ],
       ),
     );
 
