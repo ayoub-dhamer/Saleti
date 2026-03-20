@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/data/ayahs_by_page.dart';
+import 'package:saleti/data/surah_ayah_count.dart';
 import 'package:saleti/data/surah_by_number.dart';
 import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
