@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:saleti/data/ayahs_by_page.dart';
-import 'package:saleti/data/surah_ayah_count.dart';
-import 'package:saleti/data/surah_by_number.dart';
+import 'package:saleti/data/footer_list.dart';
 import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
@@ -195,11 +193,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
     await prefs.setStringList('mushaf_bookmarks', list);
     await _loadBookmarks();
-  }
-
-  bool get _isLastSurahPage {
-    if (widget.endPage == null) return false;
-    return _currentPage == widget.endPage;
   }
 
   String _getSurahNameFromPage(int page) {
@@ -542,7 +535,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           },
           itemBuilder: (context, index) {
             final pageNumber = _firstPage + index;
-            final highlighted = _bookmarkedPages.contains(pageNumber);
 
             return Stack(
               fit: StackFit.expand,
@@ -554,16 +546,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     fit: BoxFit.cover,
                   ),
                 ),
-
-                if (highlighted)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: CustomPaint(
-                      painter: _BookmarkRibbonPainter(),
-                      size: const Size(60, 60),
-                    ),
-                  ),
               ],
             );
           },
@@ -576,20 +558,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   Widget _buildFooter() {
-    // Get all surahs on this page
-    final ayahs = ayahsByPage[_currentPage];
-    if (ayahs == null || ayahs.isEmpty) return const SizedBox();
+    final footer = footerList[_currentPage];
+    if (footer == null) return const SizedBox.shrink();
 
-    // Extract unique surah numbers on this page
-    final surahNumbers = ayahs.map((a) => a['surah']!).toSet().toList();
-
-    // Map to names
-    final surahNames = surahNumbers
-        .map((num) => surahByNumber[num] ?? 'Unknown')
-        .join(' - ');
+    final List<String> surahs = List<String>.from(footer['surahs'] ?? const []);
+    final String? nextSurah = footer['nextSurah'];
 
     return Container(
-      height: 60,
+      height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -601,53 +577,93 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Page number
-          Text(
-            'Page $_currentPage',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+          /// ▶️ LEFT (was RIGHT) — Next surah
+          if (widget.readingMode == ReadingMode.goal)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: nextSurah == null
+                    ? const SizedBox()
+                    : Text(
+                        nextSurah,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+
+          /// 🔢 CENTER — Page number (true center)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Text(
+              '$_currentPage',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
 
-          // Surah names
+          /// ◀️ RIGHT (was LEFT) — Current page surahs
           Expanded(
-            child: Text(
-              surahNames,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: surahs.isEmpty
+                ? const SizedBox()
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        surahs[0],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (surahs.length > 1)
+                        Text(
+                          surahs[1],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      if (surahs.length > 2)
+                        Text(
+                          surahs[2],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
-}
-
-class _BookmarkRibbonPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.amber.shade400
-      ..style = PaintingStyle.fill;
-
-    final path = Path()
-      ..moveTo(size.width, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, 0)
-      ..close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
