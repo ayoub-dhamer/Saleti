@@ -70,72 +70,34 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       context: context,
       barrierDismissible: true,
       builder: (context) {
-        return Dialog(
+        return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                /// Icon
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.delete_forever_rounded,
-                    size: 36,
-                    color: Colors.red,
-                  ),
-                ),
+          title: const Text('Delete Bookmark?'),
 
-                const SizedBox(height: 16),
-
-                /// Title
-                const Text(
-                  'Delete Bookmark?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 8),
-
-                /// Message
-                Text(
-                  'Remove page ${b.page} from your bookmarks?',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black54),
-                ),
-
-                const SizedBox(height: 8),
-                const Text(
-                  "Hold to delete",
-                  style: TextStyle(fontSize: 12, color: Colors.redAccent),
-                ),
-
-                const SizedBox(height: 24),
-
-                /// Buttons (aligned to right, closer together)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8), // smaller gap
-                    HoldToDeleteButton(
-                      onConfirmed: () => Navigator.pop(context, true),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Remove page ${b.page} from your bookmarks?'),
+              const SizedBox(height: 8),
+              const Text(
+                "Hold to delete",
+                style: TextStyle(fontSize: 12, color: Colors.redAccent),
+              ),
+            ],
           ),
+
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            HoldToDeleteButton(onConfirmed: () => Navigator.pop(context, true)),
+          ],
         );
       },
     );

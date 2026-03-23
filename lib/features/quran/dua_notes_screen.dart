@@ -185,81 +185,47 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   Future<void> _deleteDua(int index) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => Dialog(
+      builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              /// Icon
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.delete_forever_rounded,
-                  size: 36,
-                  color: Colors.red,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              /// Title
-              const Text(
-                "Delete Du'a?",
-                style: TextStyle(
-                  fontFamily: arabicFont,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              /// Message
-              const Text(
-                "Remove this prayer from your journal?",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: arabicFont, color: Colors.black54),
-              ),
-
-              const SizedBox(height: 8),
-              const Text(
-                "Hold to delete",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.redAccent,
-                  fontFamily: arabicFont,
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              /// Buttons (aligned right, closer together)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text(
-                      "Cancel",
-                      style: TextStyle(fontFamily: arabicFont),
-                    ),
-                  ),
-                  const SizedBox(width: 8), // smaller gap
-                  HoldToDeleteButton(
-                    onConfirmed: () => Navigator.pop(context, true),
-                  ),
-                ],
-              ),
-            ],
-          ),
+        title: const Text(
+          "Delete Du'a?",
+          style: TextStyle(fontFamily: arabicFont),
         ),
+
+        /// CONTENT
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text(
+              "Remove this prayer from your journal?",
+
+              style: TextStyle(fontFamily: arabicFont),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Hold to delete",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.redAccent,
+                fontFamily: arabicFont,
+              ),
+            ),
+          ],
+        ),
+
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+
+        /// ACTIONS
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(fontFamily: arabicFont),
+            ),
+          ),
+          HoldToDeleteButton(onConfirmed: () => Navigator.pop(context, true)),
+        ],
       ),
     );
 
