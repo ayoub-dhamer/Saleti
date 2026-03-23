@@ -551,7 +551,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
   final List<Map<String, dynamic>> _surahs = [
     {"number": 1, "name": "Al-Fatiha"},
     {"number": 2, "name": "Al-Baqarah"},
-    {"number": 3, "name": "Aal-Imran"},
+    {"number": 3, "name": "Aal-E-Imran"},
     {"number": 4, "name": "An-Nisa"},
     {"number": 5, "name": "Al-Ma'idah"},
     {"number": 6, "name": "Al-An'am"},
@@ -571,7 +571,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 20, "name": "Ta-Ha"},
     {"number": 21, "name": "Al-Anbiya"},
     {"number": 22, "name": "Al-Hajj"},
-    {"number": 23, "name": "Al-Mu’minun"},
+    {"number": 23, "name": "Al-Mu'minun"},
     {"number": 24, "name": "An-Nur"},
     {"number": 25, "name": "Al-Furqan"},
     {"number": 26, "name": "Ash-Shu'ara"},
@@ -580,7 +580,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 29, "name": "Al-Ankabut"},
     {"number": 30, "name": "Ar-Rum"},
     {"number": 31, "name": "Luqman"},
-    {"number": 32, "name": "As-Sajdah"},
+    {"number": 32, "name": "As-Sajda"},
     {"number": 33, "name": "Al-Ahzab"},
     {"number": 34, "name": "Saba"},
     {"number": 35, "name": "Fatir"},
@@ -593,7 +593,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 42, "name": "Ash-Shura"},
     {"number": 43, "name": "Az-Zukhruf"},
     {"number": 44, "name": "Ad-Dukhan"},
-    {"number": 45, "name": "Al-Jathiyah"},
+    {"number": 45, "name": "Al-Jathiya"},
     {"number": 46, "name": "Al-Ahqaf"},
     {"number": 47, "name": "Muhammad"},
     {"number": 48, "name": "Al-Fath"},
@@ -604,13 +604,13 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 53, "name": "An-Najm"},
     {"number": 54, "name": "Al-Qamar"},
     {"number": 55, "name": "Ar-Rahman"},
-    {"number": 56, "name": "Al-Waqi'ah"},
+    {"number": 56, "name": "Al-Waqia"},
     {"number": 57, "name": "Al-Hadid"},
     {"number": 58, "name": "Al-Mujadila"},
     {"number": 59, "name": "Al-Hashr"},
-    {"number": 60, "name": "Al-Mumtahanah"},
+    {"number": 60, "name": "Al-Mumtahina"},
     {"number": 61, "name": "As-Saff"},
-    {"number": 62, "name": "Al-Jumu'ah"},
+    {"number": 62, "name": "Al-Jumu'a"},
     {"number": 63, "name": "Al-Munafiqun"},
     {"number": 64, "name": "At-Taghabun"},
     {"number": 65, "name": "At-Talaq"},
@@ -623,11 +623,11 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 72, "name": "Al-Jinn"},
     {"number": 73, "name": "Al-Muzzammil"},
     {"number": 74, "name": "Al-Muddathir"},
-    {"number": 75, "name": "Al-Qiyamah"},
+    {"number": 75, "name": "Al-Qiyama"},
     {"number": 76, "name": "Al-Insan"},
     {"number": 77, "name": "Al-Mursalat"},
     {"number": 78, "name": "An-Naba"},
-    {"number": 79, "name": "An-Nazi'at"},
+    {"number": 79, "name": "An-Naziat"},
     {"number": 80, "name": "Abasa"},
     {"number": 81, "name": "At-Takwir"},
     {"number": 82, "name": "Al-Infitar"},
@@ -635,29 +635,29 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     {"number": 84, "name": "Al-Inshiqaq"},
     {"number": 85, "name": "Al-Buruj"},
     {"number": 86, "name": "At-Tariq"},
-    {"number": 87, "name": "Al-A'la"},
-    {"number": 88, "name": "Al-Ghashiyah"},
+    {"number": 87, "name": "Al-Ala"},
+    {"number": 88, "name": "Al-Ghashiya"},
     {"number": 89, "name": "Al-Fajr"},
     {"number": 90, "name": "Al-Balad"},
     {"number": 91, "name": "Ash-Shams"},
-    {"number": 92, "name": "Al-Layl"},
+    {"number": 92, "name": "Al-Lail"},
     {"number": 93, "name": "Ad-Duha"},
     {"number": 94, "name": "Ash-Sharh"},
     {"number": 95, "name": "At-Tin"},
     {"number": 96, "name": "Al-Alaq"},
     {"number": 97, "name": "Al-Qadr"},
-    {"number": 98, "name": "Al-Bayyinah"},
-    {"number": 99, "name": "Az-Zalzalah"},
+    {"number": 98, "name": "Al-Bayyina"},
+    {"number": 99, "name": "Az-Zalzala"},
     {"number": 100, "name": "Al-Adiyat"},
-    {"number": 101, "name": "Al-Qari'ah"},
+    {"number": 101, "name": "Al-Qaria"},
     {"number": 102, "name": "At-Takathur"},
     {"number": 103, "name": "Al-Asr"},
-    {"number": 104, "name": "Al-Humazah"},
+    {"number": 104, "name": "Al-Humaza"},
     {"number": 105, "name": "Al-Fil"},
-    {"number": 106, "name": "Quraysh"},
+    {"number": 106, "name": "Quraish"},
     {"number": 107, "name": "Al-Ma'un"},
     {"number": 108, "name": "Al-Kawthar"},
-    {"number": 109, "name": "Al-Kafirun"},
+    {"number": 109, "name": "Al-Kafiroon"},
     {"number": 110, "name": "An-Nasr"},
     {"number": 111, "name": "Al-Masad"},
     {"number": 112, "name": "Al-Ikhlas"},
@@ -734,58 +734,61 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     return AlertDialog(
       title: const Text("Add Surah Goal"),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      content: SingleChildScrollView(
-        child: Column(
-          children: [
-            /// SURAH DROPDOWN
-            InkWell(
-              onTap: _pickSurah,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: "Surah",
-                  border: OutlineInputBorder(),
-                ),
-                child: Text(
-                  _selectedSurah == null
-                      ? "Select Surah"
-                      : _surahs.firstWhere(
-                          (s) => s["number"] == _selectedSurah,
-                        )["name"],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// TARGET COUNT
-            TextField(
-              controller: _targetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Target count",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// DEADLINE
-            Row(
-              children: [
-                Expanded(
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          // Allow scrolling if the keyboard pops up
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Very important inside Dialogs
+            children: [
+              // Surah selector
+              InkWell(
+                onTap: _pickSurah,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: "Surah",
+                    border: OutlineInputBorder(),
+                  ),
                   child: Text(
-                    _deadline == null
-                        ? "No deadline"
-                        : "${_deadline!.year}-${_deadline!.month}-${_deadline!.day}",
+                    _selectedSurah == null
+                        ? "Select Surah"
+                        : _surahs.firstWhere(
+                            (s) => s["number"] == _selectedSurah,
+                          )["name"],
                   ),
                 ),
-                TextButton(
-                  onPressed: _pickDeadline,
-                  child: const Text("Pick date"),
+              ),
+              const SizedBox(height: 16),
+
+              // Target count
+              TextField(
+                controller: _targetController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: "Target count",
+                  border: OutlineInputBorder(),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 16),
+
+              // Deadline
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _deadline == null
+                          ? "No deadline"
+                          : "${_deadline!.year}-${_deadline!.month}-${_deadline!.day}",
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _pickDeadline,
+                    child: const Text("Pick date"),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -819,34 +822,48 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
 
     return AlertDialog(
       title: const Text("Select Surah"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: "Search surah...",
-              prefixIcon: Icon(Icons.search),
+      content: SizedBox(
+        // Use SizedBox instead of ConstrainedBox for more rigid constraints
+        width: double.maxFinite,
+        height:
+            MediaQuery.of(context).size.height *
+            0.5, // Explicit height is safer here
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                hintText: "Search Surah...",
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) => setState(() => _query = value),
             ),
-            onChanged: (v) => setState(() => _query = v),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 300,
-            width: double.maxFinite,
-            child: ListView.builder(
-              itemCount: filtered.length,
-              itemBuilder: (_, i) {
-                final surah = filtered[i];
-                return ListTile(
-                  title: Text(surah["name"]),
-                  trailing: Text("${surah["number"]}"),
-                  onTap: () => Navigator.pop(context, surah),
-                );
-              },
+            const SizedBox(height: 12),
+            Expanded(
+              // Expanded works perfectly inside a Column if the Column is in a SizedBox
+              child: filtered.isEmpty
+                  ? const Center(child: Text("No results found"))
+                  : ListView.builder(
+                      shrinkWrap: true, // Helps the list play nice with parents
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final surah = filtered[index];
+                        return ListTile(
+                          title: Text(surah['name']),
+                          trailing: Text(
+                            "${surah['number']}",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          onTap: () => Navigator.pop(context, surah),
+                        );
+                      },
+                    ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

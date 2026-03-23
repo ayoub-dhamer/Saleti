@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/data/footer_list.dart';
 import 'package:saleti/data/surah_page_map.dart';
+import 'package:saleti/data/surahs_names.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
@@ -52,6 +53,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
+
+  DateTime? _lastSnackTime;
+
+  bool _isCorrectingPage = false;
 
   int get _firstPage {
     if (widget.readingMode == ReadingMode.free) {
@@ -265,10 +270,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   bool get _isLastSurahPage {
     if (widget.endPage == null) return false;
     return _currentPage == widget.endPage;
-  }
-
-  bool _hasProgress(String surah) {
-    return RegExp(r'\d+\s*/\s*\d+').hasMatch(surah);
   }
 
   AppBar _buildAppBar() {
@@ -505,6 +506,27 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
+  void _showSnackOnce(String message) {
+    final now = DateTime.now();
+
+    if (_lastSnackTime != null &&
+        now.difference(_lastSnackTime!) < const Duration(seconds: 2)) {
+      return;
+    }
+
+    _lastSnackTime = now;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message, textAlign: TextAlign.center),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Widget _buildReadingArea() {
     return Stack(
       children: [
@@ -518,19 +540,21 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
             if (widget.readingMode == ReadingMode.khatm &&
                 page < _sessionStartPage) {
-              final safeIndex = _sessionStartPage - _firstPage;
-              _pageController?.jumpToPage(safeIndex);
+              if (_isCorrectingPage) return;
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'You cannot go before your Khatm starting page',
-                    textAlign: TextAlign.center,
-                  ),
-                  duration: Duration(seconds: 2),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              _isCorrectingPage = true;
+              final safeIndex = _sessionStartPage - _firstPage;
+
+              HapticFeedback.lightImpact();
+              _pageController!
+                  .animateToPage(
+                    safeIndex,
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOutCubic,
+                  )
+                  .whenComplete(() => _isCorrectingPage = false);
+
+              _showSnackOnce('You cannot go before your Khatm starting page');
               return;
             }
 
@@ -618,7 +642,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final footer = footerList[_currentPage];
     if (footer == null) return const SizedBox.shrink();
 
-    final List<String> surahs = List<String>.from(footer['surahs'] ?? const []);
+    final List<String> surahsInFooter = List<String>.from(
+      footer['surahs'] ?? const [],
+    );
     final String? nextSurah = footer['nextSurah'];
 
     return Container(
@@ -635,7 +661,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       ),
       child: Row(
         children: [
-          /// ▶️ LEFT (was RIGHT) — Next surah
+          /// ▶️ LEFT — Next surah
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
@@ -652,7 +678,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            nextSurah!,
+                            nextSurah,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -667,7 +693,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             ),
           ),
 
-          /// 🔢 CENTER — Page number (true center)
+          /// 🔢 CENTER — Page number
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -685,55 +711,117 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             ),
           ),
 
-          /// ◀️ RIGHT (was LEFT) — Current page surahs
+          /// ◀️ RIGHT — Progress Bar Logic
           Expanded(
-            child: surahs.isEmpty
-                ? const SizedBox()
-                : Column(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: () {
+                if (widget.readingMode == ReadingMode.goal &&
+                    widget.surahGoal != null) {
+                  final liveProgress = getSurahProgressFromPage(
+                    _currentPage,
+                    widget.surahGoal!.surahName,
+                  );
+
+                  // 1. Get the Arabic name
+                  final surahEntry = surahs.firstWhere(
+                    (s) => s['english'] == widget.surahGoal!.surahName,
+                    orElse: () => {"arabic": widget.surahGoal!.surahName},
+                  );
+                  final String arabicName = surahEntry['arabic']!;
+
+                  // 2. If we found page progress in the footerList, show IT (e.g., 1/2)
+                  if (liveProgress != null) {
+                    final current =
+                        liveProgress['current']; // Current page of surah
+                    final total = liveProgress['total']; // Total pages of surah
+
+                    return surahRowFromString(
+                      "$arabicName $current / $total",
+                      dimmed: false,
+                    );
+                  } else {
+                    // 3. If the surah isn't on this page, just show the name
+                    // without the "X/Y" completion goal numbers.
+                    return surahRowFromString(arabicName, dimmed: true);
+                  }
+                } else {
+                  // Fallback for free/khatm mode
+                  if (surahsInFooter.isEmpty) return const SizedBox();
+                  return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: () {
-                      if (widget.readingMode != ReadingMode.goal) {
-                        return [
-                          surahRowFromString(surahs[0]),
-                          if (surahs.length > 1) surahRowFromString(surahs[1]),
-                          if (surahs.length > 2) surahRowFromString(surahs[2]),
-                        ];
-                      }
-
-                      final goalSurah = _findGoalSurah(surahs);
-
-                      return [surahRowFromString(goalSurah, dimmed: true)];
-                    }(),
-                  ),
+                    children: [
+                      surahRowFromString(surahsInFooter[0]),
+                      if (surahsInFooter.length > 1)
+                        surahRowFromString(surahsInFooter[1]),
+                    ],
+                  );
+                }
+              }(),
+            ),
           ),
         ],
       ),
     );
   }
 
-  ({int current, int total})? _extractProgress(String surah) {
-    final match = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(surah);
-    if (match == null) return null;
-
-    return (
-      current: int.parse(match.group(1)!),
-      total: int.parse(match.group(2)!),
+  Map<String, int>? getSurahProgressFromPage(int page, String englishName) {
+    // 1. Get the Arabic name from your master names list
+    final surahEntry = surahs.firstWhere(
+      (s) => s['english'] == englishName,
+      orElse: () => {},
     );
-  }
+    if (surahEntry.isEmpty) return null;
+    final String arabicGoalName = surahEntry['arabic']!;
 
-  String _findGoalSurah(List<String> surahs) {
-    for (final surah in surahs) {
-      final progress = _extractProgress(surah);
-      if (progress == null) continue;
+    // 2. Access the footer data for the current page
+    final pageData = footerList[page];
+    if (pageData == null) return null;
 
-      if (progress.current > 0 && progress.current < progress.total) {
-        return surah; // 🎯 real target
-      }
+    // 3. Cast the surahs on this page to a List of Strings
+    final List<String> surahsOnPage = List<String>.from(
+      pageData['surahs'] ?? [],
+    );
+
+    // 4. FIND THE MATCH:
+    // We look specifically for the string that contains our Arabic Goal Name
+    final String match = surahsOnPage.firstWhere(
+      (s) => s.contains(arabicGoalName),
+      orElse: () => "",
+    );
+
+    if (match.isEmpty) return null;
+
+    // 5. EXTRACT the "x/y" from the matched string (e.g., "البينة 1/2")
+    final regExp = RegExp(r'(\d+)\s*/\s*(\d+)');
+    final helperMatch = regExp.firstMatch(match);
+
+    if (helperMatch != null) {
+      return {
+        "current": int.parse(helperMatch.group(1)!),
+        "total": int.parse(helperMatch.group(2)!),
+      };
     }
 
-    // fallback (fully completed or none started)
-    return surahs.first;
+    return null;
+  }
+
+  SurahProgress parseSurah(String input) {
+    // Added \s* around the slash to handle varied spacing
+    final regex = RegExp(r'(.+?)\s+(\d+)\s*/\s*(\d+)$');
+    final match = regex.firstMatch(input.trim());
+
+    if (match == null) {
+      // If it's just a name without numbers (like in free mode)
+      return SurahProgress(input, 0, 0);
+    }
+
+    return SurahProgress(
+      match.group(1)!.trim(),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    );
   }
 
   Widget surahProgressBar({

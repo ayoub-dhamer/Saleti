@@ -96,7 +96,7 @@ const Map<int, int> surahStartPages = {
   95: 597, // At-Tin
   96: 597, // Al-Alaq
   97: 598, // Al-Qadr
-  98: 598, // Al-Bayyinah
+  98: 598, // Al-Bayyina
   99: 599, // Az-Zalzalah
   100: 599, // Al-Adiyat
   101: 600, // Al-Qari’ah

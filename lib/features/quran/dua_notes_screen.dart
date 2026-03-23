@@ -407,14 +407,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          // subtle green surround glow
           BoxShadow(
             color: primaryGreen.withOpacity(0.12),
             blurRadius: 18,
             spreadRadius: 1,
             offset: const Offset(0, 0),
           ),
-          // depth shadow
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 12,
@@ -425,11 +423,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () => _openGalleryAt(index),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-              child: Text(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
                 _duaList[index],
                 textDirection: TextDirection.rtl,
                 maxLines: 3,
@@ -442,9 +441,21 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   color: Colors.black87,
                 ),
               ),
-            ),
-            _cardActions(index),
-          ],
+              const Padding(
+                padding: EdgeInsets.only(top: 8.0),
+                child: Text(
+                  "Tap to view full du'a",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.black54,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _cardActions(index), // buttons aligned to bottom-right
+            ],
+          ),
         ),
       ),
     );
@@ -454,7 +465,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.end, // push to the right
         children: [
           IconButton(
             icon: Icon(Icons.edit_note, color: primaryGreen.withOpacity(0.8)),
@@ -657,7 +668,7 @@ class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
           child: _isHolding
               ? AnimatedBuilder(
                   animation: _controller,
-                  builder: (_, __) => CircularProgressIndicator(
+                  builder: (_, _) => CircularProgressIndicator(
                     value: _controller.value,
                     strokeWidth: 3,
                     color: Colors.redAccent,
