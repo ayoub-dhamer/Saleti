@@ -29,8 +29,17 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("release") {
+            // In KTS, you MUST use the '=' sign
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.getByName("debug")
+            
+            // Optional: Adds the default optimization rules
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

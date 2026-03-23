@@ -755,6 +755,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                       surahRowFromString(surahsInFooter[0]),
                       if (surahsInFooter.length > 1)
                         surahRowFromString(surahsInFooter[1]),
+                      if (surahsInFooter.length > 2)
+                        surahRowFromString(surahsInFooter[2]),
                     ],
                   );
                 }
