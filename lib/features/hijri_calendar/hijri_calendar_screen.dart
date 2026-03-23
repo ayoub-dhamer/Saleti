@@ -14,6 +14,9 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +65,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              colors: [primaryGreen, secondaryGreen],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -85,16 +88,10 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 28),
+      padding: EdgeInsets.fromLTRB(15, topPadding + 12, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(28), // ✅ only bottom
-        ),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

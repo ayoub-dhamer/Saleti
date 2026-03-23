@@ -5,6 +5,7 @@ import 'package:saleti/data/surah_page_map.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
+import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -48,6 +49,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   int _lastLoggedPage = 1; // Track last logged page for Khatm
 
   bool _isLastPage = false;
+
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
 
   int get _firstPage {
     if (widget.readingMode == ReadingMode.free) {
@@ -258,6 +262,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return (actualPages + (604 - _lastLoggedPage + 1)) >= totalPagesTarget;
   }
 
+  bool get _isLastSurahPage {
+    if (widget.endPage == null) return false;
+    return _currentPage == widget.endPage;
+  }
+
+  bool _hasProgress(String surah) {
+    return RegExp(r'\d+\s*/\s*\d+').hasMatch(surah);
+  }
+
   AppBar _buildAppBar() {
     return AppBar(
       elevation: 0,
@@ -270,7 +283,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       flexibleSpace: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+            colors: [primaryGreen, secondaryGreen],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -285,12 +298,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Row(
         children: [
@@ -444,8 +453,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           // 🔹 Go to First Page Button (last page in Khatm mode)
           if (_isLastPage && widget.readingMode == ReadingMode.khatm)
             Positioned(
-              bottom: 40,
-              right: 20,
+              bottom: 70,
+              right: 10,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 300),
                 opacity: _isLastPage ? 1 : 0,
@@ -546,6 +555,54 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     fit: BoxFit.cover,
                   ),
                 ),
+
+                if (_isLastSurahPage && widget.surahGoal != null)
+                  Positioned(
+                    bottom: 70,
+                    right: 10,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 300),
+                      opacity: _isLastSurahPage ? 1 : 0,
+                      child: FloatingActionButton.extended(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Mark Surah Completed?'),
+                              content: Text(
+                                'You reached the end of ${widget.surahGoal!.surahName}. '
+                                'Do you want to count this recitation toward your goal?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Yes'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            final service = SurahGoalService();
+                            await service.incrementProgress(widget.surahGoal!);
+
+                            if (!mounted) return;
+
+                            Navigator.pop(
+                              context,
+                              true,
+                            ); // ✅ return success to previous screen
+                          }
+                        },
+                        label: const Text('Count Recitation'),
+                        icon: const Icon(Icons.check),
+                      ),
+                    ),
+                  ),
               ],
             );
           },
@@ -579,24 +636,36 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Row(
         children: [
           /// ▶️ LEFT (was RIGHT) — Next surah
-          if (widget.readingMode == ReadingMode.goal)
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: nextSurah == null
-                    ? const SizedBox()
-                    : Text(
-                        nextSurah,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: widget.readingMode == ReadingMode.goal || nextSurah == null
+                  ? const SizedBox()
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.navigate_next_rounded,
+                          size: 12,
                           color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-              ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            nextSurah!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
+          ),
 
           /// 🔢 CENTER — Page number (true center)
           Container(
@@ -623,47 +692,181 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        surahs[0],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                      if (surahs.length > 1)
-                        Text(
-                          surahs[1],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                        ),
-                      if (surahs.length > 2)
-                        Text(
-                          surahs[2],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
+                    children: () {
+                      if (widget.readingMode != ReadingMode.goal) {
+                        return [
+                          surahRowFromString(surahs[0]),
+                          if (surahs.length > 1) surahRowFromString(surahs[1]),
+                          if (surahs.length > 2) surahRowFromString(surahs[2]),
+                        ];
+                      }
+
+                      final goalSurah = _findGoalSurah(surahs);
+
+                      return [surahRowFromString(goalSurah, dimmed: true)];
+                    }(),
                   ),
           ),
         ],
       ),
     );
   }
+
+  ({int current, int total})? _extractProgress(String surah) {
+    final match = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(surah);
+    if (match == null) return null;
+
+    return (
+      current: int.parse(match.group(1)!),
+      total: int.parse(match.group(2)!),
+    );
+  }
+
+  String _findGoalSurah(List<String> surahs) {
+    for (final surah in surahs) {
+      final progress = _extractProgress(surah);
+      if (progress == null) continue;
+
+      if (progress.current > 0 && progress.current < progress.total) {
+        return surah; // 🎯 real target
+      }
+    }
+
+    // fallback (fully completed or none started)
+    return surahs.first;
+  }
+
+  Widget surahProgressBar({
+    required int current,
+    required int total,
+    bool dimmed = false,
+  }) {
+    final progress = total == 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
+
+    return SizedBox(
+      width: 90,
+      height: 12,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.white24,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress == 1
+                    ? Colors.amber
+                    : (dimmed ? Colors.white38 : Colors.white),
+              ),
+              minHeight: 12,
+            ),
+          ),
+          Text(
+            '$current / $total',
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget surahRowFromString(String raw, {bool dimmed = false}) {
+    final parsed = parseSurah(raw);
+
+    return SizedBox(
+      height: 18, // 🔑 hard cap per row
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              parsed.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: dimmed ? Colors.white70 : Colors.white,
+                fontSize: 11, // 🔽 smaller
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _compactProgressBar(
+            current: parsed.current,
+            total: parsed.total,
+            dimmed: dimmed,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactProgressBar({
+    required int current,
+    required int total,
+    bool dimmed = false,
+  }) {
+    final progress = total == 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
+
+    return SizedBox(
+      width: 70,
+      height: 10,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.white24,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress == 1
+                    ? Colors.amber
+                    : (dimmed ? Colors.white38 : Colors.white),
+              ),
+              minHeight: 10,
+            ),
+          ),
+          Text(
+            '$current/$total',
+            style: const TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SurahProgress {
+  final String name;
+  final int current;
+  final int total;
+
+  SurahProgress(this.name, this.current, this.total);
+}
+
+SurahProgress parseSurah(String input) {
+  final regex = RegExp(r'(.+?)\s+(\d+)\s*/\s*(\d+)$');
+  final match = regex.firstMatch(input);
+
+  if (match == null) {
+    return SurahProgress(input, 0, 1); // fallback
+  }
+
+  return SurahProgress(
+    match.group(1)!.trim(), // surah name
+    int.parse(match.group(2)!), // x
+    int.parse(match.group(3)!), // y
+  );
 }

@@ -22,6 +22,9 @@ class BookmarksScreen extends StatefulWidget {
 class _BookmarksScreenState extends State<BookmarksScreen> {
   List<BookmarkItem> _bookmarks = [];
 
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
   @override
   void initState() {
     super.initState();
@@ -139,15 +142,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
     if (confirmed == true) {
       await _deleteBookmark(b);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bookmark deleted'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
   }
 
@@ -162,7 +156,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              colors: [primaryGreen, secondaryGreen],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -188,14 +182,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

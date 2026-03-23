@@ -1,6 +1,7 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class DuaNotesScreen extends StatefulWidget {
   const DuaNotesScreen({super.key});
@@ -23,6 +24,11 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   // Gallery tracking
   PageController? _pageController;
 
+  Map<int, double> _duaFontSizes = {}; // index → font size
+  static const double _minFontSize = 14;
+  static const double _maxFontSize = 34;
+  static const double _fontStep = 2;
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +39,42 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _duaList = prefs.getStringList('dua_notes') ?? [];
+
+      final stored = prefs.getStringList('dua_font_sizes') ?? [];
+      _duaFontSizes = {
+        for (var i = 0; i < stored.length; i++)
+          i: double.tryParse(stored[i]) ?? 24,
+      };
     });
+  }
+
+  Future<void> _saveFontSizes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = List.generate(
+      _duaList.length,
+      (i) => (_duaFontSizes[i] ?? 24).toString(),
+    );
+    await prefs.setStringList('dua_font_sizes', list);
+  }
+
+  void _increaseFont(int index) {
+    setState(() {
+      _duaFontSizes[index] = ((_duaFontSizes[index] ?? 24) + _fontStep).clamp(
+        _minFontSize,
+        _maxFontSize,
+      );
+    });
+    _saveFontSizes();
+  }
+
+  void _decreaseFont(int index) {
+    setState(() {
+      _duaFontSizes[index] = ((_duaFontSizes[index] ?? 24) - _fontStep).clamp(
+        _minFontSize,
+        _maxFontSize,
+      );
+    });
+    _saveFontSizes();
   }
 
   // ───────────── Dialogs ─────────────
@@ -124,8 +165,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   Future<void> _saveDua(String dua) async {
     if (dua.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _duaList.insert(0, dua.trim()));
+
+    setState(() {
+      _duaList.insert(0, dua.trim());
+      _duaFontSizes[0] = 24; // default size for new duʿāʾ
+    });
+
     await prefs.setStringList('dua_notes', _duaList);
+    await _saveFontSizes();
   }
 
   Future<void> _updateDua(int index, String dua) async {
@@ -228,6 +275,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     if (_duaList.isEmpty) return;
     setState(() {
       _isGalleryMode = true;
+      WakelockPlus.enable();
       _pageController = PageController(
         initialPage: index,
         viewportFraction: 0.9,
@@ -241,7 +289,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       onWillPop: () async {
         if (_isGalleryMode) {
           setState(() {
-            _isGalleryMode = false; // exit gallery mode
+            _isGalleryMode = false;
+            WakelockPlus.disable(); // exit gallery mode
           });
           return false; // prevent exiting the screen
         }
@@ -262,9 +311,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           leading: _isGalleryMode
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    setState(() => _isGalleryMode = false);
-                  },
+                  onPressed: _exitGalleryMode,
                 )
               : null,
           flexibleSpace: Container(
@@ -280,7 +327,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             if (_isGalleryMode)
               IconButton(
                 icon: const Icon(Icons.list_rounded),
-                onPressed: () => setState(() => _isGalleryMode = false),
+                onPressed: _exitGalleryMode,
               ),
           ],
         ),
@@ -294,9 +341,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
+  void _exitGalleryMode() {
+    setState(() {
+      _isGalleryMode = false;
+    });
+    WakelockPlus.disable();
+  }
+
   Widget _header() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -335,6 +389,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     if (_isGalleryMode) {
                       // Exit gallery
                       _isGalleryMode = false;
+                      WakelockPlus.disable();
                     } else {
                       // Enter gallery at the last du'a
                       _isGalleryMode = true;
@@ -386,8 +441,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
+          // subtle green surround glow
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: primaryGreen.withOpacity(0.12),
+            blurRadius: 18,
+            spreadRadius: 1,
+            offset: const Offset(0, 0),
+          ),
+          // depth shadow
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -398,15 +461,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         onTap: () => _openGalleryAt(index),
         child: Column(
           children: [
-            Container(
-              height: 3,
-              decoration: BoxDecoration(
-                color: primaryGreen,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
               child: Text(
@@ -455,72 +509,104 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     return PageView.builder(
       controller: _pageController,
       itemCount: _duaList.length,
-      itemBuilder: (_, i) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
-        child: Stack(
-          children: [
-            // Card
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: primaryGreen.withOpacity(0.08)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 30,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
-                      ),
-                      child: Center(
-                        child: AutoSizeText(
-                          _duaList[i],
-                          textAlign: TextAlign.center,
-                          textDirection: TextDirection.rtl,
-                          maxLines: null, // 👈 IMPORTANT: unlimited lines
-                          minFontSize: 14, // allow smaller for very long duʿāʾ
-                          maxFontSize: 28,
-                          stepGranularity: 1,
-                          overflow: TextOverflow.visible,
-                          softWrap: true,
-                          style: const TextStyle(
-                            fontFamily: arabicFont,
-                            fontWeight: FontWeight.w700,
-                            height: 1.9,
-                            color: Colors.black87,
+      itemBuilder: (_, i) {
+        final fontSize = _duaFontSizes[i] ?? 24;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 30),
+          child: Stack(
+            children: [
+              // Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: primaryGreen.withOpacity(0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 30,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: Center(
+                          child: AutoSizeText(
+                            _duaList[i],
+                            textAlign: TextAlign.center,
+                            textDirection: TextDirection.rtl,
+                            maxLines: null,
+                            minFontSize: fontSize,
+                            maxFontSize: fontSize,
+                            overflow: TextOverflow.visible,
+                            style: const TextStyle(
+                              fontFamily: arabicFont,
+                              fontWeight: FontWeight.w700,
+                              height: 1.9,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
 
-            // Islamic Watermark
-            Positioned(
-              top: -10,
-              right: -10,
-              child: Icon(
-                Icons.wb_sunny_outlined,
-                size: 100,
-                color: Colors.green.withOpacity(0.05),
+              // Islamic Watermark
+              Positioned(
+                top: -10,
+                right: -10,
+                child: Icon(
+                  Icons.wb_sunny_outlined,
+                  size: 100,
+                  color: Colors.green.withOpacity(0.05),
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+
+              Positioned(
+                bottom: 24,
+                right: 24,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        color: primaryGreen,
+                        onPressed: () => _increaseFont(i),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        color: primaryGreen,
+                        onPressed: () => _decreaseFont(i),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

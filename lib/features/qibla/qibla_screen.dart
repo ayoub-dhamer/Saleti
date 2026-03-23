@@ -17,6 +17,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
   bool _loading = true;
   String? _errorMessage;
 
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
   @override
   void initState() {
     super.initState();
@@ -241,7 +244,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              colors: [primaryGreen, secondaryGreen],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -268,14 +271,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

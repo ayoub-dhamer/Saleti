@@ -45,6 +45,9 @@ class SurahGoal extends HiveObject {
   double get progress => targetCount == 0 ? 0 : completedCount / targetCount;
 }
 
+const Color primaryGreen = Color(0xFF1FA45B);
+const Color secondaryGreen = Color(0xFF4FC3A1);
+
 class SurahGoalsScreen extends StatefulWidget {
   const SurahGoalsScreen({super.key});
 
@@ -435,7 +438,15 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
           'Surah Goals',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        flexibleSpace: const _GradientAppBar(),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [primaryGreen, secondaryGreen],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
 
       body: Column(
@@ -510,14 +521,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,23 +563,6 @@ class _Header extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _GradientAppBar extends StatelessWidget {
-  const _GradientAppBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
       ),
     );
   }

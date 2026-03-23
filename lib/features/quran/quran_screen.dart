@@ -9,6 +9,9 @@ import 'package:saleti/features/quran/bookmarks_screen.dart';
 class QuranScreen extends StatelessWidget {
   const QuranScreen({super.key});
 
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -20,7 +23,7 @@ class QuranScreen extends StatelessWidget {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
+              colors: [primaryGreen, secondaryGreen],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -135,14 +138,10 @@ class QuranScreen extends StatelessWidget {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
