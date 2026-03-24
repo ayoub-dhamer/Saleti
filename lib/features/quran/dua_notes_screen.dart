@@ -32,6 +32,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable();
     _loadDuaNotes();
   }
 
@@ -241,7 +242,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     if (_duaList.isEmpty) return;
     setState(() {
       _isGalleryMode = true;
-      WakelockPlus.enable();
+
       _pageController = PageController(
         initialPage: index,
         viewportFraction: 0.9,
@@ -256,7 +257,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         if (_isGalleryMode) {
           setState(() {
             _isGalleryMode = false;
-            WakelockPlus.disable(); // exit gallery mode
+            // exit gallery mode
           });
           return false; // prevent exiting the screen
         }
@@ -311,7 +312,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     setState(() {
       _isGalleryMode = false;
     });
-    WakelockPlus.disable();
   }
 
   Widget _header() {
@@ -355,7 +355,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     if (_isGalleryMode) {
                       // Exit gallery
                       _isGalleryMode = false;
-                      WakelockPlus.disable();
                     } else {
                       // Enter gallery at the last du'a
                       _isGalleryMode = true;
@@ -642,6 +641,7 @@ class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _controller.dispose();
     super.dispose();
   }
