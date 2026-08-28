@@ -1993,7 +1993,7 @@ final Map<int, Map<String, dynamic>> footerList = {
   },
   499: {
     "surahs": ["الجاثية 1/4"],
-    "nextSu*rah": "الأحقاف",
+    "nextSurah": "الأحقاف",
   },
   500: {
     "surahs": ["الجاثية 2/4"],
