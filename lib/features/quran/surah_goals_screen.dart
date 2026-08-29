@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
 import 'package:saleti/data/surah_pages.dart';
-
+import 'package:saleti/utils/hold_to_delete_button.dart';
 part 'surah_goals_screen.g.dart';
 
 @HiveType(typeId: 30)

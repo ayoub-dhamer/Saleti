@@ -57,7 +57,8 @@ class PrayerCache {
   PrayerTimes calculatePrayerTimes() {
     final coordinates = Coordinates(lat!, lng!);
 
-    final params = CalculationParameters(fajrAngle: 18, ishaAngle: 17)
+    // CHANGED: now matches PrayerTimesScreen exactly
+    final params = CalculationMethod.muslim_world_league.getParameters()
       ..madhab = Madhab.shafi;
 
     return PrayerTimes(

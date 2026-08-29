@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'mushaf_page_screen.dart';
+import 'package:saleti/utils/hold_to_delete_button.dart';
 
 /// 🔹 Bookmark model
 class BookmarkItem {
@@ -210,7 +210,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => MushafPageScreen(startPage: b.page),
+                builder: (_) => MushafPageScreen(
+                  startPage: b.page,
+                  storageKey: 'last_jumped_page',
+                ),
               ),
             );
           },

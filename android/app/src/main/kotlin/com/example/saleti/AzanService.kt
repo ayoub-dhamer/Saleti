@@ -21,7 +21,6 @@ class AzanService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private val CHANNEL_ID = "azan_foreground_channel"
-    private val STOP_ACTION = "com.example.saleti.STOP_AZAN"
     private var prayerName: String = "Prayer"
     private var volume: Float = 1.0f
 
@@ -85,7 +84,7 @@ class AzanService : Service() {
 
     private fun startForegroundNotification() {
         val stopIntent = Intent(this, AzanService::class.java).apply {
-            action = STOP_ACTION
+            action = ACTION_STOP_AZAN
         }
         val stopPendingIntent = PendingIntent.getService(
             this, 0, stopIntent,
@@ -143,6 +142,7 @@ class AzanService : Service() {
         }
         mediaPlayer = null
         stopForeground(true)
+        stopSelf() // ADDED
     }
 
     override fun onDestroy() {

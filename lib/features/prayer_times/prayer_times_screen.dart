@@ -16,7 +16,9 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class PrayerTimesScreen extends StatefulWidget {
-  const PrayerTimesScreen({super.key});
+  final bool isActive;
+
+  const PrayerTimesScreen({super.key, this.isActive = true});
 
   @override
   State<PrayerTimesScreen> createState() => _PrayerTimesScreenState();
@@ -35,6 +37,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   bool _batterySnackShown = false;
   bool _alarmSnackShown = false;
 
+  String? _lastWidgetKey;
+
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+
   final PrayerCache _cache = PrayerCache();
 
   @override
@@ -45,15 +52,34 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     _initializeSystemPermissions();
     _loadFromCacheOrRequest();
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    if (widget.isActive) _startTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant PrayerTimesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _startTicker();
+    } else if (!widget.isActive && oldWidget.isActive) {
+      _stopTicker();
+    }
+  }
+
+  void _startTicker() {
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
     });
+  }
+
+  void _stopTicker() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _stopTicker();
     super.dispose();
   }
 
@@ -61,7 +87,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     await _cache.load();
 
     if (_cache.hasLocation) {
-      // ✅ Use cached data (NO GPS REQUIRED)
       final cachedPrayerTimes = _cache.calculatePrayerTimes();
 
       setState(() {
@@ -72,13 +97,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
       _scheduleAllNotifications();
     } else {
-      // ❌ No cache → need location once
       await _checkPermissionAndLoad();
     }
   }
 
   // ----------------------------------------------------------
-  // SYSTEM PERMISSIONS (battery / alarms / notifications)
+  // SYSTEM PERMISSIONS
   // ----------------------------------------------------------
 
   Future<void> _initializeSystemPermissions() async {
@@ -115,7 +139,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   }
 
   // ----------------------------------------------------------
-  // LOCATION + PRAYER TIMES (SINGLE ENTRY POINT)
+  // LOCATION + PRAYER TIMES
   // ----------------------------------------------------------
 
   Future<void> _checkPermissionAndLoad() async {
@@ -144,7 +168,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       return;
     }
 
-    // ✅ Permission already granted
     await _loadLocation();
   }
 
@@ -183,7 +206,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // 🔹 Calculate PrayerTimes
       final params = CalculationMethod.muslim_world_league.getParameters();
       params.madhab = Madhab.shafi;
 
@@ -192,7 +214,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
       final prayerTimesCalculated = PrayerTimes(coordinates, date, params);
 
-      // 🔹 Reverse geocode to get city name
       String cityName = 'Unknown Location';
       try {
         final placemarks = await placemarkFromCoordinates(
@@ -235,6 +256,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   Future<void> _refreshLocation() async {
     if (!mounted) return;
+    HapticFeedback.lightImpact();
 
     setState(() {
       _loading = true;
@@ -246,7 +268,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // 🔹 Calculate PrayerTimes
       final params = CalculationMethod.muslim_world_league.getParameters();
       params.madhab = Madhab.shafi;
 
@@ -255,7 +276,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
       final refreshedPrayerTimes = PrayerTimes(coordinates, date, params);
 
-      // 🔹 Reverse geocode to get city name
       String cityName = 'Unknown Location';
       try {
         final placemarks = await placemarkFromCoordinates(
@@ -315,12 +335,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
 
     if (allow == true) {
-      // User accepted → request GPS
       await _loadLocation();
       return;
     }
 
-    // ❗ User said NO → fallback to cache if possible
     await _cache.load();
 
     if (_cache.hasLocation) {
@@ -335,7 +353,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
       _scheduleAllNotifications();
     } else {
-      // ❌ No cache → real error
       setState(() {
         _loading = false;
         _permissionError =
@@ -379,8 +396,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           );
         }
       }
-
-      await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
 
       if (setting['azan'] == true && time.isAfter(DateTime.now())) {
         await NotificationService.scheduleAzanNative(
@@ -431,7 +446,40 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4F6F8),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [primaryGreen, secondaryGreen],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryGreen.withOpacity(0.25),
+                      blurRadius: 20,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.mosque, color: Colors.white, size: 32),
+              ),
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(color: primaryGreen),
+              const SizedBox(height: 12),
+              const Text(
+                'Finding prayer times…',
+                style: TextStyle(color: Colors.black45, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (_permissionError != null) {
@@ -440,76 +488,105 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              builder: (context, t, child) => Opacity(
+                opacity: t,
+                child: Transform.translate(
+                  offset: Offset(0, (1 - t) * 16),
+                  child: child,
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.location_off, size: 72, color: Colors.red),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Location Required',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _permissionError!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black54, height: 1.4),
-                  ),
-                  const SizedBox(height: 24),
-                  Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _loadLocation,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1FA45B),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text('Retry'),
-                        ),
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        shape: BoxShape.circle,
                       ),
-
-                      // ✅ Cache-only button
-                      if (_cache.hasLocation) ...[
-                        const SizedBox(height: 12),
+                      child: const Icon(
+                        Icons.location_off_rounded,
+                        size: 48,
+                        color: Colors.red,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Location Required',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _permissionError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Column(
+                      children: [
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton(
-                            onPressed: _useCachedLocation,
-                            style: OutlinedButton.styleFrom(
+                          child: ElevatedButton(
+                            onPressed: _loadLocation,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              side: BorderSide(color: Colors.green.shade600),
                             ),
-                            child: const Text(
-                              'Use previous location',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
+                            child: const Text('Retry'),
                           ),
                         ),
+                        if (_cache.hasLocation) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: _useCachedLocation,
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                side: BorderSide(color: Colors.green.shade600),
+                              ),
+                              child: const Text(
+                                'Use previous location',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -527,17 +604,34 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       nextTime = nextTime.add(const Duration(days: 1));
     }
 
-    updateSaletiWidget(nextPrayer.name, DateFormat('hh:mm a').format(nextTime));
+    final previousTime = _getPreviousPrayerTime(nextPrayer, nextTime); // ADD
+
+    final widgetKey =
+        '${nextPrayer.name}|${DateFormat('hh:mm a').format(nextTime)}';
+    if (widgetKey != _lastWidgetKey) {
+      _lastWidgetKey = widgetKey;
+      updateSaletiWidget(
+        nextPrayer.name,
+        DateFormat('hh:mm a').format(nextTime),
+      );
+    }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       body: SafeArea(
         child: Column(
           children: [
             _header(hijri),
             const SizedBox(height: 16),
-            _clockCircle(),
+            _clockCard(),
             const SizedBox(height: 16),
-            _upcomingPrayer(nextPrayer, nextTime, nextTime.difference(now)),
+            _upcomingPrayer(
+              // CHANGED: now passes previousTime
+              nextPrayer,
+              nextTime,
+              previousTime,
+              nextTime.difference(now),
+            ),
             const SizedBox(height: 8),
             Expanded(child: _prayerList()),
           ],
@@ -562,44 +656,128 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return name[0].toUpperCase() + name.substring(1);
   }
 
+  IconData _prayerIcon(String prayer) {
+    switch (prayer) {
+      case 'fajr':
+        return Icons.nightlight_round;
+      case 'dhuhr':
+        return Icons.wb_sunny_rounded;
+      case 'asr':
+        return Icons.wb_twighlight;
+      case 'maghrib':
+        return Icons.wb_sunny_outlined;
+      case 'isha':
+        return Icons.dark_mode_rounded;
+      default:
+        return Icons.access_time;
+    }
+  }
+
   double _getVolume(Map<String, dynamic> setting) {
     final v = setting['volume'];
     if (v is double) return v;
-    if (v is int) return v.toDouble(); // safety
-    return 1.0; // default volume
+    if (v is int) return v.toDouble();
+    return 1.0;
   }
 
-  // (Helper widgets like _header, _clockCircle, _upcomingPrayer, _prayerList, _showMinutesDialog
-  // remain the same as your previous implementation)
+  /// Returns the actual DateTime of the prayer immediately preceding `next`.
+  /// Handles the Isha -> Fajr wraparound by pulling Isha from the correct
+  /// calendar day relative to `nextTime`.
+  DateTime _getPreviousPrayerTime(Prayer next, DateTime nextTime) {
+    const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    final nextName = next.name.toLowerCase();
+    final idx = order.indexOf(nextName);
+    final safeIdx = idx == -1 ? 0 : idx;
+    final prevName = order[(safeIdx - 1 + order.length) % order.length];
+
+    // If next prayer is Fajr, the previous one (Isha) belongs to the day before.
+    final isWrap = nextName == 'fajr';
+    final targetDate = isWrap
+        ? DateTime(
+            nextTime.year,
+            nextTime.month,
+            nextTime.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(nextTime.year, nextTime.month, nextTime.day);
+
+    final params = CalculationMethod.muslim_world_league.getParameters();
+    params.madhab = Madhab.shafi;
+    final coordinates = Coordinates(_cache.lat!, _cache.lng!);
+    final pt = PrayerTimes(
+      coordinates,
+      DateComponents.from(targetDate),
+      params,
+    );
+
+    switch (prevName) {
+      case 'fajr':
+        return pt.fajr;
+      case 'dhuhr':
+        return pt.dhuhr;
+      case 'asr':
+        return pt.asr;
+      case 'maghrib':
+        return pt.maghrib;
+      case 'isha':
+        return pt.isha;
+      default:
+        return pt.fajr;
+    }
+  }
+
+  // ---------------- HEADER ----------------
 
   Widget _header(HijriCalendar hijri) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              InkWell(
-                onTap: _refreshLocation,
-                child: const Icon(
-                  Icons.location_on,
-                  color: Colors.green,
-                  size: 24,
-                ),
+          Expanded(
+            child: GestureDetector(
+              onTap: _refreshLocation,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryGreen.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.location_on_rounded,
+                      color: primaryGreen,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _locationName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Text(
+                          'Tap to refresh',
+                          style: TextStyle(fontSize: 10, color: Colors.black38),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              // Display city name instead of coordinates
-              Text(
-                _locationName,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+            ),
           ),
 
+          // CHANGED: back to the plain Column, no white card wrapper
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -618,7 +796,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  Widget _clockCircle() {
+  // ---------------- CLOCK CARD ----------------
+
+  Widget _clockCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: ClipRRect(
@@ -652,80 +832,121 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  Widget _upcomingPrayer(Prayer nextPrayer, DateTime time, Duration remaining) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green.shade600, Colors.green.shade400],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  // ---------------- UPCOMING PRAYER ----------------
+
+  Widget _upcomingPrayer(
+    Prayer nextPrayer,
+    DateTime time,
+    DateTime previousTime, // ADD
+    Duration remaining,
+  ) {
+    // Mathematically accurate progress: how far `now` is between the
+    // previous prayer and the next one.
+    final totalWindow = time.difference(previousTime).inSeconds; // CHANGED
+    final elapsed = now.difference(previousTime).inSeconds; // CHANGED
+    final progress = totalWindow > 0
+        ? (elapsed / totalWindow).clamp(0.0, 1.0)
+        : 0.0; // CHANGED: guards against div-by-zero / bad data
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 12),
+          child: child,
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.timer_outlined,
-              color: Colors.white,
-              size: 20,
-            ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.green.shade600, Colors.green.shade400],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Next: ${_prettyName(nextPrayer.name)}',
-                  style: const TextStyle(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.green.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 46,
+              height: 46,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: progress),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 3,
+                      backgroundColor: Colors.white.withOpacity(0.25),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.timer_outlined,
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    size: 18,
                   ),
-                ),
-                Text(
-                  'At ${DateFormat('hh:mm a').format(time)}',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 13,
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Next: ${_prettyName(nextPrayer.name)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
-                ),
-              ],
+                  Text(
+                    'At ${DateFormat('hh:mm a').format(time)}',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Text(
-            _formatDuration(remaining),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-              letterSpacing: 0.5,
+            Text(
+              _formatDuration(remaining),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 19,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
+  // ---------------- PRAYER LIST ----------------
+
   Widget _prayerList() {
     final now = DateTime.now();
 
-    // ---------------- PRAYER TIMES ----------------
     final prayers = {
       'fajr': prayerTimes!.fajr,
       'dhuhr': prayerTimes!.dhuhr,
@@ -734,12 +955,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'isha': prayerTimes!.isha,
     };
 
-    // ---------------- NEXT PRAYER ----------------
     Prayer next = prayerTimes!.nextPrayer();
     DateTime nextTime;
 
     if (next == Prayer.none) {
-      // Isha has passed → next is Fajr tomorrow
       next = Prayer.fajr;
 
       final tomorrow = now.add(const Duration(days: 1));
@@ -756,7 +975,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     } else {
       nextTime = prayerTimes!.timeForPrayer(next)!;
       if (nextTime.isBefore(now)) {
-        // Safety: if somehow nextTime is in the past, roll to tomorrow
         final tomorrow = now.add(const Duration(days: 1));
         final params = CalculationMethod.muslim_world_league.getParameters();
         params.madhab = Madhab.shafi;
@@ -770,7 +988,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       }
     }
 
-    // ---------------- BUILD LIST ----------------
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: const BoxDecoration(
@@ -795,158 +1012,220 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final prayerTime = prayers.values.elementAt(index);
             final setting = NotificationService.prayerSettings[prayerKey]!;
 
-            // ✅ Check if this prayer is the next one
             final isNext = next.name.toLowerCase() == prayerKey;
-
             final alarmId = _alarmId(prayerKey, 'azan');
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Vertical green bar
-                    Container(
-                      width: 4,
-                      decoration: BoxDecoration(
-                        color: isNext
-                            ? Colors.green.shade700
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Prayer name & time
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _prettyName(prayerKey),
-                            style: TextStyle(
-                              fontWeight: isNext
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              fontSize: 17,
-                              color: isNext
-                                  ? Colors.green.shade700
-                                  : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            DateFormat('hh:mm a').format(prayerTime),
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Volume slider
-                    SizedBox(
-                      width: 120,
-                      child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 3,
-
-                          activeTrackColor: const Color(0xFF6EC6FF),
-                          inactiveTrackColor: const Color(
-                            0xFF6EC6FF,
-                          ).withOpacity(0.3),
-
-                          thumbColor: const Color(0xFF6EC6FF),
-                          overlayColor: const Color(
-                            0xFF6EC6FF,
-                          ).withOpacity(0.2),
-
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 6,
-                          ),
-                          overlayShape: const RoundSliderOverlayShape(
-                            overlayRadius: 12,
-                          ),
-                        ),
-                        child: Slider(
-                          value: _getVolume(setting),
-                          min: 0.0,
-                          max: 1.0,
-                          divisions: 10,
-                          label: '${((_getVolume(setting)) * 100).round()}%',
-                          onChanged: (v) async {
-                            setState(() => setting['volume'] = v);
-                            await NotificationService.saveSettings();
-                            _scheduleAllNotifications();
-                          },
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              decoration: BoxDecoration(
+                color: isNext
+                    ? primaryGreen.withOpacity(0.045)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 8,
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 4,
+                        decoration: BoxDecoration(
+                          color: isNext
+                              ? Colors.green.shade700
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 14),
 
-                    const SizedBox(width: 8),
+                      // Prayer icon
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isNext
+                              ? Colors.green.shade700.withOpacity(0.12)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _prayerIcon(prayerKey),
+                          size: 18,
+                          color: isNext
+                              ? Colors.green.shade700
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
 
-                    // Reminder toggle
-                    _actionIcon(
-                      icon: setting['reminder'] == true
-                          ? Icons.alarm_on
-                          : Icons.alarm_off,
-                      activeColor: Colors.green,
-                      isActive: setting['reminder'] == true,
-                      onTap: () async {
-                        setState(
-                          () => setting['reminder'] = !setting['reminder'],
-                        );
-                        await NotificationService.saveSettings();
-                        _scheduleAllNotifications();
-                      },
-                      onLongPress: () async {
-                        HapticFeedback.heavyImpact();
-                        final minutes = await _showDurationPickerDialog(
-                          setting['minutesBefore'] as int,
-                        );
-                        if (minutes != null) {
-                          setState(() {
-                            setting['minutesBefore'] = minutes;
-                            setting['reminder'] = true;
-                          });
+                      // Prayer name & time
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _prettyName(prayerKey),
+                              style: TextStyle(
+                                fontWeight: isNext
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                fontSize: 17,
+                                color: isNext
+                                    ? Colors.green.shade700
+                                    : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              DateFormat('hh:mm a').format(prayerTime),
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Volume slider
+                      SizedBox(
+                        width: 116,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 3,
+                                activeTrackColor: const Color(0xFF6EC6FF),
+                                inactiveTrackColor: const Color(
+                                  0xFF6EC6FF,
+                                ).withOpacity(0.3),
+                                thumbColor: const Color(0xFF6EC6FF),
+                                overlayColor: const Color(
+                                  0xFF6EC6FF,
+                                ).withOpacity(0.2),
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 6,
+                                ),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 12,
+                                ),
+                              ),
+                              child: Slider(
+                                value: _getVolume(setting),
+                                min: 0.0,
+                                max: 1.0,
+                                divisions: 10,
+                                label:
+                                    '${((_getVolume(setting)) * 100).round()}%',
+                                onChanged: (v) {
+                                  // Update UI live only — no I/O per drag frame
+                                  setState(() => setting['volume'] = v);
+                                },
+                                onChangeEnd: (v) async {
+                                  // Heavy work happens once, on release
+                                  await NotificationService.saveSettings();
+                                  if (setting['azan'] == true) {
+                                    await NotificationService.scheduleAzanNative(
+                                      id: alarmId,
+                                      time: prayerTime,
+                                      prayer: prayerKey,
+                                      volume: v,
+                                      azanEnabled: true,
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 150),
+                              child: Text(
+                                '${(_getVolume(setting) * 100).round()}%',
+                                key: ValueKey(
+                                  (_getVolume(setting) * 100).round(),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 4),
+
+                      // Reminder toggle
+                      _actionIcon(
+                        icon: setting['reminder'] == true
+                            ? Icons.alarm_on
+                            : Icons.alarm_off,
+                        activeColor: Colors.green,
+                        isActive: setting['reminder'] == true,
+                        onTap: () async {
+                          HapticFeedback.selectionClick();
+                          setState(
+                            () => setting['reminder'] = !setting['reminder'],
+                          );
                           await NotificationService.saveSettings();
                           _scheduleAllNotifications();
-                        }
-                      },
-                    ),
-
-                    const SizedBox(width: 8),
-
-                    // Azan toggle
-                    _actionIcon(
-                      icon: setting['azan'] == true
-                          ? Icons.mosque
-                          : Icons.mosque_outlined,
-                      activeColor: Colors.blue,
-                      isActive: setting['azan'] == true,
-                      onTap: () async {
-                        setState(() => setting['azan'] = !setting['azan']);
-                        await NotificationService.saveSettings();
-
-                        if (setting['azan'] == true) {
-                          await NotificationService.scheduleAzanNative(
-                            id: alarmId,
-                            time: prayers[prayerKey]!,
-                            prayer: prayerKey,
-                            volume: _getVolume(setting),
-                            azanEnabled: true,
+                        },
+                        onLongPress: () async {
+                          HapticFeedback.heavyImpact();
+                          final minutes = await _showDurationPickerDialog(
+                            setting['minutesBefore'] as int,
                           );
-                        } else {
-                          await NotificationService.cancelAzan(alarmId);
-                        }
-                      },
-                    ),
-                  ],
+                          if (minutes != null) {
+                            setState(() {
+                              setting['minutesBefore'] = minutes;
+                              setting['reminder'] = true;
+                            });
+                            await NotificationService.saveSettings();
+                            _scheduleAllNotifications();
+                          }
+                        },
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // Azan toggle
+                      _actionIcon(
+                        icon: setting['azan'] == true
+                            ? Icons.mosque
+                            : Icons.mosque_outlined,
+                        activeColor: Colors.blue,
+                        isActive: setting['azan'] == true,
+                        onTap: () async {
+                          HapticFeedback.selectionClick();
+                          setState(() => setting['azan'] = !setting['azan']);
+                          await NotificationService.saveSettings();
+
+                          if (setting['azan'] == true) {
+                            await NotificationService.scheduleAzanNative(
+                              id: alarmId,
+                              time: prayerTime,
+                              prayer: prayerKey,
+                              volume: _getVolume(setting),
+                              azanEnabled: true,
+                            );
+                          } else {
+                            await NotificationService.cancelAzan(alarmId);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -956,7 +1235,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  // Custom Helper for Elegant Buttons
   Widget _actionIcon({
     required IconData icon,
     required Color activeColor,
@@ -974,10 +1252,16 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           color: isActive ? activeColor.withOpacity(0.12) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isActive ? activeColor : Colors.grey.shade400,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (child, anim) =>
+              ScaleTransition(scale: anim, child: child),
+          child: Icon(
+            icon,
+            key: ValueKey(icon),
+            size: 20,
+            color: isActive ? activeColor : Colors.grey.shade400,
+          ),
         ),
       ),
     );
@@ -1026,7 +1310,6 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
     hours = widget.initialMinutes ~/ 60;
     minutes = widget.initialMinutes % 60;
 
-    // ✅ Clamp to safe ranges
     hours = hours.clamp(0, 23);
     minutes = minutes.clamp(0, 59);
 

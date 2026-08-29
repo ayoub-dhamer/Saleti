@@ -29,11 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  final List<Widget> pages = const [
-    PrayerTimesScreen(),
-    HijriCalendarScreen(),
-    QiblaScreen(),
-    QuranScreen(), // <-- NEW PAGE
+  List<Widget> get pages => [
+    PrayerTimesScreen(isActive: selected == 0),
+    const HijriCalendarScreen(),
+    QiblaScreen(isActive: selected == 2),
+    const QuranScreen(),
   ];
 
   @override

@@ -122,7 +122,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
           MaterialPageRoute(
             builder: (_) => MushafPageScreen(
               startPage: actualStartPage,
-              storageKey: 'last_read_general',
+              storageKey: 'last_jumped_page',
             ),
           ),
         );

@@ -14,17 +14,15 @@ class ExactAlarmPermission {
     if (!Platform.isAndroid) return;
 
     if (!(await isGranted())) {
-      // This is the specific Android Action for the "Alarms & Reminders" page
       const intent = AndroidIntent(
         action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
         data:
-            'package:your.package.name', // Replace with your actual package name (e.g., com.example.saleti)
+            'package:com.example.saleti', // CHANGED (was 'package:your.package.name')
       );
 
       try {
         await intent.launch();
       } catch (e) {
-        // Fallback: If the specific package link fails, open the general list
         const fallbackIntent = AndroidIntent(
           action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
         );

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:saleti/features/quran/dua_notes_screen.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
-
+import 'package:saleti/utils/hold_to_delete_button.dart';
 part 'khatm_screen.g.dart';
 
 /// =======================
@@ -58,6 +57,10 @@ class KhatmYear extends HiveObject {
     this.endDate,
     this.startFromYearStart = false, // default false
   });
+
+  DateTime get planEndDate => startFromYearStart
+      ? DateTime(year, 12, 31)
+      : DateTime(startDate.year + 1, startDate.month, startDate.day);
 }
 
 @HiveType(typeId: 21)
@@ -106,28 +109,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
   void initState() {
     super.initState();
 
-    _initializeKhatm();
-
     _load();
-  }
-
-  Future<void> _initializeKhatm() async {
-    // Generate historical years if they don't exist
-    await addHistoricalYear(
-      year: 2025,
-      targetCompletions: 2,
-      completedCycles: 1,
-      pagesReadTotal: 100,
-    );
-
-    await addHistoricalYear(
-      year: 2024,
-      targetCompletions: 1,
-      completedCycles: 1,
-      pagesReadTotal: 0,
-    );
-
-    // Load curren
   }
 
   Future<void> _load() async {
@@ -138,35 +120,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
       _activeYear = active;
       _history = history;
     });
-  }
-
-  Future<void> addHistoricalYear({
-    required int year,
-    required int targetCompletions,
-    required int completedCycles,
-    required int pagesReadTotal,
-  }) async {
-    final box = await Hive.openBox<KhatmYear>('khatm_years');
-
-    // Prevent duplicate year
-    if (box.values.any((y) => y.year == year)) return;
-
-    final startDate = DateTime(year, 1, 1);
-    final endDate = DateTime(year, 12, 31);
-
-    final historical = KhatmYear(
-      year: year,
-      targetCompletions: targetCompletions,
-      pagesPerDay: ((604 * targetCompletions) / 365).ceil(),
-      pagesReadTotal: pagesReadTotal,
-      completedCycles: completedCycles,
-      isActive: false, // historical record
-      startDate: startDate,
-      endDate: endDate,
-      startFromYearStart: true,
-    );
-
-    await box.add(historical);
   }
 
   Future<void> _confirmDeleteYear(int year) async {
@@ -257,25 +210,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final active = _activeYear;
     if (active == null) return;
 
-    final int currentPage = active.pagesReadTotal;
     final int currentCycle = active.completedCycles;
     final int totalCycles = active.targetCompletions;
 
     final bool isLastCycle = currentCycle + 1 >= totalCycles;
 
     if (!isLastCycle) {
-      // 🔹 CASE 1: Not last cycle
-      // Move to next cycle, keep page number
       active.completedCycles += 1;
       // pagesReadTotal stays EXACTLY the same
     } else {
-      // 🔹 CASE 2: Last cycle
-      // Add only remaining pages to finish the cycle
-      final int remainingPages = cyclePages - currentPage;
-
-      active.pagesReadTotal += remainingPages;
-
-      // Finish year
+      // 🔹 CASE 2: Last cycle — normalize the same way logPagesRead() does
+      active.pagesReadTotal = 0; // CHANGED (was += remainingPages)
+      active.completedCycles = totalCycles; // CHANGED (was left unincremented)
       active.isActive = false;
       active.endDate = DateTime.now();
     }
@@ -338,16 +284,11 @@ class _KhatmScreenState extends State<KhatmScreen> {
         (_activeYear!.completedCycles * cyclePages) +
         _activeYear!.pagesReadTotal;
     final pagesInCurrentCycle = _activeYear!.pagesReadTotal.toDouble();
-
     final remainingPages = totalTargetPages - pagesReadInYear;
+
     final now = DateTime.now();
-    final endDate = _activeYear!.startFromYearStart
-        ? DateTime(_activeYear!.year, 12, 31)
-        : DateTime(
-            _activeYear!.startDate.year + 1,
-            _activeYear!.startDate.month,
-            _activeYear!.startDate.day,
-          );
+    final endDate =
+        _activeYear!.planEndDate; // CHANGED: was inline duplicated logic
     final daysRemaining = endDate.difference(now).inDays.clamp(1, 9999);
     final catchUpPagesPerDay = (remainingPages / daysRemaining).ceil();
 

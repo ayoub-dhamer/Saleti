@@ -65,7 +65,10 @@ class QuranScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const MushafPageScreen(),
+                        builder: (_) => const MushafPageScreen(
+                          storageKey: 'last_read_general',
+                          useLastReadPosition: true, // ADD
+                        ),
                       ),
                     );
                   },

@@ -1,7 +1,9 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:saleti/utils/hold_to_delete_button.dart';
 
 class DuaNotesScreen extends StatefulWidget {
   const DuaNotesScreen({super.key});
@@ -82,84 +84,57 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   void _showAddDialog() {
     _addController.clear();
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (_) => _duaEditorDialog(
-        title: "New Du'a",
-        controller: _addController,
-        onSave: () => _saveDua(_addController.text),
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Add Dua',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+        return Transform.scale(
+          scale: 0.9 + (0.1 * curved.value.clamp(0.0, 1.0)),
+          child: Opacity(
+            opacity: anim.value.clamp(0.0, 1.0),
+            child: _DuaEditorDialog(
+              title: "New Du'a",
+              initialText: '',
+              onSave: (text) => _saveDua(text),
+            ),
+          ),
+        );
+      },
     );
   }
 
   void _showEditDialog(int index) {
-    final controller = TextEditingController(text: _duaList[index]);
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (_) => _duaEditorDialog(
-        title: "Edit Du'a",
-        controller: controller,
-        onSave: () => _updateDua(index, controller.text),
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Edit Dua',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+        return Transform.scale(
+          scale: 0.9 + (0.1 * curved.value.clamp(0.0, 1.0)),
+          child: Opacity(
+            opacity: anim.value.clamp(0.0, 1.0),
+            child: _DuaEditorDialog(
+              title: "Edit Du'a",
+              initialText: _duaList[index],
+              onSave: (text) => _updateDua(index, text),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _duaEditorDialog({
-    required String title,
-    required TextEditingController controller,
-    required VoidCallback onSave,
-  }) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontFamily: arabicFont,
-          fontWeight: FontWeight.bold,
-          color: primaryGreen,
-        ),
-      ),
-      content: TextField(
-        controller: controller,
-        maxLines: 6,
-        autofocus: true,
-        textDirection: TextDirection.rtl,
-        style: const TextStyle(
-          fontFamily: arabicFont,
-          fontSize: 18,
-          height: 1.8,
-        ),
-        decoration: InputDecoration(
-          hintText: "Enter your prayer here...",
-          filled: true,
-          fillColor: const Color(0xFFF4F7F5),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel", style: TextStyle(fontFamily: arabicFont)),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            onSave();
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryGreen,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Text("Save", style: TextStyle(fontFamily: arabicFont)),
-        ),
-      ],
-    );
-  }
+  // REMOVE the old `Widget _duaEditorDialog({...})` method entirely —
+  // replaced by the standalone `_DuaEditorDialog` widget below.
 
   // ───────────── Storage Logic ─────────────
 
@@ -607,82 +582,250 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 }
 
-class HoldToDeleteButton extends StatefulWidget {
-  final VoidCallback onConfirmed;
+class _DuaEditorDialog extends StatefulWidget {
+  final String title;
+  final String initialText;
+  final ValueChanged<String> onSave;
 
-  const HoldToDeleteButton({super.key, required this.onConfirmed});
+  const _DuaEditorDialog({
+    required this.title,
+    required this.initialText,
+    required this.onSave,
+  });
 
   @override
-  State<HoldToDeleteButton> createState() => _HoldToDeleteButtonState();
+  State<_DuaEditorDialog> createState() => _DuaEditorDialogState();
 }
 
-class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  bool _isHolding = false;
+class _DuaEditorDialogState extends State<_DuaEditorDialog> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  static const Color primaryGreen = Color(0xFF1FA45B);
+  static const Color secondaryGreen = Color(0xFF4FC3A1);
+  static const String arabicFont = 'Amiri';
 
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 1))
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) {
-              widget.onConfirmed();
-              _reset();
-            }
-          });
-  }
-
-  void _reset() {
-    _controller.reset();
-    setState(() => _isHolding = false);
+    _controller = TextEditingController(text: widget.initialText);
+    _focusNode = FocusNode();
+    _focusNode.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) _focusNode.requestFocus();
+      });
+    });
   }
 
   @override
   void dispose() {
-    WakelockPlus.disable();
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _startHold() {
-    setState(() => _isHolding = true);
-    _controller.forward();
+  void _handleSave() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    HapticFeedback.selectionClick();
+    widget.onSave(text);
+    Navigator.pop(context);
   }
 
-  void _cancelHold() {
-    _controller.reset();
-    setState(() => _isHolding = false);
+  void _handleCancel() {
+    HapticFeedback.lightImpact();
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onLongPressStart: (_) => _startHold(),
-      onLongPressEnd: (_) => _cancelHold(),
-      child: SizedBox(
-        width: 100,
-        height: 50,
-        child: Center(
-          child: _isHolding
-              ? AnimatedBuilder(
-                  animation: _controller,
-                  builder: (_, _) => CircularProgressIndicator(
-                    value: _controller.value,
-                    strokeWidth: 3,
-                    color: Colors.redAccent,
-                    backgroundColor: Colors.redAccent.withOpacity(0.2),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryGreen, secondaryGreen],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.auto_stories_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
-                )
-              : const Text(
-                  "Delete",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.redAccent,
-                    fontSize: 16,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontFamily: arabicFont,
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _handleCancel,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Text field
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F7F5),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _focusNode.hasFocus
+                        ? primaryGreen.withOpacity(0.4)
+                        : Colors.transparent,
+                    width: 1.5,
                   ),
                 ),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  maxLines: 6,
+                  minLines: 4,
+                  textDirection: TextDirection.rtl,
+                  cursorColor: primaryGreen,
+                  style: const TextStyle(
+                    fontFamily: arabicFont,
+                    fontSize: 18,
+                    height: 1.8,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: "Enter your prayer here...",
+                    hintStyle: TextStyle(
+                      color: Colors.black38,
+                      fontFamily: arabicFont,
+                    ),
+                    contentPadding: EdgeInsets.all(16),
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (_) =>
+                      setState(() {}), // refresh char count + save button state
+                ),
+              ),
+            ),
+
+            // Character counter
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${_controller.text.trim().length} characters',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Actions
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _handleCancel,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          fontFamily: arabicFont,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: _controller.text.trim().isEmpty ? 0.5 : 1,
+                      child: ElevatedButton(
+                        onPressed: _controller.text.trim().isEmpty
+                            ? null
+                            : _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(
+                            fontFamily: arabicFont,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

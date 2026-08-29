@@ -82,12 +82,12 @@ class KhatmService {
     final startDate = startFromYearStart
         ? DateTime(year, 1, 1)
         : DateTime.now();
-    final endOfYear = DateTime(year, 12, 31);
+    // CHANGED: use the same end-date rule as KhatmYear.planEndDate
+    final endDate = startFromYearStart
+        ? DateTime(year, 12, 31)
+        : DateTime(startDate.year + 1, startDate.month, startDate.day);
 
-    int remainingDays = startFromYearStart
-        ? endOfYear.difference(DateTime(year, 1, 1)).inDays + 1
-        : endOfYear.difference(startDate).inDays + 1;
-
+    int remainingDays = endDate.difference(startDate).inDays + 1;
     if (remainingDays <= 0) remainingDays = 1;
 
     final pagesPerDay = ((604 * targetCompletions) / remainingDays).ceil();
@@ -203,7 +203,8 @@ class KhatmService {
     final totalPages = 604 * active.targetCompletions;
     final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
-    if (now.year > active.year || actualPages >= totalPages) {
+    // CHANGED: was `now.year > active.year || actualPages >= totalPages`
+    if (now.isAfter(active.planEndDate) || actualPages >= totalPages) {
       active.isActive = false;
       active.endDate = now;
       await active.save();
