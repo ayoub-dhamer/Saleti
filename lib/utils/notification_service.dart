@@ -50,6 +50,13 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
 class NotificationService {
   static const _key = 'prayer_settings';
 
+  static const int fridayReminderNotificationId = 8888;
+  static const int fridayReminderAlarmId = 8001;
+  static const int fridayReminderEndAlarmId = 8002;
+
+  static const String _eidOffsetKey = 'eid_offset_minutes';
+  static int eidOffsetMinutes = 20;
+
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {
       'reminder': true,
@@ -90,6 +97,9 @@ class NotificationService {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _notifications.initialize(
       const InitializationSettings(android: androidInit),
+      onDidReceiveNotificationResponse:
+          _handleFridayNotificationResponse, // ADD
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     final androidPlugin = _notifications
@@ -103,6 +113,17 @@ class NotificationService {
         'Prayer Reminders',
         importance: Importance.high,
         playSound: false,
+      ),
+    );
+
+    // ADD: Friday reminder channel
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'friday_reminder_channel',
+        'Friday Reminder',
+        description: "Weekly reminder to prepare for Salat al-Jumu'ah",
+        importance: Importance.max,
+        playSound: true,
       ),
     );
   }
@@ -125,6 +146,79 @@ class NotificationService {
   static Future<void> saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode(prayerSettings));
+  }
+
+  // ----------------------------------------------------------
+  // FRIDAY REMINDER (ADD — new section)
+  // ----------------------------------------------------------
+
+  /// Schedules the next Friday reminder at the given local time.
+  /// Safe to call repeatedly (e.g. on every app start) — it just
+  /// recomputes and overwrites the same alarm ID.
+  static Future<void> scheduleFridayReminder({
+    int hour = 8,
+    int minute = 0,
+  }) async {
+    final now = DateTime.now();
+    int daysUntilFriday = (DateTime.friday - now.weekday + 7) % 7;
+
+    DateTime nextFriday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    ).add(Duration(days: daysUntilFriday));
+
+    // If today IS Friday but the time already passed, roll to next week
+    if (daysUntilFriday == 0 && nextFriday.isBefore(now)) {
+      nextFriday = nextFriday.add(const Duration(days: 7));
+    }
+    await AndroidAlarmManager.oneShotAt(
+      nextFriday,
+      fridayReminderAlarmId,
+      fridayReminderCallback,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
+  }
+
+  /// Schedules a cleanup alarm for the end of the current day (midnight),
+  /// which force-dismisses the reminder if the user never tapped "Done".
+  static Future<void> scheduleFridayReminderEnd() async {
+    final now = DateTime.now();
+    final endOfDay = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
+
+    await AndroidAlarmManager.oneShotAt(
+      endOfDay,
+      fridayReminderEndAlarmId,
+      fridayReminderEndCallback,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
+  }
+
+  static Future<void> cancelFridayReminder() async {
+    await AndroidAlarmManager.cancel(fridayReminderAlarmId);
+    await AndroidAlarmManager.cancel(fridayReminderEndAlarmId);
+    await _notifications.cancel(fridayReminderNotificationId);
+  }
+
+  static Future<void> loadEidOffset() async {
+    final prefs = await SharedPreferences.getInstance();
+    eidOffsetMinutes = prefs.getInt(_eidOffsetKey) ?? 20;
+  }
+
+  static Future<void> saveEidOffset(int minutes) async {
+    eidOffsetMinutes = minutes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_eidOffsetKey, minutes);
   }
 
   // ----------------------------------------------------------
@@ -230,4 +324,80 @@ class NotificationService {
       rescheduleOnReboot: true,
     );
   }
+}
+
+// ----------------------------------------------------------
+// TOP-LEVEL CALLBACKS (required by android_alarm_manager_plus
+// and flutter_local_notifications background dispatch)
+// ----------------------------------------------------------
+
+@pragma('vm:entry-point')
+Future<void> fridayReminderCallback() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  final notifications = FlutterLocalNotificationsPlugin();
+
+  await notifications.initialize(
+    const InitializationSettings(android: androidInit),
+    onDidReceiveNotificationResponse: _handleFridayNotificationResponse,
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
+  const androidDetails = AndroidNotificationDetails(
+    'friday_reminder_channel',
+    'Friday Reminder',
+    channelDescription: "Weekly reminder to prepare for Salat al-Jumu'ah",
+    importance: Importance.max,
+    priority: Priority.high,
+    ongoing: true, // prevents swipe-to-dismiss
+    autoCancel: false, // tapping the body won't dismiss it either
+    playSound: true,
+    actions: [
+      AndroidNotificationAction(
+        'friday_done',
+        'Done',
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+    ],
+  );
+  await notifications.show(
+    NotificationService.fridayReminderNotificationId,
+    "It's Jumu'ah Day",
+    "Today is Friday — shower and read Surah Al-Kahf to get ready for Salat al-Jumu'ah.",
+    const NotificationDetails(android: androidDetails),
+  );
+
+  // Reschedule for next week, and arm the end-of-day cleanup
+  await NotificationService.scheduleFridayReminder();
+  await NotificationService.scheduleFridayReminderEnd();
+}
+
+@pragma('vm:entry-point')
+Future<void> fridayReminderEndCallback() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  final notifications = FlutterLocalNotificationsPlugin();
+  await notifications.initialize(
+    const InitializationSettings(android: androidInit),
+  );
+  await notifications.cancel(NotificationService.fridayReminderNotificationId);
+}
+
+/// Handles the "Done" action tap while the app is alive (foreground/background).
+@pragma('vm:entry-point')
+void _handleFridayNotificationResponse(NotificationResponse response) async {
+  if (response.actionId == 'friday_done') {
+    final notifications = FlutterLocalNotificationsPlugin();
+    await notifications.cancel(
+      NotificationService.fridayReminderNotificationId,
+    );
+  }
+}
+
+/// Handles the "Done" action tap when the app process is terminated.
+/// Must be a top-level function annotated with @pragma('vm:entry-point').
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  _handleFridayNotificationResponse(response);
 }

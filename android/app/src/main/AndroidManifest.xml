@@ -24,7 +24,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
-        android:label="saleti"
+        android:label="Saleti"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <receiver

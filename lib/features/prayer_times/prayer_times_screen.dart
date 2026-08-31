@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/prayer_cache.dart';
+import 'package:saleti/utils/special_day_helper.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -36,8 +36,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   bool _batterySnackShown = false;
   bool _alarmSnackShown = false;
-
-  String? _lastWidgetKey;
 
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
@@ -595,6 +593,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     }
 
     final hijri = HijriCalendar.now();
+    final eidName = SpecialDayHelper.eidNameFor(DateTime.now());
     final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
         ? Prayer.fajr
         : prayerTimes!.nextPrayer();
@@ -606,22 +605,13 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
     final previousTime = _getPreviousPrayerTime(nextPrayer, nextTime); // ADD
 
-    final widgetKey =
-        '${nextPrayer.name}|${DateFormat('hh:mm a').format(nextTime)}';
-    if (widgetKey != _lastWidgetKey) {
-      _lastWidgetKey = widgetKey;
-      updateSaletiWidget(
-        nextPrayer.name,
-        DateFormat('hh:mm a').format(nextTime),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       body: SafeArea(
         child: Column(
           children: [
             _header(hijri),
+            if (eidName != null) _eidBanner(eidName), // ADD
             const SizedBox(height: 16),
             _clockCard(),
             const SizedBox(height: 16),
@@ -640,37 +630,14 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     );
   }
 
-  Future<void> updateSaletiWidget(String name, String time) async {
-    await HomeWidget.saveWidgetData<String>('next_prayer_name', name);
-    await HomeWidget.saveWidgetData<String>('next_prayer_time', time);
-    await HomeWidget.updateWidget(
-      name: 'PrayerWidgetProvider',
-      androidName: 'PrayerWidgetProvider',
-    );
-  }
-
   String _formatDuration(Duration d) =>
       '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   String _prettyName(String name) {
-    return name[0].toUpperCase() + name.substring(1);
-  }
-
-  IconData _prayerIcon(String prayer) {
-    switch (prayer) {
-      case 'fajr':
-        return Icons.nightlight_round;
-      case 'dhuhr':
-        return Icons.wb_sunny_rounded;
-      case 'asr':
-        return Icons.wb_twighlight;
-      case 'maghrib':
-        return Icons.wb_sunny_outlined;
-      case 'isha':
-        return Icons.dark_mode_rounded;
-      default:
-        return Icons.access_time;
+    if (name == 'dhuhr' && SpecialDayHelper.isJumuah(DateTime.now())) {
+      return "Jumu'ah";
     }
+    return name[0].toUpperCase() + name.substring(1);
   }
 
   double _getVolume(Map<String, dynamic> setting) {
@@ -1044,27 +1011,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       ),
                       const SizedBox(width: 14),
 
-                      // Prayer icon
-                      Container(
-                        width: 38,
-                        height: 38,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isNext
-                              ? Colors.green.shade700.withOpacity(0.12)
-                              : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          _prayerIcon(prayerKey),
-                          size: 18,
-                          color: isNext
-                              ? Colors.green.shade700
-                              : Colors.grey.shade500,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-
                       // Prayer name & time
                       Expanded(
                         child: Column(
@@ -1146,20 +1092,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                                 },
                               ),
                             ),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 150),
-                              child: Text(
-                                '${(_getVolume(setting) * 100).round()}%',
-                                key: ValueKey(
-                                  (_getVolume(setting) * 100).round(),
-                                ),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade500,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -1233,6 +1165,132 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         ),
       ),
     );
+  }
+
+  Widget _eidBanner(String eidName) {
+    final estimate = SpecialDayHelper.estimatedEidTime(
+      prayerTimes!,
+      offsetMinutes: NotificationService.eidOffsetMinutes,
+    );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFE9A319), Color(0xFFF4C542)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE9A319).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.celebration_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '$eidName Mubarak!',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _showEidOffsetPicker(context),
+                child: const Icon(
+                  Icons.tune_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Estimated prayer time: ${DateFormat('hh:mm a').format(estimate)} '
+            '(sunrise + ${NotificationService.eidOffsetMinutes} min)',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'This is an estimate, not official — confirm with your local mosque.',
+            style: TextStyle(color: Colors.white, fontSize: 11, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEidOffsetPicker(BuildContext context) async {
+    int tempValue = NotificationService.eidOffsetMinutes;
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Eid Time Offset'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Minutes after sunrise your local mosque typically holds Eid prayer.',
+                style: TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+              const SizedBox(height: 16),
+              Slider(
+                value: tempValue.toDouble(),
+                min: 0,
+                max: 60,
+                divisions: 12,
+                label: '$tempValue min',
+                activeColor: primaryGreen,
+                onChanged: (v) => setDialogState(() => tempValue = v.round()),
+              ),
+              Text(
+                '$tempValue minutes',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, tempValue),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await NotificationService.saveEidOffset(result);
+      setState(() {}); // refresh the banner with the new offset
+    }
   }
 
   Widget _actionIcon({

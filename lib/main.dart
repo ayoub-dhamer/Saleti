@@ -30,10 +30,12 @@ void main() async {
 
   await PrayerCache().load();
   await NotificationService.loadSettings();
+  await NotificationService.loadEidOffset(); // ADD
   await NotificationService.init();
 
   await AndroidAlarmManager.initialize();
   await NotificationService.scheduleDailyRescheduler();
+  await NotificationService.scheduleFridayReminder();
 
   // ------------------- Decide Entry -------------------
   final onboardingDone = await hasCompletedOnboarding();
