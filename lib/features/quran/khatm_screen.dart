@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
@@ -44,7 +46,7 @@ class KhatmYear extends HiveObject {
   DateTime? endDate;
 
   @HiveField(8)
-  bool startFromYearStart; // true = Jan 1, false = today
+  bool startFromYearStart;
 
   KhatmYear({
     required this.year,
@@ -55,7 +57,7 @@ class KhatmYear extends HiveObject {
     this.completedCycles = 0,
     this.isActive = true,
     this.endDate,
-    this.startFromYearStart = false, // default false
+    this.startFromYearStart = false,
   });
 
   DateTime get planEndDate => startFromYearStart
@@ -84,7 +86,7 @@ class DailyKhatmLog extends HiveObject {
 /// =======================
 /// SCREEN
 /// =======================
-///
+
 const Color primaryGreen = Color(0xFF1FA45B);
 const Color secondaryGreen = Color(0xFF4FC3A1);
 
@@ -108,7 +110,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
   @override
   void initState() {
     super.initState();
-
     _load();
   }
 
@@ -174,25 +175,25 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
     final totalCycles = active.targetCompletions;
     final currentCycles = active.completedCycles;
-
     final isLastCycle = currentCycles + 1 >= totalCycles;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Confirm Cycle Completion'),
         content: Text(
           isLastCycle
-              ? 'This will finish the FINAL cycle and complete the year.\n\nContinue?'
-              : 'This will move you to the next cycle while keeping your current page.\n\nContinue?',
+              ? 'This will finish the FINAL cycle and complete the year. Continue?'
+              : 'This will move you to the next cycle while keeping your current page. Continue?',
         ),
-
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Confirm'),
           ),
@@ -201,8 +202,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
 
     if (confirmed != true) return;
-
-    // ✅ Apply changes
     await _addCycleToActiveYear();
   }
 
@@ -212,16 +211,13 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
     final int currentCycle = active.completedCycles;
     final int totalCycles = active.targetCompletions;
-
     final bool isLastCycle = currentCycle + 1 >= totalCycles;
 
     if (!isLastCycle) {
       active.completedCycles += 1;
-      // pagesReadTotal stays EXACTLY the same
     } else {
-      // 🔹 CASE 2: Last cycle — normalize the same way logPagesRead() does
-      active.pagesReadTotal = 0; // CHANGED (was += remainingPages)
-      active.completedCycles = totalCycles; // CHANGED (was left unincremented)
+      active.pagesReadTotal = 0;
+      active.completedCycles = totalCycles;
       active.isActive = false;
       active.endDate = DateTime.now();
     }
@@ -238,7 +234,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          'Qur’an Khatm',
+          'Qur\'an Khatm',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         flexibleSpace: Container(
@@ -259,7 +255,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _activeYear != null ? _activeYearCard() : _noPlanCard(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _historySection(),
               ],
             ),
@@ -269,13 +265,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  /// =======================
-  /// ACTIVE YEAR CARD
-  /// =======================
-
-  /// =======================
-  /// ACTIVE YEAR CARD WITH 2 PROGRESS BARS
-  /// =======================
   Widget _activeYearCard() {
     if (_activeYear == null) return const SizedBox();
 
@@ -287,8 +276,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final remainingPages = totalTargetPages - pagesReadInYear;
 
     final now = DateTime.now();
-    final endDate =
-        _activeYear!.planEndDate; // CHANGED: was inline duplicated logic
+    final endDate = _activeYear!.planEndDate;
     final daysRemaining = endDate.difference(now).inDays.clamp(1, 9999);
     final catchUpPagesPerDay = (remainingPages / daysRemaining).ceil();
 
@@ -306,18 +294,23 @@ class _KhatmScreenState extends State<KhatmScreen> {
         }
 
         Color statusColor;
+        String statusLabel;
         switch (status) {
           case KhatmStatus.ahead:
-            statusColor = Colors.green;
+            statusColor = primaryGreen;
+            statusLabel = 'Ahead by $diff pages';
+
             break;
           case KhatmStatus.behind:
-            statusColor = Colors.red;
+            statusColor = Colors.red.shade600;
+            statusLabel = 'Behind by ${diff.abs()} pages';
+
             break;
           case KhatmStatus.onTrack:
-            statusColor = Colors.blue;
+            statusColor = Colors.indigo.shade600;
+            statusLabel = 'On track';
         }
 
-        // Calculate progress ratios
         final currentCycleProgress = (pagesInCurrentCycle / cyclePages).clamp(
           0.0,
           1.0,
@@ -326,6 +319,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
           0.0,
           1.0,
         );
+        final isFinished = pagesReadInYear >= totalTargetPages;
 
         return _card(
           child: Column(
@@ -334,64 +328,155 @@ class _KhatmScreenState extends State<KhatmScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Active Year: ${_activeYear!.year}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [primaryGreen, secondaryGreen],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.menu_book_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_activeYear!.year}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '${_activeYear!.targetCompletions}× target · ${_activeYear!.pagesPerDay} pages/day',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    color: Colors.red,
-                    tooltip: "Delete record",
-                    onPressed: () => _confirmDeleteYear(_activeYear!.year),
+                  _TapScale(
+                    onTap: () => _confirmDeleteYear(_activeYear!.year),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 18,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _row('Target Khatms', _activeYear!.targetCompletions.toString()),
-              _row('Pages / Day', _activeYear!.pagesPerDay.toString()),
 
-              _row('Completed Cycles', _activeYear!.completedCycles.toString()),
-              _row('Pages Read', _activeYear!.pagesReadTotal.toString()),
-              _row(
-                'Start Date',
-                "${_activeYear!.startDate.year}-${_activeYear!.startDate.month}-${_activeYear!.startDate.day}",
-              ),
-              _row(
-                'Status',
-                diff == 0
-                    ? 'On Track'
-                    : diff > 0
-                    ? 'Ahead by $diff pages'
-                    : 'Behind by ${diff.abs()} pages',
-              ),
-              if (status == KhatmStatus.behind) ...[
-                const SizedBox(height: 6),
-                _row('Catch-up Pace', '$catchUpPagesPerDay pages/day'),
-              ],
               const SizedBox(height: 16),
 
-              // ===================
-              // Progress Bars
-              // ===================
+              // Status pill
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(scale: anim, child: child),
+                ),
+                child: Container(
+                  key: ValueKey(statusLabel),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: statusColor.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        statusLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              if (status == KhatmStatus.behind) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Catch-up pace: $catchUpPagesPerDay pages/day',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 18),
+
               Row(
                 children: [
-                  // Current Cycle
+                  Expanded(
+                    child: _statChip(
+                      'Cycles',
+                      '${_activeYear!.completedCycles}/${_activeYear!.targetCompletions}',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _statChip(
+                      'Started',
+                      DateFormat(
+                        'MMM d',
+                      ).format(_activeYear!.startDate), // Output: "Jan 15"
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              Row(
+                children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Current Cycle',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
+                            fontSize: 11.5,
+                            color: Colors.grey.shade500,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         _buildProgressBar(
                           currentCycleProgress,
                           statusColor,
@@ -402,20 +487,19 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Year Progress
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Year Progress',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
+                            fontSize: 11.5,
+                            color: Colors.grey.shade500,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         _buildProgressBar(
                           yearProgress,
                           statusColor,
@@ -427,33 +511,44 @@ class _KhatmScreenState extends State<KhatmScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
 
-              // Action Buttons
+              const SizedBox(height: 18),
+
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.menu_book),
-                      label: Text(
-                        pagesReadInYear >= totalTargetPages
-                            ? 'Year Complete'
-                            : 'Start Reading',
+                      icon: Icon(
+                        isFinished ? Icons.check_circle : Icons.menu_book,
+                        size: 18,
                       ),
-                      onPressed: pagesReadInYear >= totalTargetPages
-                          ? null
-                          : _startReading,
+                      label: Text(
+                        isFinished ? 'Year Complete' : 'Continue Reading',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryGreen,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade200,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: isFinished ? null : _startReading,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    tooltip:
-                        _activeYear!.completedCycles + 1 >=
-                            _activeYear!.targetCompletions
-                        ? "Finish Final Cycle"
-                        : "Add Cycle",
-                    onPressed: _confirmAddCycle,
+                  const SizedBox(width: 10),
+                  _TapScale(
+                    onTap: _confirmAddCycle,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: primaryGreen.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(Icons.add, color: primaryGreen),
+                    ),
                   ),
                 ],
               ),
@@ -464,50 +559,84 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  /// Helper for progress bars
+  Widget _statChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F6F8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProgressBar(
     double progress,
     Color color,
     int pages,
     int totalPages,
   ) {
-    final textColor = progress < 0.3 ? Colors.black : Colors.white;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              height: 16,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.grey.shade300,
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 16,
-                backgroundColor: Colors.transparent,
-                valueColor: AlwaysStoppedAnimation(color),
-              ),
-            ),
-            Text(
-              "${(progress * 100).toStringAsFixed(0)}%",
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
-            ),
-          ],
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: progress),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, _) {
+            final textColor = value < 0.3 ? Colors.black87 : Colors.white;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  height: 16,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey.shade200,
+                  ),
+                ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LinearProgressIndicator(
+                    value: value,
+                    minHeight: 16,
+                    backgroundColor: Colors.transparent,
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
+                ),
+                Text(
+                  "${(value * 100).toStringAsFixed(0)}%",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 4),
         Text(
           '$pages / $totalPages pages',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500),
         ),
       ],
     );
@@ -516,12 +645,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
   Widget _noPlanCard() {
     final now = DateTime.now().year;
 
-    // Check if there's an active year OR a completed/current year plan
     final hasCurrentYearPlan =
         (_activeYear != null && _activeYear!.year == now) ||
         _history.any((y) => y.year == now);
 
-    // Check if current year is finished
     bool currentYearFinished = false;
     if (_activeYear != null && _activeYear!.year == now) {
       final totalPagesInYear = _activeYear!.targetCompletions * cyclePages;
@@ -535,27 +662,54 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
     return _card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: primaryGreen.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.track_changes_rounded,
+              size: 44,
+              color: primaryGreen.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text(
             'No active Khatm plan',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             canCreatePlan
-                ? 'Create a yearly plan to track your Qur’an reading.'
-                : 'You already have a Khatm record for this year ($now). You cannot create another one until next year or by deleting this record.',
-            style: const TextStyle(color: Colors.black54),
+                ? 'Create a yearly plan to track your Qur\'an reading.'
+                : 'You already have a Khatm record for $now. Finish or delete it to start a new one.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
           ),
-          const SizedBox(height: 12),
-          Tooltip(
-            message: canCreatePlan
-                ? 'Create a new plan'
-                : 'Finish or delete the current year record before creating a new one.',
-            child: ElevatedButton(
-              onPressed: canCreatePlan ? _configurePlan : null,
-              child: const Text('Create Plan'),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: Tooltip(
+              message: canCreatePlan
+                  ? 'Create a new plan'
+                  : 'Finish or delete the current year record first.',
+              child: ElevatedButton.icon(
+                onPressed: canCreatePlan ? _configurePlan : null,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Create Plan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade200,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+              ),
             ),
           ),
         ],
@@ -563,27 +717,42 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  /// =======================
-  /// HISTORY
-  /// =======================
-
   Widget _historySection() {
     if (_history.isEmpty) {
-      return const Text(
-        'No previous years yet',
-        style: TextStyle(color: Colors.black54),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            children: [
+              Icon(
+                Icons.history_rounded,
+                size: 36,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No previous years yet',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'History',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'History',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
-        const SizedBox(height: 12),
-        ..._history.map((y) {
+        ..._history.asMap().entries.map((entry) {
+          final index = entry.key;
+          final y = entry.value;
           final expanded = _expandedYears.contains(y.year);
 
           final pagesReadInYear =
@@ -592,132 +761,152 @@ class _KhatmScreenState extends State<KhatmScreen> {
           final yearProgress = (pagesReadInYear / totalTargetPages)
               .clamp(0, 1)
               .toDouble();
+          final completed = pagesReadInYear >= totalTargetPages;
 
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                if (expanded) {
-                  _expandedYears.remove(y.year);
-                } else {
-                  _expandedYears.add(y.year);
-                }
-              });
-            },
-            child: _card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// HEADER ROW
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        y.year.toString(),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Icon(
-                            expanded ? Icons.expand_less : Icons.expand_more,
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            color: Colors.red,
-                            onPressed: () => _confirmDeleteYear(y.year),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  if (expanded) ...[
-                    const SizedBox(height: 12),
-                    _row('Target Khatms', y.targetCompletions.toString()),
-                    _row('Pages / Day', y.pagesPerDay.toString()),
-                    _row('Completed Cycles', y.completedCycles.toString()),
-                    _row('Pages Read', y.pagesReadTotal.toString()),
-                    _row(
-                      'Start Date',
-                      '${y.startDate.year}-${y.startDate.month}-${y.startDate.day}',
-                    ),
-                    if (y.endDate != null)
-                      _row(
-                        'End Date',
-                        '${y.endDate!.year}-${y.endDate!.month}-${y.endDate!.day}',
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    /// YEAR PROGRESS BAR
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          return TweenAnimationBuilder<double>(
+            key: ValueKey('history_${y.year}'),
+            tween: Tween(begin: 0, end: 1),
+            duration: Duration(milliseconds: 300 + (index.clamp(0, 6) * 40)),
+            curve: Curves.easeOutCubic,
+            builder: (context, t, child) => Opacity(
+              opacity: t,
+              child: Transform.translate(
+                offset: Offset(0, (1 - t) * 14),
+                child: child,
+              ),
+            ),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  expanded
+                      ? _expandedYears.remove(y.year)
+                      : _expandedYears.add(y.year);
+                });
+              },
+              child: _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Year Progress',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0, end: yearProgress),
-                          duration: const Duration(seconds: 1),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, value, child) {
-                            final textColor = value < 0.3
-                                ? Colors.black
-                                : Colors.white;
-                            return Stack(
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
                               alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: LinearProgressIndicator(
-                                    value: value,
-                                    minHeight: 16,
-                                    backgroundColor: Colors.transparent,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      Colors.blue,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  "${(value * 100).toStringAsFixed(0)}%",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+                              decoration: BoxDecoration(
+                                color: completed
+                                    ? primaryGreen.withOpacity(0.1)
+                                    : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                completed
+                                    ? Icons.emoji_events_rounded
+                                    : Icons.menu_book_rounded,
+                                size: 18,
+                                color: completed
+                                    ? primaryGreen
+                                    : Colors.grey.shade400,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              y.year.toString(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$pagesReadInYear / $totalTargetPages pages',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Row(
+                          children: [
+                            AnimatedRotation(
+                              turns: expanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: Icon(
+                                Icons.expand_more,
+                                color: Colors.grey.shade400,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            _TapScale(
+                              onTap: () => _confirmDeleteYear(y.year),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
+                      child: expanded
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _row(
+                                    'Target Khatms',
+                                    y.targetCompletions.toString(),
+                                  ),
+                                  _row('Pages / Day', y.pagesPerDay.toString()),
+                                  _row(
+                                    'Completed Cycles',
+                                    y.completedCycles.toString(),
+                                  ),
+                                  _row(
+                                    'Pages Read',
+                                    y.pagesReadTotal.toString(),
+                                  ),
+                                  _row(
+                                    'Start Date',
+                                    '${y.startDate.year}-${y.startDate.month}-${y.startDate.day}',
+                                  ),
+                                  if (y.endDate != null)
+                                    _row(
+                                      'End Date',
+                                      '${y.endDate!.year}-${y.endDate!.month}-${y.endDate!.day}',
+                                    ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    'Year Progress',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Colors.grey.shade500,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _buildProgressBar(
+                                    yearProgress,
+                                    Colors.indigo.shade600,
+                                    pagesReadInYear,
+                                    totalTargetPages,
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                   ],
-                ],
+                ),
               ),
             ),
           );
@@ -725,10 +914,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
       ],
     );
   }
-
-  /// =======================
-  /// ACTIONS
-  /// =======================
 
   Future<void> _startReading() async {
     final refreshNeeded = await Navigator.push(
@@ -742,115 +927,59 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
 
     if (refreshNeeded == true) {
-      _load(); // Refresh your Khatm stats immediately
+      _load();
     }
   }
 
   Future<void> _configurePlan() async {
     final activeYear = _activeYear;
 
-    // 🔹 If there's an active year that is not finished
     if (activeYear != null) {
       final totalPages = activeYear.targetCompletions * 604;
       final pagesDone =
           (activeYear.completedCycles * 604) + activeYear.pagesReadTotal;
 
       if (pagesDone < totalPages) {
-        // Show a warning and prevent creating new plan
         await showDialog(
           context: context,
           builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
             title: const Text("Active Plan Exists"),
             content: Text(
-              "You already have an active Khatm plan for ${activeYear.year}.\n\n"
-              "You must complete this plan before starting a new one.",
+              "You already have an active Khatm plan for ${activeYear.year}. You must complete this plan before starting a new one.",
             ),
             actions: [
-              TextButton(
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
                 onPressed: () => Navigator.pop(context),
                 child: const Text("OK"),
               ),
             ],
           ),
         );
-        return; // Exit early, prevent new plan creation
+        return;
       }
     }
 
-    // 🔹 Continue with creating/editing plan
-    final controller = TextEditingController(
-      text: activeYear?.targetCompletions.toString() ?? '',
-    );
-
-    bool startFromYearStart = false;
-
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showGeneralDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Khatm Plan'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Completions per year',
-                      hintText: 'e.g. 1, 2, 3...',
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Start counting from:",
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  RadioListTile<bool>(
-                    title: const Text("January 1st"),
-                    value: true,
-                    groupValue: startFromYearStart,
-                    onChanged: (value) {
-                      setState(() {
-                        startFromYearStart = value!;
-                      });
-                    },
-                  ),
-                  RadioListTile<bool>(
-                    title: const Text("Today"),
-                    value: false,
-                    groupValue: startFromYearStart,
-                    onChanged: (value) {
-                      setState(() {
-                        startFromYearStart = value!;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final cycles = int.tryParse(controller.text);
-                    Navigator.pop(context, {
-                      "cycles": cycles,
-                      "startFromYearStart": startFromYearStart,
-                    });
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
+      barrierDismissible: true,
+      barrierLabel: 'Khatm Plan',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+        return Transform.scale(
+          scale: 0.9 + (0.1 * curved.value.clamp(0.0, 1.0)),
+          child: Opacity(
+            opacity: anim.value.clamp(0.0, 1.0),
+            child: _KhatmPlanDialog(
+              initialCycles: activeYear?.targetCompletions.toString() ?? '',
+            ),
+          ),
         );
       },
     );
@@ -870,22 +999,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
     }
   }
 
-  /// =======================
-  /// UI HELPERS
-  /// =======================
-
   Widget _card({required Widget child}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
           BoxShadow(
-            blurRadius: 10,
-            offset: Offset(0, 4),
-            color: Colors.black12,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -899,9 +1024,292 @@ class _KhatmScreenState extends State<KhatmScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small reusable scale-on-tap wrapper.
+class _TapScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _TapScale({required this.child, required this.onTap});
+
+  @override
+  State<_TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<_TapScale> {
+  double _scale = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.9),
+      onTapUp: (_) => setState(() => _scale = 1),
+      onTapCancel: () => setState(() => _scale = 1),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Restyled Khatm plan creation/edit dialog.
+class _KhatmPlanDialog extends StatefulWidget {
+  final String initialCycles;
+
+  const _KhatmPlanDialog({required this.initialCycles});
+
+  @override
+  State<_KhatmPlanDialog> createState() => _KhatmPlanDialogState();
+}
+
+class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
+  late final TextEditingController _controller;
+  bool _startFromYearStart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialCycles);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _canSubmit =>
+      int.tryParse(_controller.text.trim()) != null &&
+      int.parse(_controller.text.trim()) > 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryGreen, secondaryGreen],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.track_changes_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Khatm Plan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _controller,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Completions per year',
+                      hintText: 'e.g. 1, 2, 3...',
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6F8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(Icons.repeat_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Start counting from',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _optionTile('January 1st', true)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _optionTile('Today', false)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: _canSubmit ? 1 : 0.5,
+                      child: ElevatedButton(
+                        onPressed: _canSubmit
+                            ? () => Navigator.pop(context, {
+                                "cycles": int.parse(_controller.text.trim()),
+                                "startFromYearStart": _startFromYearStart,
+                              })
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Save',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _optionTile(String label, bool value) {
+    final selected = _startFromYearStart == value;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _startFromYearStart = value);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? primaryGreen.withOpacity(0.1)
+              : const Color(0xFFF4F6F8),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? primaryGreen : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              selected ? Icons.check_circle : Icons.circle_outlined,
+              size: 18,
+              color: selected ? primaryGreen : Colors.grey.shade400,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: selected ? primaryGreen : Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -936,7 +1344,7 @@ class _Header extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Track and complete the Qur’an with a yearly plan',
+            'Track and complete the Qur\'an with a yearly plan',
             style: TextStyle(color: Colors.white70),
           ),
         ],

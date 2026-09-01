@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:saleti/utils/prayer_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class QiblaScreen extends StatefulWidget {
@@ -30,6 +31,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
   StreamSubscription<CompassEvent>? _compassSub;
 
+  final PrayerCache _cache =
+      PrayerCache(); // ADD — reuse the app-wide singleton cache
+
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
 
@@ -37,8 +41,62 @@ class _QiblaScreenState extends State<QiblaScreen> {
   void initState() {
     super.initState();
     _loadCalibrationHintState(); // ADD
-    _checkPermissionAndLoad();
+    _loadFromCacheOrRequest();
     if (widget.isActive) _startCompass();
+  }
+
+  // ADD: mirrors PrayerTimesScreen's cache-first pattern
+  Future<void> _loadFromCacheOrRequest() async {
+    await _cache.load();
+
+    if (_cache.hasLocation) {
+      // Instant — no GPS wait at all
+      final qibla = calculateQiblaDirection(_cache.lat!, _cache.lng!);
+      if (mounted) {
+        setState(() {
+          _qiblaDirection = qibla;
+          _loading = false;
+        });
+      }
+    } else {
+      // No cache yet — fall back to the original permission/GPS flow
+      await _checkPermissionAndLoad();
+    }
+  }
+
+  Future<void> _refreshLocation() async {
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final qibla = calculateQiblaDirection(pos.latitude, pos.longitude);
+
+      await _cache.save(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        locationName: _cache.locationName ?? 'Unknown Location',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _qiblaDirection = qibla;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _errorMessage = 'Unable to get your location. Please try again.';
+      });
+    }
   }
 
   Future<void> _loadCalibrationHintState() async {
@@ -186,6 +244,13 @@ class _QiblaScreenState extends State<QiblaScreen> {
     try {
       final pos = await Geolocator.getCurrentPosition();
       final qibla = calculateQiblaDirection(pos.latitude, pos.longitude);
+
+      // ADD: save to cache so next time (and PrayerTimesScreen too) benefits
+      await _cache.save(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        locationName: _cache.locationName ?? 'Unknown Location',
+      );
 
       if (mounted) {
         setState(() {
@@ -395,21 +460,46 @@ class _QiblaScreenState extends State<QiblaScreen> {
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
-      child: Column(
+      child: Row(
+        // CHANGED: was a plain Column
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text(
-            'Find the Qibla',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Find the Qibla',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Align your phone to face the Kaaba',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: 6),
-          Text(
-            'Align your phone to face the Kaaba',
-            style: TextStyle(color: Colors.white70),
+          GestureDetector(
+            // ADD
+            onTap: _refreshLocation,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white30),
+              ),
+              child: const Icon(
+                Icons.my_location_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
           ),
         ],
       ),

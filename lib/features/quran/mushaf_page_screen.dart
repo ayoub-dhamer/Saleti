@@ -699,7 +699,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                         fit: StackFit.expand,
                         children: [
                           Image.asset(
-                            'assets/mushaf/$pageNumber.jpg',
+                            'assets/mushaf/$pageNumber.png',
                             fit: _isLectureMode ? BoxFit.fill : BoxFit.cover,
                           ),
                           if (!_isLectureMode)

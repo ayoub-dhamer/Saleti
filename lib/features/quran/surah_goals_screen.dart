@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
@@ -25,7 +27,7 @@ class SurahGoal extends HiveObject {
   DateTime? deadline;
 
   @HiveField(5)
-  String label; // ✅ NEW
+  String label;
 
   SurahGoal({
     required this.surahNumber,
@@ -65,15 +67,19 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   @override
   void initState() {
     super.initState();
-
     _tabController = TabController(length: 3, vsync: this);
-
+    _tabController.addListener(() => setState(() {}));
     _loadGoals();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadGoals() async {
     final goals = await _service.getGoals();
-
     setState(() {
       _goals = goals;
     });
@@ -152,7 +158,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     await _loadGoals();
   }
 
-  Widget _goalCard(SurahGoal goal) {
+  Widget _goalCard(SurahGoal goal, int index) {
     final progress = goal.progress;
 
     String? buildDeadlineIndicator(SurahGoal goal) {
@@ -168,226 +174,395 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       if (daysLeft <= 0) return "Deadline passed";
 
       final remaining = goal.targetCount - goal.completedCount;
-
       if (remaining <= 0) return null;
 
-      // Case 1: multiple per day
       if (remaining >= daysLeft) {
         final perDay = (remaining / daysLeft).ceil();
         return "$perDay time${perDay > 1 ? 's' : ''} per day";
       }
 
-      // Case 2: once every X days
       final everyDays = (daysLeft / remaining).ceil();
       return "1 time every $everyDays day${everyDays > 1 ? 's' : ''}";
     }
 
-    // ✅ Declare indicator before return
     final deadlineIndicator = buildDeadlineIndicator(goal);
 
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// HEADER
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                goal.surahName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Row(
-                children: [
-                  if (goal.isExpired)
-                    const Icon(Icons.timer_off, color: Colors.red, size: 18),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    color: Colors.red,
-                    onPressed: () => _confirmDelete(goal),
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('goal_${goal.surahNumber}_${goal.label}'),
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 300 + (index.clamp(0, 6) * 40)),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 14),
+          child: child,
+        ),
+      ),
+      child: _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// HEADER
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    goal.surahName,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          _row("Target", "${goal.targetCount} times"),
-          _row("Completed", goal.completedCount.toString()),
-
-          if (goal.deadline != null)
-            _row(
-              "Deadline",
-              "${goal.deadline!.year}-${goal.deadline!.month}-${goal.deadline!.day}",
+                ),
+                if (goal.isExpired)
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.timer_off_rounded,
+                          color: Colors.red,
+                          size: 14,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Expired',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                _TapScale(
+                  onTap: () => _confirmDelete(goal),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
             ),
 
-          // ✅ Use the indicator here
-          if (deadlineIndicator != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
+
             Row(
               children: [
-                const Icon(Icons.schedule, size: 16, color: Colors.blueGrey),
-                const SizedBox(width: 6),
-                Text(
-                  deadlineIndicator,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blueGrey,
+                Expanded(child: _statChip('Target', '${goal.targetCount}×')),
+                const SizedBox(width: 8),
+                Expanded(child: _statChip('Done', '${goal.completedCount}×')),
+                if (goal.deadline != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _statChip(
+                      'Deadline',
+                      DateFormat('MMM d y').format(goal.deadline!),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+
+            if (deadlineIndicator != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: Colors.blueGrey,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      deadlineIndicator,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            /// PROGRESS BAR
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                final textColor = value < 0.3 ? Colors.black87 : Colors.white;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      height: 16,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.grey.shade200,
+                      ),
+                    ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: LinearProgressIndicator(
+                        value: value,
+                        minHeight: 16,
+                        backgroundColor: Colors.transparent,
+                        valueColor: AlwaysStoppedAnimation(
+                          goal.isExpired
+                              ? Colors.red
+                              : goal.isCompleted
+                              ? Colors.blueGrey
+                              : primaryGreen,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "${(value * 100).toStringAsFixed(0)}%",
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            /// ACTIONS
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.menu_book, size: 18),
+                    label: Text(goal.isCompleted ? 'Completed' : 'Read'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryGreen,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade200,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: goal.isCompleted
+                        ? null
+                        : () async {
+                            final int startPage =
+                                surahStartPages[goal.surahNumber] ?? 1;
+                            final int endPage =
+                                surahEndPages[goal.surahNumber] ?? 604;
+
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MushafPageScreen(
+                                  startPage: startPage,
+                                  endPage: endPage,
+                                  readingMode: ReadingMode.goal,
+                                  storageKey: 'last_read_goals',
+                                  surahGoal: goal,
+                                ),
+                              ),
+                            );
+                            if (result == true) _loadGoals();
+                          },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TapScale(
+                  onTap: goal.isCompleted || goal.isExpired
+                      ? () {}
+                      : () async {
+                          HapticFeedback.selectionClick();
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              title: const Text('Confirm Recitation'),
+                              content: const Text(
+                                'Did you finish reciting this surah?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryGreen,
+                                  ),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Yes'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (confirm == true) {
+                            await _service.incrementProgress(goal);
+                            await _loadGoals();
+                          }
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: (goal.isCompleted || goal.isExpired)
+                          ? Colors.grey.shade100
+                          : primaryGreen.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.add,
+                      color: (goal.isCompleted || goal.isExpired)
+                          ? Colors.grey.shade400
+                          : primaryGreen,
+                    ),
                   ),
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
 
-          const SizedBox(height: 14),
-
-          /// PROGRESS BAR
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: progress),
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              final textColor = value < 0.3 ? Colors.black : Colors.white;
-
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    height: 16,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.grey.shade300,
-                    ),
-                  ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: LinearProgressIndicator(
-                      value: value,
-                      minHeight: 16,
-                      backgroundColor: Colors.transparent,
-                      valueColor: AlwaysStoppedAnimation(
-                        goal.isExpired
-                            ? Colors.red
-                            : goal.isCompleted
-                            ? Colors.blueGrey
-                            : Colors.green,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    "${(value * 100).toStringAsFixed(0)}%",
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 6),
-
+  Widget _statChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F6F8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            "${goal.completedCount} / ${goal.targetCount}",
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-
-          const SizedBox(height: 14),
-
-          /// ACTIONS
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.menu_book),
-                  label: const Text("Read"),
-                  onPressed: goal.isCompleted
-                      ? null
-                      : () async {
-                          final int startPage =
-                              surahStartPages[goal.surahNumber] ?? 1;
-                          final int endPage =
-                              surahEndPages[goal.surahNumber] ?? 604;
-
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MushafPageScreen(
-                                startPage: startPage,
-                                endPage: endPage,
-                                readingMode: ReadingMode.goal,
-                                storageKey: 'last_read_goals',
-                                surahGoal: goal,
-                              ),
-                            ),
-                          );
-                          if (result == true) {
-                            _loadGoals();
-                          }
-                        },
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: "Increment",
-                onPressed: goal.isCompleted || goal.isExpired
-                    ? null
-                    : () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text('Confirm Recitation'),
-                            content: const Text(
-                              'Did you finish reciting this surah?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Yes'),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (confirm == true) {
-                          await _service.incrementProgress(goal);
-                          await _loadGoals();
-                        }
-                      },
-              ),
-            ],
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  Widget _goalsList(List<SurahGoal> goals) {
+  Widget _goalsList(List<SurahGoal> goals, {required int tabIndex}) {
     if (goals.isEmpty) {
-      return const Center(
-        child: Text(
-          "No goals here yet",
-          style: TextStyle(color: Colors.black54),
-        ),
-      );
+      return _emptyState(tabIndex);
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: goals.length,
-      itemBuilder: (_, i) => _goalCard(goals[i]),
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _goalCard(goals[i], i),
+      ),
+    );
+  }
+
+  Widget _emptyState(int tabIndex) {
+    final config = switch (tabIndex) {
+      0 => (
+        Icons.flag_outlined,
+        'No active goals',
+        'Set a target and start tracking your recitation.',
+      ),
+      1 => (
+        Icons.emoji_events_outlined,
+        'No completed goals yet',
+        'Finished goals will show up here.',
+      ),
+      _ => (
+        Icons.timer_off_outlined,
+        'No expired goals',
+        'Goals that pass their deadline appear here.',
+      ),
+    };
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: primaryGreen.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                config.$1,
+                size: 48,
+                color: primaryGreen.withOpacity(0.5),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              config.$2,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              config.$3,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -412,29 +587,17 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
           ),
         ),
       ),
-
       body: Column(
         children: [
-          _Header(onAdd: _addGoal),
-
-          TabBar(
-            controller: _tabController,
-            indicatorColor: const Color(0xFF1FA45B),
-            labelColor: Colors.black,
-            tabs: const [
-              Tab(text: "Active"),
-              Tab(text: "Completed"),
-              Tab(text: "Expired"),
-            ],
-          ),
-
+          _Header(onAdd: _addGoal, goalCount: _goals.length),
+          _tabBar(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _goalsList(_activeGoals),
-                _goalsList(_completedGoals),
-                _goalsList(_expiredGoals),
+                _goalsList(_activeGoals, tabIndex: 0),
+                _goalsList(_completedGoals, tabIndex: 1),
+                _goalsList(_expiredGoals, tabIndex: 2),
               ],
             ),
           ),
@@ -443,9 +606,68 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     );
   }
 
+  Widget _tabBar() {
+    final labels = ['Active', 'Completed', 'Expired'];
+    final counts = [
+      _activeGoals.length,
+      _completedGoals.length,
+      _expiredGoals.length,
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: List.generate(3, (i) {
+          final isSelected = _tabController.index == i;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _tabController.animateTo(i);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: isSelected
+                      ? const LinearGradient(
+                          colors: [primaryGreen, secondaryGreen],
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    '${labels[i]} (${counts[i]})',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _card({required Widget child}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -461,16 +683,33 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       child: child,
     );
   }
+}
 
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.black54)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
+/// Small reusable scale-on-tap wrapper.
+class _TapScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _TapScale({required this.child, required this.onTap});
+
+  @override
+  State<_TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<_TapScale> {
+  double _scale = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.9),
+      onTapUp: (_) => setState(() => _scale = 1),
+      onTapCancel: () => setState(() => _scale = 1),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
       ),
     );
   }
@@ -478,8 +717,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
 class _Header extends StatelessWidget {
   final VoidCallback onAdd;
+  final int goalCount;
 
-  const _Header({required this.onAdd});
+  const _Header({required this.onAdd, required this.goalCount});
 
   @override
   Widget build(BuildContext context) {
@@ -493,11 +733,11 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Surah Goals',
                   style: TextStyle(
                     color: Colors.white,
@@ -505,25 +745,29 @@ class _Header extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
-                  'Track your Surah recitation goals',
-                  style: TextStyle(color: Colors.white70),
+                  goalCount == 0
+                      ? 'Track your Surah recitation goals'
+                      : '$goalCount ${goalCount == 1 ? 'goal' : 'goals'} tracked',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
           ),
-
-          /// ADD BUTTON
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add, color: Colors.white),
-              tooltip: "Add Goal",
+          _TapScale(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onAdd();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white30),
+              ),
+              child: const Icon(Icons.add, color: Colors.white, size: 22),
             ),
           ),
         ],
@@ -543,10 +787,8 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
   int? _selectedSurah;
   final TextEditingController _targetController = TextEditingController();
   DateTime? _deadline;
-
   final TextEditingController _labelController = TextEditingController();
 
-  /// Simple Surah list
   final List<Map<String, dynamic>> _surahs = [
     {"number": 1, "name": "Al-Fatiha"},
     {"number": 2, "name": "Al-Baqarah"},
@@ -682,17 +924,11 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
 
   String _buildLabel() {
     if (_selectedSurah == null) return "";
-
     final surah = _surahs.firstWhere((s) => s["number"] == _selectedSurah);
-
-    if (_deadline == null) {
-      return surah["name"];
-    }
-
+    if (_deadline == null) return surah["name"];
     final d = _deadline!;
     final date =
         "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
     return "${surah["name"]} · $date";
   }
 
@@ -702,9 +938,8 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
         _labelController.text.trim().isEmpty) {
       return;
     }
-
     final surah = _surahs.firstWhere((s) => s["number"] == _selectedSurah);
-
+    HapticFeedback.selectionClick();
     Navigator.pop(context, {
       "surahNumber": surah["number"],
       "surahName": surah["name"],
@@ -728,75 +963,264 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     }
   }
 
+  bool get _canSubmit =>
+      _selectedSurah != null && _targetController.text.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Add Surah Goal"),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: SingleChildScrollView(
-          // Allow scrolling if the keyboard pops up
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Very important inside Dialogs
-            children: [
-              // Surah selector
-              InkWell(
-                onTap: _pickSurah,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: "Surah",
-                    border: OutlineInputBorder(),
-                  ),
-                  child: Text(
-                    _selectedSurah == null
-                        ? "Select Surah"
-                        : _surahs.firstWhere(
-                            (s) => s["number"] == _selectedSurah,
-                          )["name"],
-                  ),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryGreen, secondaryGreen],
                 ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
-              const SizedBox(height: 16),
-
-              // Target count
-              TextField(
-                controller: _targetController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Target count",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Deadline
-              Row(
+              child: Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      _deadline == null
-                          ? "No deadline"
-                          : "${_deadline!.year}-${_deadline!.month}-${_deadline!.day}",
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.flag_rounded,
+                      color: Colors.white,
+                      size: 20,
                     ),
                   ),
-                  TextButton(
-                    onPressed: _pickDeadline,
-                    child: const Text("Pick date"),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      "New Surah Goal",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _TapScale(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      _pickSurah();
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F6F8),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _selectedSurah != null
+                              ? primaryGreen.withOpacity(0.3)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.menu_book_rounded,
+                            color: primaryGreen,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedSurah == null
+                                  ? "Select Surah"
+                                  : _surahs.firstWhere(
+                                      (s) => s["number"] == _selectedSurah,
+                                    )["name"],
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: _selectedSurah == null
+                                    ? Colors.grey.shade500
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.grey.shade400,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _targetController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: "Target count",
+                      hintText: "e.g. 3",
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6F8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(Icons.repeat_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _TapScale(
+                    onTap: _pickDeadline,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F6F8),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            color: Colors.grey.shade600,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _deadline == null
+                                  ? "No deadline (optional)"
+                                  : "${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}",
+                              style: TextStyle(
+                                color: _deadline == null
+                                    ? Colors.grey.shade500
+                                    : Colors.black87,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            "Pick date",
+                            style: TextStyle(
+                              color: primaryGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_selectedSurah != null) ...[
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _labelController.text,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.grey.shade500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: _canSubmit ? 1 : 0.5,
+                      child: ElevatedButton(
+                        onPressed: _canSubmit ? _submit : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          "Add Goal",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          child: const Text("Cancel"),
-          onPressed: () => Navigator.pop(context),
-        ),
-        ElevatedButton(onPressed: _submit, child: const Text("Add Goal")),
-      ],
     );
   }
 }
@@ -819,48 +1243,133 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
         .where((s) => s["name"].toLowerCase().contains(_query.toLowerCase()))
         .toList();
 
-    return AlertDialog(
-      title: const Text("Select Surah"),
-      content: SizedBox(
-        // Use SizedBox instead of ConstrainedBox for more rigid constraints
-        width: double.maxFinite,
-        height:
-            MediaQuery.of(context).size.height *
-            0.5, // Explicit height is safer here
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              decoration: const InputDecoration(
-                hintText: "Search Surah...",
-                prefixIcon: Icon(Icons.search),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Select Surah",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              onChanged: (value) => setState(() => _query = value),
             ),
-            const SizedBox(height: 12),
-            Expanded(
-              // Expanded works perfectly inside a Column if the Column is in a SizedBox
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F6F8),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: TextField(
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: "Search Surah...",
+                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.45,
               child: filtered.isEmpty
-                  ? const Center(child: Text("No results found"))
-                  : ListView.builder(
-                      shrinkWrap: true, // Helps the list play nice with parents
+                  ? Center(
+                      child: Text(
+                        "No results found",
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       itemCount: filtered.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: Colors.grey.shade100),
                       itemBuilder: (context, index) {
                         final surah = filtered[index];
                         return ListTile(
-                          title: Text(surah['name']),
-                          trailing: Text(
-                            "${surah['number']}",
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontWeight: FontWeight.bold,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: primaryGreen.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              "${surah['number']}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: primaryGreen,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                          onTap: () => Navigator.pop(context, surah),
+                          title: Text(
+                            surah['name'],
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.grey.shade400,
+                          ),
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.pop(context, surah);
+                          },
                         );
                       },
                     ),
             ),
+            const SizedBox(height: 12),
           ],
         ),
       ),

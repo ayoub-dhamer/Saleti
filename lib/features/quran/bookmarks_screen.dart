@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
@@ -7,7 +9,7 @@ import 'package:saleti/utils/hold_to_delete_button.dart';
 class BookmarkItem {
   final int page;
   final String surah;
-  final String date; // now includes time
+  final String date;
 
   BookmarkItem({required this.page, required this.surah, required this.date});
 }
@@ -31,7 +33,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     _loadBookmarks();
   }
 
-  /// 🔹 Load bookmarks safely
   Future<void> _loadBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
@@ -53,7 +54,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     setState(() => _bookmarks = parsed);
   }
 
-  /// 🔹 Delete bookmark
   Future<void> _deleteBookmark(BookmarkItem b) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('mushaf_bookmarks') ?? [];
@@ -64,7 +64,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     _loadBookmarks();
   }
 
-  /// ⚠️ Confirm delete dialog
   Future<void> _confirmDelete(BookmarkItem b) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -140,7 +139,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     );
   }
 
-  /// 🌿 Header
   Widget _header() {
     return Container(
       width: double.infinity,
@@ -151,8 +149,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text(
+        children: [
+          const Text(
             'Your Saved Pages',
             style: TextStyle(
               color: Colors.white,
@@ -160,35 +158,47 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 6),
+          const SizedBox(height: 6),
           Text(
-            'Quick access to your favorite places in the Qur’an',
-            style: TextStyle(color: Colors.white70),
+            _bookmarks.isEmpty
+                ? 'Quick access to your favorite places in the Qur\'an'
+                : '${_bookmarks.length} saved ${_bookmarks.length == 1 ? 'page' : 'pages'}',
+            style: const TextStyle(color: Colors.white70),
           ),
         ],
       ),
     );
   }
 
-  /// 📭 Empty State
   Widget _emptyState() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.bookmark_outline, size: 90, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'No bookmarks yet',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: primaryGreen.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.bookmark_outline_rounded,
+                size: 64,
+                color: primaryGreen.withOpacity(0.5),
+              ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 24),
+            const Text(
+              'No bookmarks yet',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
             Text(
               'Start reading and save pages for quick access later.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
             ),
           ],
         ),
@@ -196,7 +206,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     );
   }
 
-  /// 📚 Bookmark List
   Widget _bookmarksList() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -204,84 +213,169 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       itemBuilder: (context, index) {
         final b = _bookmarks[index];
 
-        return InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MushafPageScreen(
-                  startPage: b.page,
-                  storageKey: 'last_jumped_page',
-                ),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                  color: Colors.black12,
-                ),
-              ],
+        return TweenAnimationBuilder<double>(
+          key: ValueKey('bookmark_${b.page}'),
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 280 + (index.clamp(0, 6) * 40)),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, child) => Opacity(
+            opacity: t,
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * 14),
+              child: child,
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.bookmark_rounded,
-                    color: Colors.green,
-                    size: 28,
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MushafPageScreen(
+                    startPage: b.page,
+                    storageKey: 'last_jumped_page',
                   ),
                 ),
-                const SizedBox(width: 16),
-
-                /// Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        b.surah,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          primaryGreen.withOpacity(0.15),
+                          secondaryGreen.withOpacity(0.15),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Page ${b.page} • ${b.date}',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.bookmark_rounded,
+                      color: primaryGreen,
+                      size: 26,
+                    ),
                   ),
-                ),
-
-                /// Delete
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () => _confirmDelete(b),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          b.surah,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'page ${b.page}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryGreen,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                DateFormat.yMMMMd().format(
+                                  DateTime.parse(b.date),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  _TapScale(
+                    onTap: () => _confirmDelete(b),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+/// Small reusable scale-on-tap wrapper.
+class _TapScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _TapScale({required this.child, required this.onTap});
+
+  @override
+  State<_TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<_TapScale> {
+  double _scale = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.9),
+      onTapUp: (_) => setState(() => _scale = 1),
+      onTapCancel: () => setState(() => _scale = 1),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
     );
   }
 }
