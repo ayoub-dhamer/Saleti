@@ -11,6 +11,7 @@ import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/special_day_helper.dart';
+import 'package:saleti/utils/theme_controller.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -1499,5 +1500,69 @@ class NotificationPermission {
     if (await Permission.notification.isDenied) {
       await Permission.notification.request();
     }
+  }
+}
+
+class ThemeModeSelector extends StatefulWidget {
+  const ThemeModeSelector({super.key});
+
+  @override
+  State<ThemeModeSelector> createState() => _ThemeModeSelectorState();
+}
+
+class _ThemeModeSelectorState extends State<ThemeModeSelector> {
+  final ThemeController _controller = ThemeController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: AppThemeMode.values.map((mode) {
+        final selected = _controller.mode == mode;
+        final label = switch (mode) {
+          AppThemeMode.light => 'Light',
+          AppThemeMode.dark => 'Dark',
+          AppThemeMode.system => 'Auto',
+        };
+        final icon = switch (mode) {
+          AppThemeMode.light => Icons.light_mode_rounded,
+          AppThemeMode.dark => Icons.dark_mode_rounded,
+          AppThemeMode.system => Icons.brightness_auto_rounded,
+        };
+
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => _controller.setMode(mode),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    icon,
+                    color: selected ? Colors.white : Colors.grey.shade500,
+                    size: 20,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? Colors.white : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 }

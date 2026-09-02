@@ -11,6 +11,8 @@ import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
+import 'package:saleti/utils/theme_controller.dart';
+import 'package:saleti/utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +38,8 @@ void main() async {
   await AndroidAlarmManager.initialize();
   await NotificationService.scheduleDailyRescheduler();
   await NotificationService.scheduleFridayReminder();
+
+  await ThemeController().load();
 
   // ------------------- Decide Entry -------------------
   final onboardingDone = await hasCompletedOnboarding();
@@ -67,26 +71,42 @@ Future<bool> _allCriticalPermissionsGranted() async {
   return locationGranted && notificationGranted && batteryOk && alarmOk;
 }
 
-class SaletiApp extends StatelessWidget {
+class SaletiApp extends StatefulWidget {
+  // CHANGED: was StatelessWidget
   final bool skipOnboarding;
 
   const SaletiApp({required this.skipOnboarding, super.key});
+
+  @override
+  State<SaletiApp> createState() => _SaletiAppState();
+}
+
+class _SaletiAppState extends State<SaletiApp> {
+  final ThemeController _themeController = ThemeController();
+
+  @override
+  void initState() {
+    super.initState();
+    _themeController.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    _themeController.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Saleti',
-      theme: ThemeData(
-        brightness: Brightness.light,
-        fontFamily: 'Amiri',
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      home: skipOnboarding
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: _themeController.flutterThemeMode,
+      home: widget.skipOnboarding
           ? const HomeScreen()
           : const PermissionOnboardingScreen(),
     );
