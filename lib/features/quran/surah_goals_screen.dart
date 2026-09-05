@@ -68,7 +68,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() => setState(() {}));
+
     _loadGoals();
   }
 
@@ -628,40 +628,50 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
           ),
         ],
       ),
-      child: Row(
-        children: List.generate(3, (i) {
-          final isSelected = _tabController.index == i;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                _tabController.animateTo(i);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: isSelected
-                      ? const LinearGradient(
-                          colors: [primaryGreen, secondaryGreen],
-                        )
-                      : null,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    '${labels[i]} (${counts[i]})',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.grey.shade500,
+      child: AnimatedBuilder(
+        animation: _tabController.animation!,
+        builder: (context, _) {
+          final animValue = _tabController.animation!.value; // continuous 0..2
+          return Row(
+            children: List.generate(3, (i) {
+              // how "selected" this tab is, smoothly, based on distance from animValue
+              final selection = (1 - (animValue - i).abs()).clamp(0.0, 1.0);
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _tabController.animateTo(i);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        Colors.transparent,
+                        primaryGreen,
+                        selection,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${labels[i]} (${counts[i]})',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color.lerp(
+                            Colors.grey.shade500,
+                            Colors.white,
+                            selection,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           );
-        }),
+        },
       ),
     );
   }

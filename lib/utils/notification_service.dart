@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'package:adhan/adhan.dart';
 import 'package:flutter/material.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:saleti/utils/special_day_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'daily_rescheduler.dart';
 
@@ -57,6 +59,9 @@ class NotificationService {
   static const String _eidOffsetKey = 'eid_offset_minutes';
   static int eidOffsetMinutes = 20;
 
+  static const int eidNotificationId = 7777;
+  static const int eidAlarmId = 7001;
+
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {
       'reminder': true,
@@ -86,6 +91,37 @@ class NotificationService {
   };
 
   static const MethodChannel _platform = MethodChannel('azan_service');
+
+  static Future<void> scheduleEidReminderIfApplicable({
+    required PrayerTimes? todaysPrayerTimes,
+  }) async {
+    final eidName = SpecialDayHelper.eidNameFor(DateTime.now());
+    if (eidName == null || todaysPrayerTimes == null) {
+      return; // not Eid today, or no location available yet
+    }
+
+    final estimatedTime = SpecialDayHelper.estimatedEidTime(
+      todaysPrayerTimes,
+      offsetMinutes: eidOffsetMinutes,
+    );
+
+    // Don't schedule for a time that's already passed today
+    if (estimatedTime.isBefore(DateTime.now())) return;
+
+    await AndroidAlarmManager.oneShotAt(
+      estimatedTime,
+      eidAlarmId,
+      eidReminderCallback,
+      exact: true,
+      wakeup: true,
+      params: {'eidName': eidName},
+    );
+  }
+
+  static Future<void> cancelEidReminder() async {
+    await AndroidAlarmManager.cancel(eidAlarmId);
+    await _notifications.cancel(eidNotificationId);
+  }
 
   // ----------------------------------------------------------
   // INIT
@@ -242,6 +278,8 @@ class NotificationService {
     required String prayer,
     required int minutes,
   }) async {
+    final displayName = SpecialDayHelper.prettyPrayerName(prayer, time); // ADD
+
     await AndroidAlarmManager.oneShotAt(
       time,
       id,
@@ -250,7 +288,7 @@ class NotificationService {
       wakeup: true,
       params: {
         'title': 'Prayer Reminder',
-        'body': '$prayer in $minutes minutes',
+        'body': '$displayName in $minutes minutes',
         'playAzan': false,
       },
     );
@@ -400,4 +438,33 @@ void _handleFridayNotificationResponse(NotificationResponse response) async {
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
   _handleFridayNotificationResponse(response);
+}
+
+@pragma('vm:entry-point')
+Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  final notifications = FlutterLocalNotificationsPlugin();
+
+  await notifications.initialize(
+    const InitializationSettings(android: androidInit),
+  );
+
+  final eidName = params['eidName'] as String? ?? 'Eid';
+
+  await notifications.show(
+    NotificationService.eidNotificationId,
+    '$eidName Mubarak!',
+    "It's time for Eid prayer — estimated based on today's sunrise. Confirm the exact time with your local mosque.",
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'friday_reminder_channel', // reuse the existing high-importance channel
+        'Friday Reminder',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+      ),
+    ),
+  );
 }

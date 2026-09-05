@@ -39,6 +39,13 @@ void main() async {
   await NotificationService.scheduleDailyRescheduler();
   await NotificationService.scheduleFridayReminder();
 
+  // ADD: catch the case where the app is opened already on Eid day
+  if (PrayerCache().hasLocation) {
+    await NotificationService.scheduleEidReminderIfApplicable(
+      todaysPrayerTimes: PrayerCache().calculatePrayerTimes(),
+    );
+  }
+
   await ThemeController().load();
 
   // ------------------- Decide Entry -------------------

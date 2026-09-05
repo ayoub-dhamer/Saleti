@@ -11,6 +11,13 @@ class SpecialDayHelper {
     return null;
   }
 
+  static String prettyPrayerName(String prayerKey, DateTime date) {
+    if (prayerKey == 'dhuhr' && isJumuah(date)) {
+      return "Jumu'ah";
+    }
+    return prayerKey[0].toUpperCase() + prayerKey.substring(1);
+  }
+
   /// A rough, non-authoritative estimate of Eid prayer time —
   /// sunrise + offset minutes. Communities vary widely (commonly
   /// 15-30 min after sunrise), so this is a guide only.

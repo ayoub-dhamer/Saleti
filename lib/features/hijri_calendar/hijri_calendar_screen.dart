@@ -20,7 +20,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   @override
   void initState() {
     super.initState();
-
     _selectedHijri = HijriCalendar.fromDate(_focusedDay);
   }
 
@@ -68,9 +67,12 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme
+          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -87,7 +89,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         ),
         title: const Text(
           'Hijri Calendar',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
       body: Stack(
@@ -96,8 +98,8 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             children: [
               _bigHeader(),
               _infoCard(),
-              _calendarSection(),
-              _legend(),
+              _calendarSection(theme),
+              _legend(theme),
             ],
           ),
           if (!_isViewingCurrentMonth) _jumpToTodayChip(),
@@ -106,7 +108,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // 🟢 BIG HEADER
+  // 🟢 BIG HEADER — unchanged, sits on the brand gradient regardless of theme
   Widget _bigHeader() {
     final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
 
@@ -118,7 +120,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: const Column(
-        // CHANGED: was a Row with the icon + this Column
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -139,10 +140,10 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // 💜 Info Card
+  // 💜 Info Card — deliberately unchanged, this purple card is a brand accent
+  // color independent of theme, same treatment as the green gradient header.
   Widget _infoCard() {
     final holiday = _selectedDay != null ? _holidayName(_selectedDay!) : null;
-    // REMOVED: final isToday = ...
 
     return Container(
       transform: Matrix4.translationValues(0, -26, 0),
@@ -178,7 +179,6 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // REMOVED: the `if (isToday) Container(...'TODAY' badge...)` block
                 Text(
                   "${_selectedHijri.hDay} ${_selectedHijri.longMonthName} ${_selectedHijri.hYear} AH",
                   textAlign: TextAlign.center,
@@ -230,21 +230,24 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   // 📅 Calendar
-  Widget _calendarSection() {
+  Widget _calendarSection(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final bodyTextColor = theme.textTheme.bodyLarge?.color ?? Colors.black87;
+
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.cardColor, // CHANGED: was hardcoded Colors.white
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                 blurRadius: 14,
                 offset: const Offset(0, 6),
-              ),
+              ), // CHANGED
             ],
           ),
           child: TableCalendar(
@@ -267,11 +270,22 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               setState(() => _focusedDay = focusedDay);
             },
 
+            // ADD: TableCalendar's own defaultTextStyle otherwise defaults to
+            // black text, which would be invisible on a dark card.
+            calendarStyle: CalendarStyle(
+              defaultTextStyle: TextStyle(color: bodyTextColor),
+              weekendTextStyle: TextStyle(color: bodyTextColor),
+              outsideTextStyle: TextStyle(
+                color: bodyTextColor.withOpacity(0.3),
+              ),
+            ),
+
             daysOfWeekStyle: DaysOfWeekStyle(
-              weekdayStyle: const TextStyle(
+              weekdayStyle: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-              ),
+                color: bodyTextColor.withOpacity(0.8),
+              ), // CHANGED
               weekendStyle: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
@@ -282,21 +296,34 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             headerStyle: HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
-              titleTextStyle: const TextStyle(
+              titleTextStyle: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-              ),
-              leftChevronIcon: const Icon(Icons.chevron_left_rounded),
-              rightChevronIcon: const Icon(Icons.chevron_right_rounded),
+                color: bodyTextColor,
+              ), // CHANGED
+              leftChevronIcon: Icon(
+                Icons.chevron_left_rounded,
+                color: bodyTextColor.withOpacity(0.7),
+              ), // CHANGED
+              rightChevronIcon: Icon(
+                Icons.chevron_right_rounded,
+                color: bodyTextColor.withOpacity(0.7),
+              ), // CHANGED
               decoration: BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                  bottom: BorderSide(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : Colors.grey.shade100,
+                    width: 1,
+                  ), // CHANGED
                 ),
               ),
             ),
 
             calendarBuilders: CalendarBuilders(
-              defaultBuilder: _dayTile,
+              defaultBuilder: (context, day, _) =>
+                  _dayTile(context, day, isDark, bodyTextColor),
               todayBuilder: _todayTile,
               selectedBuilder: _selectedTile,
             ),
@@ -306,7 +333,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  // 🟢 Floating "Jump to Today" chip
+  // 🟢 Floating "Jump to Today" chip — unchanged, brand-colored regardless of theme
   Widget _jumpToTodayChip() {
     return Positioned(
       bottom: 90,
@@ -359,25 +386,28 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   // 🟦 Legend
-  Widget _legend() {
+  Widget _legend(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _legendPill(Colors.lightBlue, "Selected"),
-          _legendPill(Colors.lightGreen.shade400, "Holiday"),
-          _legendPill(Colors.deepPurpleAccent, "Today"),
+          _legendPill(Colors.lightBlue, "Selected", theme),
+          _legendPill(Colors.lightGreen.shade400, "Holiday", theme),
+          _legendPill(Colors.deepPurpleAccent, "Today", theme),
         ],
       ),
     );
   }
 
-  Widget _legendPill(Color color, String label) {
+  Widget _legendPill(Color color, String label, ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withOpacity(
+          isDark ? 0.2 : 0.12,
+        ), // CHANGED: slightly stronger tint for visibility on dark backgrounds
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -394,8 +424,13 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
+              // CHANGED: lightened text variant for holiday label in dark mode,
+              // since Colors.green.shade700 is a dark green that would be low
+              // contrast against a dark card background.
               color: color == Colors.lightGreen.shade400
-                  ? Colors.green.shade700
+                  ? (isDark
+                        ? Colors.lightGreen.shade300
+                        : Colors.green.shade700)
                   : color,
             ),
           ),
@@ -404,7 +439,12 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  Widget _dayTile(context, day, _) {
+  Widget _dayTile(
+    BuildContext context,
+    DateTime day,
+    bool isDark,
+    Color bodyTextColor,
+  ) {
     final hijri = HijriCalendar.fromDate(day);
     final holiday = _isHoliday(day);
 
@@ -413,14 +453,19 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: holiday
-            ? Colors.lightGreen.withOpacity(0.15)
+            ? Colors.lightGreen.withOpacity(isDark ? 0.22 : 0.15) // CHANGED
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         border: holiday
             ? Border.all(color: Colors.lightGreen.shade300, width: 1.2)
             : null,
       ),
-      child: _dayContent(day, hijri, showHolidayDot: holiday),
+      child: _dayContent(
+        day,
+        hijri,
+        textColor: bodyTextColor,
+        showHolidayDot: holiday,
+      ), // CHANGED: was implicit default black
     );
   }
 
@@ -471,7 +516,8 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   Widget _dayContent(
     DateTime day,
     HijriCalendar hijri, {
-    Color textColor = Colors.black,
+    Color textColor = Colors
+        .black, // CHANGED: default fallback stays black87-ish, but callers now always pass an explicit theme-aware color
     bool showHolidayDot = false,
   }) {
     return Center(
@@ -484,21 +530,16 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: textColor,
-              fontSize: 14, // CHANGED: was 15
+              fontSize: 14,
             ),
           ),
           Text(
             "${hijri.hDay}",
-            style: TextStyle(
-              fontSize: 10,
-              color: textColor.withOpacity(0.75),
-            ), // CHANGED: was 11, removed SizedBox(height: 2) before this
+            style: TextStyle(fontSize: 10, color: textColor.withOpacity(0.75)),
           ),
           if (showHolidayDot)
             Container(
-              margin: const EdgeInsets.only(
-                top: 1,
-              ), // CHANGED: was a separate SizedBox(height: 2) + this container
+              margin: const EdgeInsets.only(top: 1),
               width: 4,
               height: 4,
               decoration: const BoxDecoration(

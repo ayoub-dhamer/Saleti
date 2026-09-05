@@ -26,13 +26,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
   bool _wasAligned = false;
   bool _showCalibrationHint = false;
 
-  static const String _calibrationHintKey =
-      'qibla_calibration_hint_dismissed'; // ADD
+  static const String _calibrationHintKey = 'qibla_calibration_hint_dismissed';
 
   StreamSubscription<CompassEvent>? _compassSub;
 
-  final PrayerCache _cache =
-      PrayerCache(); // ADD — reuse the app-wide singleton cache
+  final PrayerCache _cache = PrayerCache();
 
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
@@ -40,17 +38,15 @@ class _QiblaScreenState extends State<QiblaScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCalibrationHintState(); // ADD
+    _loadCalibrationHintState();
     _loadFromCacheOrRequest();
     if (widget.isActive) _startCompass();
   }
 
-  // ADD: mirrors PrayerTimesScreen's cache-first pattern
   Future<void> _loadFromCacheOrRequest() async {
     await _cache.load();
 
     if (_cache.hasLocation) {
-      // Instant — no GPS wait at all
       final qibla = calculateQiblaDirection(_cache.lat!, _cache.lng!);
       if (mounted) {
         setState(() {
@@ -59,7 +55,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
         });
       }
     } else {
-      // No cache yet — fall back to the original permission/GPS flow
       await _checkPermissionAndLoad();
     }
   }
@@ -100,7 +95,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   Future<void> _loadCalibrationHintState() async {
-    // ADD
     final prefs = await SharedPreferences.getInstance();
     final dismissed = prefs.getBool(_calibrationHintKey) ?? false;
     if (mounted) {
@@ -109,7 +103,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   Future<void> _dismissCalibrationHint() async {
-    // ADD
     setState(() => _showCalibrationHint = false);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_calibrationHintKey, true);
@@ -173,17 +166,25 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   Future<void> _showLocationDialog() async {
+    final theme = Theme.of(context);
     final allow = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          title: const Text('Enable Location'),
-          content: const Text(
+          title: Text(
+            'Enable Location',
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+          ),
+          content: Text(
             'We need your location to calculate the Qibla direction accurately.',
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+            ),
           ),
           actions: [
             TextButton(
@@ -193,7 +194,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Enable'),
+              child: const Text(
+                'Enable',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -245,7 +249,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
       final pos = await Geolocator.getCurrentPosition();
       final qibla = calculateQiblaDirection(pos.latitude, pos.longitude);
 
-      // ADD: save to cache so next time (and PrayerTimesScreen too) benefits
       await _cache.save(
         lat: pos.latitude,
         lng: pos.longitude,
@@ -268,9 +271,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
   // ---------------- LOADING / ERROR STATES ----------------
 
-  Widget _loadingView() {
+  Widget _loadingView(ThemeData theme) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -295,9 +298,12 @@ class _QiblaScreenState extends State<QiblaScreen> {
             const SizedBox(height: 20),
             const CircularProgressIndicator(color: primaryGreen),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Finding the Qibla…',
-              style: TextStyle(color: Colors.black45, fontSize: 13),
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                fontSize: 13,
+              ), // CHANGED
             ),
           ],
         ),
@@ -312,8 +318,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
     required VoidCallback onRetry,
     String retryText = 'Try Again',
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -331,14 +340,14 @@ class _QiblaScreenState extends State<QiblaScreen> {
             child: Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor, // CHANGED
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.05),
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
-                  ),
+                  ), // CHANGED
                 ],
               ),
               child: Column(
@@ -355,16 +364,22 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   const SizedBox(height: 18),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                    ),
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // CHANGED
                   ),
                   const SizedBox(height: 10),
                   Text(
                     message,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black54, height: 1.4),
+                    style: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.7,
+                      ),
+                      height: 1.4,
+                    ), // CHANGED
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -378,7 +393,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: Text(retryText),
+                      child: Text(
+                        retryText,
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ],
@@ -392,8 +410,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_loading) {
-      return _loadingView();
+      return _loadingView(theme);
     }
 
     if (_errorMessage != null) {
@@ -420,7 +441,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
     _wasAligned = isAligned;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -436,22 +457,24 @@ class _QiblaScreenState extends State<QiblaScreen> {
         ),
         title: const Text(
           'Qibla Direction',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
       body: Column(
         children: [
           _header(),
-          if (_showCalibrationHint) _calibrationHint(),
+          if (_showCalibrationHint) _calibrationHint(isDark),
           Expanded(
-            child: Center(child: _compass(angle, difference, isAligned)),
+            child: Center(
+              child: _compass(angle, difference, isAligned, theme, isDark),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// 🌿 Header
+  /// 🌿 Header — unchanged, brand gradient regardless of theme
   Widget _header() {
     return Container(
       width: double.infinity,
@@ -461,7 +484,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Row(
-        // CHANGED: was a plain Column
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Expanded(
@@ -485,7 +507,6 @@ class _QiblaScreenState extends State<QiblaScreen> {
             ),
           ),
           GestureDetector(
-            // ADD
             onTap: _refreshLocation,
             child: Container(
               padding: const EdgeInsets.all(10),
@@ -507,7 +528,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   /// 🧭 Calibration hint banner
-  Widget _calibrationHint() {
+  Widget _calibrationHint(bool isDark) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 300),
@@ -516,7 +537,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
         margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.amber.withOpacity(0.12),
+          color: Colors.amber.withOpacity(isDark ? 0.18 : 0.12), // CHANGED
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.amber.withOpacity(0.3)),
         ),
@@ -524,17 +545,26 @@ class _QiblaScreenState extends State<QiblaScreen> {
           children: [
             const Icon(Icons.info_outline, color: Colors.amber, size: 18),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
                 'If the reading seems off, move your phone in a figure-8 to calibrate the compass.',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.85)
+                      : Colors.black87,
+                ), // CHANGED
               ),
             ),
             GestureDetector(
-              onTap: _dismissCalibrationHint, // CHANGED: was inline setState
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.close, size: 16, color: Colors.black45),
+              onTap: _dismissCalibrationHint,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: isDark ? Colors.white38 : Colors.black45,
+                ), // CHANGED
               ),
             ),
           ],
@@ -544,7 +574,13 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   /// 🧭 Compass Widget
-  Widget _compass(double angle, int difference, bool aligned) {
+  Widget _compass(
+    double angle,
+    int difference,
+    bool aligned,
+    ThemeData theme,
+    bool isDark,
+  ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -562,7 +598,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   BoxShadow(
                     color: aligned
                         ? Colors.green.withOpacity(0.25)
-                        : Colors.black.withOpacity(0.05),
+                        : Colors.black.withOpacity(
+                            isDark ? 0.15 : 0.05,
+                          ), // CHANGED
                     blurRadius: aligned ? 40 : 30,
                     spreadRadius: aligned ? 8 : 5,
                   ),
@@ -576,18 +614,22 @@ class _QiblaScreenState extends State<QiblaScreen> {
               width: 280,
               height: 280,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor, // CHANGED: was Colors.white
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: aligned ? Colors.green.shade400 : Colors.grey.shade200,
+                  color: aligned
+                      ? Colors.green.shade400
+                      : (isDark
+                            ? Colors.white24
+                            : Colors.grey.shade200), // CHANGED
                   width: aligned ? 2.5 : 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
-                  ),
+                  ), // CHANGED
                 ],
               ),
               child: Stack(
@@ -603,7 +645,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
                             ? (aligned
                                   ? Colors.green.shade400
                                   : Colors.green.shade300)
-                            : Colors.grey.shade300,
+                            : (isDark
+                                  ? Colors.white24
+                                  : Colors.grey.shade300), // CHANGED
                         thickness: isMajor ? 3 : 1,
                         indent: 0,
                         endIndent: 260,
@@ -622,26 +666,35 @@ class _QiblaScreenState extends State<QiblaScreen> {
                       ),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     bottom: 15,
                     child: Text(
                       'S',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ), // CHANGED
                   ),
-                  const Positioned(
+                  Positioned(
                     right: 15,
                     child: Text(
                       'E',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ), // CHANGED
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 15,
                     child: Text(
                       'W',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ), // CHANGED
                   ),
                 ],
               ),
@@ -668,7 +721,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
                             child: Icon(
                               Icons.mosque,
                               size: 34,
-                              color: aligned ? Colors.green : Colors.black87,
+                              color: aligned
+                                  ? Colors.green
+                                  : theme.textTheme.bodyLarge?.color, // CHANGED
                             ),
                           ),
                           Container(
@@ -679,7 +734,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  aligned ? Colors.green : Colors.black87,
+                                  aligned
+                                      ? Colors.green
+                                      : (theme.textTheme.bodyLarge?.color ??
+                                            Colors.black87), // CHANGED
                                   Colors.transparent,
                                 ],
                               ),
@@ -699,18 +757,22 @@ class _QiblaScreenState extends State<QiblaScreen> {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor, // CHANGED: was Colors.white
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: aligned ? Colors.green.shade300 : Colors.grey.shade300,
+                  color: aligned
+                      ? Colors.green.shade300
+                      : (isDark
+                            ? Colors.white24
+                            : Colors.grey.shade300), // CHANGED
                   width: 2,
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
                     blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
+                    offset: const Offset(0, 2),
+                  ), // CHANGED
                 ],
               ),
               child: Center(
@@ -719,7 +781,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   width: aligned ? 10 : 8,
                   height: aligned ? 10 : 8,
                   decoration: BoxDecoration(
-                    color: aligned ? Colors.green : Colors.black,
+                    color: aligned
+                        ? Colors.green
+                        : (theme.textTheme.bodyLarge?.color ??
+                              Colors.black), // CHANGED
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -731,14 +796,16 @@ class _QiblaScreenState extends State<QiblaScreen> {
         const SizedBox(height: 40),
 
         /// 🎯 Digital readout card
-        _buildStatusCard(difference, aligned),
+        _buildStatusCard(difference, aligned, theme, isDark),
 
         const SizedBox(height: 16),
 
-        const Text(
+        Text(
           'Ensure phone is on a flat surface',
           style: TextStyle(
-            color: Colors.black38,
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(
+              0.3,
+            ), // CHANGED
             fontSize: 12,
             letterSpacing: 0.5,
           ),
@@ -747,7 +814,12 @@ class _QiblaScreenState extends State<QiblaScreen> {
     );
   }
 
-  Widget _buildStatusCard(int difference, bool aligned) {
+  Widget _buildStatusCard(
+    int difference,
+    bool aligned,
+    ThemeData theme,
+    bool isDark,
+  ) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
@@ -755,13 +827,13 @@ class _QiblaScreenState extends State<QiblaScreen> {
         gradient: aligned
             ? const LinearGradient(colors: [primaryGreen, secondaryGreen])
             : null,
-        color: aligned ? null : Colors.white,
+        color: aligned ? null : theme.cardColor, // CHANGED: was Colors.white
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: aligned
                 ? Colors.green.withOpacity(0.35)
-                : Colors.black.withOpacity(0.05),
+                : Colors.black.withOpacity(isDark ? 0.3 : 0.05), // CHANGED
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -785,7 +857,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
             Text(
               aligned ? 'Facing Qibla' : '$difference° Off Track',
               style: TextStyle(
-                color: aligned ? Colors.white : Colors.black87,
+                color: aligned
+                    ? Colors.white
+                    : theme.textTheme.bodyLarge?.color, // CHANGED
                 fontWeight: FontWeight.w800,
                 fontSize: 16,
               ),

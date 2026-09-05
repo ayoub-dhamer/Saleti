@@ -380,6 +380,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: color,
+                decoration: TextDecoration.none,
               ),
             ),
           ],
@@ -411,11 +412,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                       'Swipe to flip pages',
                       style: TextStyle(color: Colors.white70),
                     ),
-                    if (widget.readingMode == ReadingMode.khatm) ...[
-                      // ADD
-                      const SizedBox(height: 8),
-                      _buildKhatmPaceIndicator(),
-                    ],
                   ],
                 ),
               ),
@@ -582,6 +578,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ],
             ),
           ),
+
+          // ADD: Khatm pace indicator, floating over the header — doesn't affect header height
+          if (!_isLectureMode && widget.readingMode == ReadingMode.khatm)
+            Positioned(
+              top: 120,
+              right:
+                  30, // sits left of the bookmark/page-badge cluster, clear of the fullscreen icon
+              child: SafeArea(bottom: false, child: _buildKhatmPaceIndicator()),
+            ),
 
           // Exit button in lecture mode
           if (_isLectureMode)

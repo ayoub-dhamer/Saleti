@@ -7,6 +7,7 @@ Future<void> dailyRescheduleCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await NotificationService.loadSettings();
+  await NotificationService.loadEidOffset(); // ADD — needed for the offset value
 
   final cache = PrayerCache();
   await cache.load();
@@ -16,6 +17,9 @@ Future<void> dailyRescheduleCallback() async {
   final prayerTimes = cache.calculatePrayerTimes();
 
   await NotificationService.cancelPrayerAlarms();
+  await NotificationService.scheduleEidReminderIfApplicable(
+    todaysPrayerTimes: prayerTimes,
+  ); // ADD
 
   final map = {
     'fajr': prayerTimes.fajr,
