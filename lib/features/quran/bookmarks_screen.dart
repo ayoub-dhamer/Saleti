@@ -65,20 +65,32 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _confirmDelete(BookmarkItem b) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: theme.cardColor, // ADD
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text('Delete Bookmark?'),
+          title: Text(
+            'Delete Bookmark?',
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color), // ADD
+          ),
 
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Remove page ${b.page} from your bookmarks?'),
+              Text(
+                'Remove page ${b.page} from your bookmarks?',
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ), // ADD
+              ),
               const SizedBox(height: 8),
               const Text(
                 "Hold to delete",
@@ -108,8 +120,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme
+          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -125,14 +141,19 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         ),
         title: const Text(
           'Bookmarks',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ), // ADD: explicit white on the green gradient
         ),
       ),
       body: Column(
         children: [
           _header(),
           Expanded(
-            child: _bookmarks.isEmpty ? _emptyState() : _bookmarksList(),
+            child: _bookmarks.isEmpty
+                ? _emptyState(theme)
+                : _bookmarksList(theme, isDark),
           ),
         ],
       ),
@@ -170,7 +191,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(ThemeData theme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -190,15 +211,22 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'No bookmarks yet',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color,
+              ), // CHANGED
             ),
             const SizedBox(height: 8),
             Text(
               'Start reading and save pages for quick access later.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                fontSize: 13,
+              ), // CHANGED
             ),
           ],
         ),
@@ -206,7 +234,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     );
   }
 
-  Widget _bookmarksList() {
+  Widget _bookmarksList(ThemeData theme, bool isDark) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _bookmarks.length,
@@ -243,11 +271,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor, // CHANGED: was hardcoded Colors.white
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withOpacity(
+                      isDark ? 0.3 : 0.04,
+                    ), // CHANGED
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
@@ -280,9 +310,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       children: [
                         Text(
                           b.surah,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: theme.textTheme.bodyLarge?.color, // CHANGED
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -294,7 +325,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: primaryGreen.withOpacity(0.1),
+                                color: primaryGreen.withOpacity(
+                                  isDark ? 0.18 : 0.1,
+                                ), // CHANGED
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -315,7 +348,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.grey.shade500,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.5), // CHANGED
                                   fontSize: 12,
                                 ),
                               ),

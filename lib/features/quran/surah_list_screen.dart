@@ -26,6 +26,9 @@ class _SurahListScreenState extends State<SurahListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final surahs = List.generate(114, (i) => i + 1)
         .where(
           (s) =>
@@ -35,7 +38,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme
+          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -51,15 +55,17 @@ class _SurahListScreenState extends State<SurahListScreen> {
         ),
         title: const Text(
           'Surahs',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
       body: Column(
         children: [
           _header(surahs.length),
-          _searchBox(),
+          _searchBox(theme, isDark),
           Expanded(
-            child: surahs.isEmpty ? _emptyState() : _surahListView(surahs),
+            child: surahs.isEmpty
+                ? _emptyState(theme)
+                : _surahListView(surahs, theme, isDark),
           ),
         ],
       ),
@@ -97,34 +103,43 @@ class _SurahListScreenState extends State<SurahListScreen> {
     );
   }
 
-  Widget _searchBox() {
+  Widget _searchBox(ThemeData theme, bool isDark) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor, // CHANGED: was hardcoded Colors.white
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          ),
+          ), // CHANGED
         ],
       ),
       child: Row(
         children: [
-          Icon(Icons.search, color: Colors.grey.shade400),
+          Icon(
+            Icons.search,
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
+          ), // CHANGED
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: (v) => setState(() => _query = v),
-              decoration: const InputDecoration(
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+              ), // ADD: input text color
+              decoration: InputDecoration(
                 hintText: 'Search Surah...',
+                hintStyle: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
+                ), // ADD
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
@@ -138,10 +153,16 @@ class _SurahListScreenState extends State<SurahListScreen> {
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.grey.shade100, // CHANGED
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.close, size: 16, color: Colors.grey.shade600),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                ), // CHANGED
               ),
             ),
         ],
@@ -149,7 +170,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(ThemeData theme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -169,14 +190,21 @@ class _SurahListScreenState extends State<SurahListScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No matching surahs',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color,
+              ), // CHANGED
             ),
             const SizedBox(height: 6),
             Text(
               'Try a different name or spelling.',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                fontSize: 12.5,
+              ), // CHANGED
             ),
           ],
         ),
@@ -184,7 +212,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
     );
   }
 
-  Widget _surahListView(List<int> surahs) {
+  Widget _surahListView(List<int> surahs, ThemeData theme, bool isDark) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
       itemCount: surahs.length,
@@ -215,6 +243,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
             startPage: startPage,
             pages: pagesCount,
             ayat: ayahCount,
+            theme: theme,
+            isDark: isDark,
           ),
         );
       },
@@ -226,6 +256,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
     required int startPage,
     required int pages,
     required int ayat,
+    required ThemeData theme,
+    required bool isDark,
   }) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -248,13 +280,13 @@ class _SurahListScreenState extends State<SurahListScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.white,
+          color: theme.cardColor, // CHANGED: was hardcoded Colors.white
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
-            ),
+            ), // CHANGED
           ],
         ),
         child: Row(
@@ -268,25 +300,31 @@ class _SurahListScreenState extends State<SurahListScreen> {
                   Text(
                     getSurahNameArabic(surah),
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                    ),
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // CHANGED
                   ),
                   const SizedBox(height: 4),
                   Text(
                     getSurahName(surah),
                     style: TextStyle(
-                      color: Colors.grey.shade600,
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.55,
+                      ), // CHANGED
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      _miniBadge('$ayat Ayat'),
+                      _miniBadge('$ayat Ayat', isDark),
                       const SizedBox(width: 6),
-                      _miniBadge('$pages ${pages == 1 ? 'Page' : 'Pages'}'),
+                      _miniBadge(
+                        '$pages ${pages == 1 ? 'Page' : 'Pages'}',
+                        isDark,
+                      ),
                     ],
                   ),
                 ],
@@ -325,18 +363,20 @@ class _SurahListScreenState extends State<SurahListScreen> {
     );
   }
 
-  Widget _miniBadge(String text) {
+  Widget _miniBadge(String text, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F8),
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : const Color(0xFFF4F6F8), // CHANGED
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 10.5,
-          color: Colors.grey.shade600,
+          color: isDark ? Colors.white70 : Colors.grey.shade600, // CHANGED
           fontWeight: FontWeight.w600,
         ),
       ),

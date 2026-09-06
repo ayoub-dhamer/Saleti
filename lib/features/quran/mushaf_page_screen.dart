@@ -15,10 +15,8 @@ class MushafPageScreen extends StatefulWidget {
   final int? endPage;
   final ReadingMode readingMode;
   final SurahGoal? surahGoal;
-  final String
-  storageKey; // e.g. 'last_read_general', 'last_jumped_page', 'last_read_khatm'
-  final bool
-  useLastReadPosition; // only true screens should resume from saved position
+  final String storageKey;
+  final bool useLastReadPosition;
 
   const MushafPageScreen({
     super.key,
@@ -41,8 +39,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   bool _isLectureMode = false;
 
   bool _isLastPage = false;
-  bool _isPageSettled =
-      true; // ADD: true only when the PageView is at rest, not mid-swipe
+  bool _isPageSettled = true;
 
   KhatmYear? _khatmYear;
 
@@ -54,8 +51,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       return 1;
     }
     if (widget.readingMode == ReadingMode.khatm) {
-      // ADD
-      return _sessionStartPage; // the resume point becomes the structural floor
+      return _sessionStartPage;
     }
     return widget.startPage;
   }
@@ -81,21 +77,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     _loadBookmarks();
     _initPageController();
     if (widget.readingMode == ReadingMode.khatm) {
-      _loadKhatmYear(); // ADD
+      _loadKhatmYear();
     }
   }
 
   Future<void> _loadKhatmYear() async {
-    // ADD
     final year = await KhatmService().getActiveYear();
     if (mounted) setState(() => _khatmYear = year);
   }
 
-  /// Live pages-ahead/behind indicator for Khatm mode, recalculated
-  /// instantly as the user flips pages (no async call per swipe).
-  /// Positive = ahead, negative = behind, null = no active plan or unknown.
   int? get _khatmPaceDiff {
-    // ADD
     final year = _khatmYear;
     if (year == null) return null;
 
@@ -108,8 +99,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       0,
       604 * year.targetCompletions,
     );
-    // Live "actual pages" = committed progress from prior sessions
-    // + however far into the CURRENT session we've read so far.
     final pagesReadThisSession = _calculatePagesRead(
       _sessionStartPage,
       _currentPage,
@@ -126,7 +115,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     if (widget.readingMode != ReadingMode.goal) {
       final int initialPage;
 
-      // Resume from saved position for Khatm mode, or when explicitly requested
       if (widget.readingMode == ReadingMode.khatm ||
           widget.useLastReadPosition) {
         initialPage = await _loadLastPage();
@@ -135,13 +123,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       }
 
       _currentPage = initialPage;
-      _sessionStartPage =
-          initialPage; // must be set BEFORE computing initialIndex,
-      _sessionEndPage =
-          initialPage; // since _firstPage now reads _sessionStartPage
+      _sessionStartPage = initialPage;
+      _sessionEndPage = initialPage;
 
-      final initialIndex =
-          initialPage - _firstPage; // CHANGED: was `initialPage - 1`
+      final initialIndex = initialPage - _firstPage;
 
       _pageController = PageController(initialPage: initialIndex);
 
@@ -156,12 +141,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _currentPage = _firstPage + initialIndex;
     }
 
-    _pageController!.addListener(_handleScrollSettleCheck); // ADD
+    _pageController!.addListener(_handleScrollSettleCheck);
 
     setState(() {});
   }
 
-  // ADD: fires on every scroll frame, including mid-drag
   void _handleScrollSettleCheck() {
     final controller = _pageController;
     if (controller == null || !controller.hasClients) return;
@@ -169,8 +153,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final rawPage = controller.page;
     if (rawPage == null) return;
 
-    // A page is "settled" only when it's essentially a whole number —
-    // i.e. not actively being dragged/animated between two pages.
     final settled = (rawPage - rawPage.roundToDouble()).abs() < 0.001;
 
     if (settled != _isPageSettled) {
@@ -182,10 +164,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   void dispose() {
     WakelockPlus.disable();
     if (_isLectureMode) {
-      // Restore system UI in case the user backs out while still in lecture mode
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
-    _pageController?.removeListener(_handleScrollSettleCheck); // ADD
+    _pageController?.removeListener(_handleScrollSettleCheck);
     _pageController?.dispose();
     super.dispose();
   }
@@ -308,7 +289,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final totalPagesTarget = 604 * active.targetCompletions;
     final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
-    // Use the page this session actually started from, not a stale/dead field
     return (actualPages + (604 - _sessionStartPage + 1)) >= totalPagesTarget;
   }
 
@@ -323,8 +303,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       centerTitle: true,
       backgroundColor: Colors.transparent,
       title: const Text(
-        'Al-Qur’an',
-        style: TextStyle(fontWeight: FontWeight.bold),
+        'Al-Qur\'an',
+        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
       ),
       flexibleSpace: Container(
         decoration: const BoxDecoration(
@@ -339,21 +319,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   Widget _buildKhatmPaceIndicator() {
-    // ADD
     final diff = _khatmPaceDiff;
     if (diff == null) return const SizedBox.shrink();
 
     final bool isAhead = diff > 0;
     final bool isBehind = diff < 0;
 
-    // Chosen for strong contrast against the green/teal header gradient —
-    // avoid green tones entirely (they'd blend into the background) and
-    // avoid pale/translucent fills (they'd wash out).
-    final Color color = isBehind
-        ? Colors.red.shade600
-        : Colors
-              .indigo
-              .shade600; // on track: cool blue-violet, distinct from bg
+    final Color color = isBehind ? Colors.red.shade600 : Colors.indigo.shade600;
 
     final String label = isAhead
         ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
@@ -370,7 +342,18 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Container(
         key: ValueKey('$isAhead-$isBehind-$diff'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(
+          color: Colors
+              .white, // ADD: solid backdrop so the colored text stays legible regardless of theme/background behind it
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -402,7 +385,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         children: [
           Row(
             children: [
-              /// 📖 Page Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,8 +397,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                   ],
                 ),
               ),
-
-              /// 🔍 Lecture Mode Toggle (the ONLY trigger for lecture mode)
               IconButton(
                 onPressed: () => _toggleLectureMode(true),
                 icon: const Icon(
@@ -426,10 +406,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 ),
                 tooltip: 'Full Screen',
               ),
-
               const SizedBox(width: 8),
-
-              /// 📄 Page Badge — animated on change
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 transitionBuilder: (child, anim) => FadeTransition(
@@ -457,10 +434,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(width: 12),
-
-              /// 🔖 Bookmark Button — bounce + haptic on toggle
               GestureDetector(
                 onTap: () {
                   HapticFeedback.selectionClick();
@@ -510,7 +484,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
         ],
       ),
@@ -519,9 +492,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     if (_pageController == null) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: theme
+            .scaffoldBackgroundColor, // CHANGED: was hardcoded Colors.white
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -553,11 +529,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Stack(
         children: [
           Scaffold(
-            backgroundColor: _isLectureMode ? Colors.black : Colors.white,
+            // CHANGED: lecture mode stays black (intentional immersive backdrop);
+            // normal mode now follows theme instead of hardcoded white, since the
+            // page image no longer has side padding and this mostly shows at
+            // the very top/bottom edges (e.g. behind the animated header).
+            backgroundColor: _isLectureMode
+                ? Colors.black
+                : theme.scaffoldBackgroundColor,
             appBar: _isLectureMode ? null : _buildAppBar(),
             body: Column(
               children: [
-                // Animated header show/hide
                 AnimatedSize(
                   duration: const Duration(milliseconds: 280),
                   curve: Curves.easeOutCubic,
@@ -571,7 +552,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 ),
                 Expanded(
                   child: Container(
-                    color: _isLectureMode ? Colors.black : Colors.white,
+                    color: _isLectureMode
+                        ? Colors.black
+                        : theme.scaffoldBackgroundColor, // CHANGED
                     child: _buildReadingArea(),
                   ),
                 ),
@@ -579,16 +562,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             ),
           ),
 
-          // ADD: Khatm pace indicator, floating over the header — doesn't affect header height
           if (!_isLectureMode && widget.readingMode == ReadingMode.khatm)
             Positioned(
               top: 120,
-              right:
-                  30, // sits left of the bookmark/page-badge cluster, clear of the fullscreen icon
+              right: 30,
               child: SafeArea(bottom: false, child: _buildKhatmPaceIndicator()),
             ),
 
-          // Exit button in lecture mode
           if (_isLectureMode)
             Positioned(
               top: 8,
@@ -615,7 +595,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             ),
 
-          // Go to First Page button (last page in Khatm mode)
           if (_isLastPage &&
               _isPageSettled &&
               widget.readingMode == ReadingMode.khatm)
@@ -630,9 +609,19 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (_) => AlertDialog(
-                        title: const Text('Finish Cycle?'),
-                        content: const Text(
+                        backgroundColor: theme.cardColor, // CHANGED
+                        title: Text(
+                          'Finish Cycle?',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                        ), // CHANGED
+                        content: Text(
                           'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
+                          ), // CHANGED
                         ),
                         actions: [
                           TextButton(
@@ -640,8 +629,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                             child: const Text('Cancel'),
                           ),
                           ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                            ),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Yes'),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(color: Colors.white),
+                            ),
                           ),
                         ],
                       ),
@@ -690,41 +685,25 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    _isLectureMode ? 0 : 0,
-                    _isLectureMode ? 0 : 0,
-                    _isLectureMode ? 0 : 0,
+                    0,
+                    0,
+                    0,
                     _isLectureMode ? 0 : 64,
                   ),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
-
                     child: ClipRRect(
                       borderRadius: BorderRadius.zero,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
+                          // NOTE: intentionally untouched — scanned mushaf pages
+                          // are printed white/black; not inverted for dark mode,
+                          // consistent with how virtually every Quran app handles this.
                           Image.asset(
                             'assets/mushaf/$pageNumber.png',
                             fit: _isLectureMode ? BoxFit.fill : BoxFit.cover,
                           ),
-                          if (!_isLectureMode)
-                            IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.transparent,
-                                      Colors.transparent,
-                                      Colors.transparent,
-                                    ],
-                                    stops: const [0, 0.06, 0.94, 1],
-                                  ),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -742,13 +721,24 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                       child: _AnimatedActionButton(
                         label: 'Count Recitation',
                         onTap: () async {
+                          final theme = Theme.of(context);
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
-                              title: const Text('Mark Surah Completed?'),
+                              backgroundColor: theme.cardColor, // CHANGED
+                              title: Text(
+                                'Mark Surah Completed?',
+                                style: TextStyle(
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ), // CHANGED
                               content: Text(
                                 'You reached the end of ${widget.surahGoal!.surahName}. '
                                 'Do you want to count this recitation toward your goal?',
+                                style: TextStyle(
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.7),
+                                ), // CHANGED
                               ),
                               actions: [
                                 TextButton(
@@ -757,8 +747,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                                   child: const Text('Cancel'),
                                 ),
                                 ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryGreen,
+                                  ),
                                   onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Yes'),
+                                  child: const Text(
+                                    'Yes',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
                                 ),
                               ],
                             ),
@@ -779,7 +775,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           },
         ),
 
-        // Fixed footer — animated show/hide
         Positioned(
           left: 0,
           right: 0,
@@ -822,7 +817,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       ),
       child: Row(
         children: [
-          /// ▶️ LEFT — Next surah
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
@@ -853,8 +847,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     ),
             ),
           ),
-
-          /// 🔢 CENTER — Page number
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -871,8 +863,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ),
             ),
           ),
-
-          /// ◀️ RIGHT — Progress Bar Logic
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
@@ -1085,8 +1075,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 }
 
-/// Shared animated pill-button used for the "Restart Cycle" / "Count Recitation" actions.
-/// Styled to match the app's green gradient identity, with a slide-up entrance.
 class _AnimatedActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;

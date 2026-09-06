@@ -68,7 +68,6 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-
     _loadGoals();
   }
 
@@ -86,21 +85,27 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   }
 
   Future<void> _confirmDelete(SurahGoal goal) async {
+    final theme = Theme.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: theme.cardColor, // CHANGED
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-
-          title: const Text("Delete Goal?"),
-
+          title: Text(
+            "Delete Goal?",
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+          ), // CHANGED
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 "Are you sure you want to delete the goal for ${goal.surahName}?",
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ), // CHANGED
               ),
               const SizedBox(height: 8),
               const Text(
@@ -109,9 +114,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
               ),
             ],
           ),
-
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -158,7 +161,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     await _loadGoals();
   }
 
-  Widget _goalCard(SurahGoal goal, int index) {
+  Widget _goalCard(SurahGoal goal, int index, ThemeData theme, bool isDark) {
     final progress = goal.progress;
 
     String? buildDeadlineIndicator(SurahGoal goal) {
@@ -200,20 +203,22 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
         ),
       ),
       child: _card(
+        theme: theme,
+        isDark: isDark,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// HEADER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
                     goal.surahName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                    ),
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // CHANGED
                   ),
                 ),
                 if (goal.isExpired)
@@ -269,15 +274,20 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
             Row(
               children: [
-                Expanded(child: _statChip('Target', '${goal.targetCount}×')),
+                Expanded(
+                  child: _statChip('Target', '${goal.targetCount}×', isDark),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _statChip('Done', '${goal.completedCount}×')),
+                Expanded(
+                  child: _statChip('Done', '${goal.completedCount}×', isDark),
+                ),
                 if (goal.deadline != null) ...[
                   const SizedBox(width: 8),
                   Expanded(
                     child: _statChip(
                       'Deadline',
                       DateFormat('MMM d y').format(goal.deadline!),
+                      isDark,
                     ),
                   ),
                 ],
@@ -292,25 +302,31 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey.withOpacity(0.08),
+                  color: Colors.blueGrey.withOpacity(
+                    isDark ? 0.18 : 0.08,
+                  ), // CHANGED
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.schedule_rounded,
                       size: 14,
-                      color: Colors.blueGrey,
-                    ),
+                      color: isDark
+                          ? Colors.blueGrey.shade200
+                          : Colors.blueGrey,
+                    ), // CHANGED
                     const SizedBox(width: 6),
                     Text(
                       deadlineIndicator,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Colors.blueGrey,
-                      ),
+                        color: isDark
+                            ? Colors.blueGrey.shade200
+                            : Colors.blueGrey,
+                      ), // CHANGED
                     ),
                   ],
                 ),
@@ -319,13 +335,14 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
             const SizedBox(height: 16),
 
-            /// PROGRESS BAR
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: progress),
               duration: const Duration(milliseconds: 800),
               curve: Curves.easeOutCubic,
               builder: (context, value, child) {
-                final textColor = value < 0.3 ? Colors.black87 : Colors.white;
+                final textColor = value < 0.3
+                    ? (isDark ? Colors.white : Colors.black87)
+                    : Colors.white; // CHANGED
                 return Stack(
                   alignment: Alignment.center,
                   children: [
@@ -333,7 +350,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       height: 16,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.grey.shade200,
+                        color: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.grey.shade200, // CHANGED
                       ),
                     ),
                     ClipRRect(
@@ -366,7 +385,6 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
             const SizedBox(height: 16),
 
-            /// ACTIONS
             Row(
               children: [
                 Expanded(
@@ -376,7 +394,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryGreen,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey.shade200,
+                      disabledBackgroundColor: isDark
+                          ? Colors.white12
+                          : Colors.grey.shade200, // CHANGED
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -416,12 +436,22 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
+                              backgroundColor: theme.cardColor, // CHANGED
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              title: const Text('Confirm Recitation'),
-                              content: const Text(
+                              title: Text(
+                                'Confirm Recitation',
+                                style: TextStyle(
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ), // CHANGED
+                              content: Text(
                                 'Did you finish reciting this surah?',
+                                style: TextStyle(
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.7),
+                                ), // CHANGED
                               ),
                               actions: [
                                 TextButton(
@@ -434,7 +464,10 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                                     backgroundColor: primaryGreen,
                                   ),
                                   onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Yes'),
+                                  child: const Text(
+                                    'Yes',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
                                 ),
                               ],
                             ),
@@ -449,15 +482,17 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: (goal.isCompleted || goal.isExpired)
-                          ? Colors.grey.shade100
+                          ? (isDark
+                                ? Colors.white.withOpacity(0.06)
+                                : Colors.grey.shade100) // CHANGED
                           : primaryGreen.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.add,
                       color: (goal.isCompleted || goal.isExpired)
-                          ? Colors.grey.shade400
-                          : primaryGreen,
+                          ? (isDark ? Colors.white38 : Colors.grey.shade400)
+                          : primaryGreen, // CHANGED
                     ),
                   ),
                 ),
@@ -469,11 +504,13 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     );
   }
 
-  Widget _statChip(String label, String value) {
+  Widget _statChip(String label, String value, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F8),
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : const Color(0xFFF4F6F8), // CHANGED
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -483,23 +520,32 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
             label,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.white54 : Colors.grey.shade500,
               fontWeight: FontWeight.w600,
             ),
-          ),
+          ), // CHANGED
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ), // CHANGED
         ],
       ),
     );
   }
 
-  Widget _goalsList(List<SurahGoal> goals, {required int tabIndex}) {
+  Widget _goalsList(
+    List<SurahGoal> goals, {
+    required int tabIndex,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
     if (goals.isEmpty) {
-      return _emptyState(tabIndex);
+      return _emptyState(tabIndex, theme);
     }
 
     return ListView.builder(
@@ -507,12 +553,12 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       itemCount: goals.length,
       itemBuilder: (_, i) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: _goalCard(goals[i], i),
+        child: _goalCard(goals[i], i, theme, isDark),
       ),
     );
   }
 
-  Widget _emptyState(int tabIndex) {
+  Widget _emptyState(int tabIndex, ThemeData theme) {
     final config = switch (tabIndex) {
       0 => (
         Icons.flag_outlined,
@@ -552,13 +598,20 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
             const SizedBox(height: 18),
             Text(
               config.$2,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ), // CHANGED
             const SizedBox(height: 6),
             Text(
               config.$3,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                fontSize: 12.5,
+              ), // CHANGED
             ),
           ],
         ),
@@ -568,14 +621,17 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
         title: const Text(
           'Surah Goals',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -590,14 +646,29 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       body: Column(
         children: [
           _Header(onAdd: _addGoal, goalCount: _goals.length),
-          _tabBar(),
+          _tabBar(theme, isDark),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _goalsList(_activeGoals, tabIndex: 0),
-                _goalsList(_completedGoals, tabIndex: 1),
-                _goalsList(_expiredGoals, tabIndex: 2),
+                _goalsList(
+                  _activeGoals,
+                  tabIndex: 0,
+                  theme: theme,
+                  isDark: isDark,
+                ),
+                _goalsList(
+                  _completedGoals,
+                  tabIndex: 1,
+                  theme: theme,
+                  isDark: isDark,
+                ),
+                _goalsList(
+                  _expiredGoals,
+                  tabIndex: 2,
+                  theme: theme,
+                  isDark: isDark,
+                ),
               ],
             ),
           ),
@@ -606,7 +677,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     );
   }
 
-  Widget _tabBar() {
+  Widget _tabBar(ThemeData theme, bool isDark) {
     final labels = ['Active', 'Completed', 'Expired'];
     final counts = [
       _activeGoals.length,
@@ -618,23 +689,22 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor, // CHANGED
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          ),
+          ), // CHANGED
         ],
       ),
       child: AnimatedBuilder(
         animation: _tabController.animation!,
         builder: (context, _) {
-          final animValue = _tabController.animation!.value; // continuous 0..2
+          final animValue = _tabController.animation!.value;
           return Row(
             children: List.generate(3, (i) {
-              // how "selected" this tab is, smoothly, based on distance from animValue
               final selection = (1 - (animValue - i).abs()).clamp(0.0, 1.0);
               return Expanded(
                 child: GestureDetector(
@@ -659,7 +729,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
                           color: Color.lerp(
-                            Colors.grey.shade500,
+                            isDark
+                                ? Colors.white54
+                                : Colors.grey.shade500, // CHANGED
                             Colors.white,
                             selection,
                           ),
@@ -676,18 +748,22 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
     );
   }
 
-  Widget _card({required Widget child}) {
+  Widget _card({
+    required Widget child,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor, // CHANGED
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
             blurRadius: 10,
-            offset: Offset(0, 4),
-            color: Colors.black12,
-          ),
+            offset: const Offset(0, 4),
+          ), // CHANGED
         ],
       ),
       child: child,
@@ -695,7 +771,6 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   }
 }
 
-/// Small reusable scale-on-tap wrapper.
 class _TapScale extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -978,20 +1053,23 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor, // CHANGED
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
-            ),
+            ), // CHANGED
           ],
         ),
         child: Column(
@@ -1062,7 +1140,9 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF4F6F8),
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : const Color(0xFFF4F6F8), // CHANGED
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: _selectedSurah != null
@@ -1088,15 +1168,22 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: _selectedSurah == null
-                                    ? Colors.grey.shade500
-                                    : Colors.black87,
+                                    ? (isDark
+                                          ? Colors.white38
+                                          : Colors.grey.shade500) // CHANGED
+                                    : theme
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color, // CHANGED
                               ),
                             ),
                           ),
                           Icon(
                             Icons.chevron_right_rounded,
-                            color: Colors.grey.shade400,
-                          ),
+                            color: isDark
+                                ? Colors.white24
+                                : Colors.grey.shade400,
+                          ), // CHANGED
                         ],
                       ),
                     ),
@@ -1106,11 +1193,16 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                     controller: _targetController,
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // ADD
                     decoration: InputDecoration(
                       labelText: "Target count",
                       hintText: "e.g. 3",
                       filled: true,
-                      fillColor: const Color(0xFFF4F6F8),
+                      fillColor: isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : const Color(0xFFF4F6F8), // CHANGED
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
@@ -1125,16 +1217,20 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF4F6F8),
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : const Color(0xFFF4F6F8), // CHANGED
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         children: [
                           Icon(
                             Icons.calendar_today_rounded,
-                            color: Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.white60
+                                : Colors.grey.shade600,
                             size: 18,
-                          ),
+                          ), // CHANGED
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -1143,8 +1239,13 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                                   : "${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}",
                               style: TextStyle(
                                 color: _deadline == null
-                                    ? Colors.grey.shade500
-                                    : Colors.black87,
+                                    ? (isDark
+                                          ? Colors.white38
+                                          : Colors.grey.shade500) // CHANGED
+                                    : theme
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color, // CHANGED
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1169,9 +1270,11 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                         _labelController.text,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: Colors.grey.shade500,
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.5,
+                          ),
                           fontStyle: FontStyle.italic,
-                        ),
+                        ), // CHANGED
                       ),
                     ),
                   ],
@@ -1187,7 +1290,9 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.grey.shade300),
+                        side: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        ), // CHANGED
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -1195,10 +1300,12 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       child: Text(
                         "Cancel",
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.7,
+                          ),
                           fontWeight: FontWeight.w600,
                         ),
-                      ),
+                      ), // CHANGED
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1211,7 +1318,9 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                         onPressed: _canSubmit ? _submit : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryGreen,
-                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledBackgroundColor: isDark
+                              ? Colors.white12
+                              : Colors.grey.shade300, // CHANGED
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -1220,7 +1329,10 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                         ),
                         child: const Text(
                           "Add Goal",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -1249,6 +1361,9 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final filtered = widget.surahs
         .where((s) => s["name"].toLowerCase().contains(_query.toLowerCase()))
         .toList();
@@ -1259,14 +1374,14 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor, // CHANGED
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
-            ),
+            ), // CHANGED
           ],
         ),
         child: Column(
@@ -1276,28 +1391,33 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       "Select Surah",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
                       ),
-                    ),
+                    ), // CHANGED
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
+                        color: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.grey.shade100,
                         shape: BoxShape.circle,
-                      ),
+                      ), // CHANGED
                       child: Icon(
                         Icons.close,
                         size: 18,
-                        color: Colors.grey.shade600,
-                      ),
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.6,
+                        ),
+                      ), // CHANGED
                     ),
                   ),
                 ],
@@ -1307,14 +1427,29 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F6F8),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.06)
+                      : const Color(0xFFF4F6F8), // CHANGED
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: TextField(
                   autofocus: true,
+                  style: TextStyle(
+                    color: theme.textTheme.bodyLarge?.color,
+                  ), // ADD
                   decoration: InputDecoration(
                     hintText: "Search Surah...",
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                    hintStyle: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.4,
+                      ),
+                    ), // ADD
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.4,
+                      ),
+                    ), // CHANGED
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -1329,8 +1464,12 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                   ? Center(
                       child: Text(
                         "No results found",
-                        style: TextStyle(color: Colors.grey.shade500),
-                      ),
+                        style: TextStyle(
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.5,
+                          ),
+                        ),
+                      ), // CHANGED
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(
@@ -1338,8 +1477,12 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                         vertical: 8,
                       ),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) =>
-                          Divider(height: 1, color: Colors.grey.shade100),
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.grey.shade100,
+                      ), // CHANGED
                       itemBuilder: (context, index) {
                         final surah = filtered[index];
                         return ListTile(
@@ -1365,12 +1508,17 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                           ),
                           title: Text(
                             surah['name'],
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ), // CHANGED
                           trailing: Icon(
                             Icons.chevron_right_rounded,
-                            color: Colors.grey.shade400,
-                          ),
+                            color: isDark
+                                ? Colors.white24
+                                : Colors.grey.shade400,
+                          ), // CHANGED
                           onTap: () {
                             HapticFeedback.selectionClick();
                             Navigator.pop(context, surah);

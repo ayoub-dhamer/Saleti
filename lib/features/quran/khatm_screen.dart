@@ -7,17 +7,9 @@ import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
 part 'khatm_screen.g.dart';
 
-/// =======================
-/// ENUMS
-/// =======================
-
 enum KhatmStatus { ahead, onTrack, behind }
 
 enum ReadingMode { free, khatm, pointer, goal }
-
-/// =======================
-/// MODELS
-/// =======================
 
 @HiveType(typeId: 20)
 class KhatmYear extends HiveObject {
@@ -83,10 +75,6 @@ class DailyKhatmLog extends HiveObject {
   });
 }
 
-/// =======================
-/// SCREEN
-/// =======================
-
 const Color primaryGreen = Color(0xFF1FA45B);
 const Color secondaryGreen = Color(0xFF4FC3A1);
 
@@ -124,22 +112,28 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   Future<void> _confirmDeleteYear(int year) async {
+    final theme = Theme.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: theme.cardColor, // CHANGED
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-
-          title: const Text('Delete Record'),
-
+          title: Text(
+            'Delete Record',
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+          ), // CHANGED
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Are you sure you want to delete the khatm record for $year?\n\n'
                 'This will permanently delete the plan and all reading logs for that year.',
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ), // CHANGED
               ),
               const SizedBox(height: 8),
               const Text(
@@ -148,9 +142,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
               ),
             ],
           ),
-
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -173,6 +165,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final active = _activeYear;
     if (active == null) return;
 
+    final theme = Theme.of(context);
     final totalCycles = active.targetCompletions;
     final currentCycles = active.completedCycles;
     final isLastCycle = currentCycles + 1 >= totalCycles;
@@ -180,12 +173,19 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
+        backgroundColor: theme.cardColor, // CHANGED
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Confirm Cycle Completion'),
+        title: Text(
+          'Confirm Cycle Completion',
+          style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+        ), // CHANGED
         content: Text(
           isLastCycle
               ? 'This will finish the FINAL cycle and complete the year. Continue?'
               : 'This will move you to the next cycle while keeping your current page. Continue?',
+          style: TextStyle(
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+          ), // CHANGED
         ),
         actions: [
           TextButton(
@@ -195,7 +195,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -228,14 +228,17 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
         title: const Text(
           'Qur\'an Khatm',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -254,9 +257,11 @@ class _KhatmScreenState extends State<KhatmScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _activeYear != null ? _activeYearCard() : _noPlanCard(),
+                _activeYear != null
+                    ? _activeYearCard(theme, isDark)
+                    : _noPlanCard(theme, isDark),
                 const SizedBox(height: 20),
-                _historySection(),
+                _historySection(theme, isDark),
               ],
             ),
           ),
@@ -265,7 +270,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  Widget _activeYearCard() {
+  Widget _activeYearCard(ThemeData theme, bool isDark) {
     if (_activeYear == null) return const SizedBox();
 
     final totalTargetPages = _activeYear!.targetCompletions * cyclePages;
@@ -299,12 +304,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
           case KhatmStatus.ahead:
             statusColor = primaryGreen;
             statusLabel = 'Ahead by $diff pages';
-
             break;
           case KhatmStatus.behind:
             statusColor = Colors.red.shade600;
             statusLabel = 'Behind by ${diff.abs()} pages';
-
             break;
           case KhatmStatus.onTrack:
             statusColor = Colors.indigo.shade600;
@@ -322,6 +325,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
         final isFinished = pagesReadInYear >= totalTargetPages;
 
         return _card(
+          theme: theme,
+          isDark: isDark,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -350,17 +355,19 @@ class _KhatmScreenState extends State<KhatmScreen> {
                         children: [
                           Text(
                             '${_activeYear!.year}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                            ),
+                              color: theme.textTheme.bodyLarge?.color,
+                            ), // CHANGED
                           ),
                           Text(
                             '${_activeYear!.targetCompletions}× target · ${_activeYear!.pagesPerDay} pages/day',
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: Colors.grey.shade500,
-                            ),
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.5),
+                            ), // CHANGED
                           ),
                         ],
                       ),
@@ -386,7 +393,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
               const SizedBox(height: 16),
 
-              // Status pill
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
                 transitionBuilder: (child, anim) => FadeTransition(
@@ -432,9 +438,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                   'Catch-up pace: $catchUpPagesPerDay pages/day',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade500,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
                     fontWeight: FontWeight.w600,
-                  ),
+                  ), // CHANGED
                 ),
               ],
 
@@ -446,15 +452,15 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     child: _statChip(
                       'Cycles',
                       '${_activeYear!.completedCycles}/${_activeYear!.targetCompletions}',
+                      isDark,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _statChip(
                       'Started',
-                      DateFormat(
-                        'MMM d',
-                      ).format(_activeYear!.startDate), // Output: "Jan 15"
+                      DateFormat('MMM d').format(_activeYear!.startDate),
+                      isDark,
                     ),
                   ),
                 ],
@@ -472,16 +478,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
                           'Current Cycle',
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: Colors.grey.shade500,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.5),
                             fontWeight: FontWeight.w600,
                           ),
-                        ),
+                        ), // CHANGED
                         const SizedBox(height: 6),
                         _buildProgressBar(
                           currentCycleProgress,
                           statusColor,
                           pagesInCurrentCycle.toInt(),
                           cyclePages,
+                          isDark,
                         ),
                       ],
                     ),
@@ -495,16 +503,18 @@ class _KhatmScreenState extends State<KhatmScreen> {
                           'Year Progress',
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: Colors.grey.shade500,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.5),
                             fontWeight: FontWeight.w600,
                           ),
-                        ),
+                        ), // CHANGED
                         const SizedBox(height: 6),
                         _buildProgressBar(
                           yearProgress,
                           statusColor,
                           pagesReadInYear,
                           totalTargetPages,
+                          isDark,
                         ),
                       ],
                     ),
@@ -528,7 +538,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryGreen,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade200,
+                        disabledBackgroundColor: isDark
+                            ? Colors.white12
+                            : Colors.grey.shade200, // CHANGED
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -559,11 +571,13 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  Widget _statChip(String label, String value) {
+  Widget _statChip(String label, String value, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F8),
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : const Color(0xFFF4F6F8), // CHANGED
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -573,15 +587,19 @@ class _KhatmScreenState extends State<KhatmScreen> {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.white54 : Colors.grey.shade500,
               fontWeight: FontWeight.w600,
             ),
-          ),
+          ), // CHANGED
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ), // CHANGED
         ],
       ),
     );
@@ -592,6 +610,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
     Color color,
     int pages,
     int totalPages,
+    bool isDark,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,7 +620,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
           duration: const Duration(milliseconds: 700),
           curve: Curves.easeOutCubic,
           builder: (context, value, _) {
-            final textColor = value < 0.3 ? Colors.black87 : Colors.white;
+            final textColor = value < 0.3
+                ? (isDark ? Colors.white : Colors.black87)
+                : Colors.white; // CHANGED
             return Stack(
               alignment: Alignment.center,
               children: [
@@ -609,7 +630,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                   height: 16,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey.shade200,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : Colors.grey.shade200, // CHANGED
                   ),
                 ),
                 ClipRRect(
@@ -636,13 +659,17 @@ class _KhatmScreenState extends State<KhatmScreen> {
         const SizedBox(height: 4),
         Text(
           '$pages / $totalPages pages',
-          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+            color: isDark ? Colors.white70 : Colors.black87,
+          ), // CHANGED
         ),
       ],
     );
   }
 
-  Widget _noPlanCard() {
+  Widget _noPlanCard(ThemeData theme, bool isDark) {
     final now = DateTime.now().year;
 
     final hasCurrentYearPlan =
@@ -661,6 +688,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final canCreatePlan = !hasCurrentYearPlan || currentYearFinished;
 
     return _card(
+      theme: theme,
+      isDark: isDark,
       child: Column(
         children: [
           Container(
@@ -676,17 +705,24 @@ class _KhatmScreenState extends State<KhatmScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No active Khatm plan',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.bodyLarge?.color,
+            ),
+          ), // CHANGED
           const SizedBox(height: 8),
           Text(
             canCreatePlan
                 ? 'Create a yearly plan to track your Qur\'an reading.'
                 : 'You already have a Khatm record for $now. Finish or delete it to start a new one.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+              fontSize: 12.5,
+            ), // CHANGED
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -702,7 +738,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryGreen,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade200,
+                  disabledBackgroundColor: isDark
+                      ? Colors.white12
+                      : Colors.grey.shade200, // CHANGED
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -717,7 +755,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
     );
   }
 
-  Widget _historySection() {
+  Widget _historySection(ThemeData theme, bool isDark) {
     if (_history.isEmpty) {
       return Center(
         child: Padding(
@@ -727,13 +765,16 @@ class _KhatmScreenState extends State<KhatmScreen> {
               Icon(
                 Icons.history_rounded,
                 size: 36,
-                color: Colors.grey.shade300,
-              ),
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.2),
+              ), // CHANGED
               const SizedBox(height: 8),
               Text(
                 'No previous years yet',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-              ),
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                  fontSize: 13,
+                ),
+              ), // CHANGED
             ],
           ),
         ),
@@ -743,12 +784,16 @@ class _KhatmScreenState extends State<KhatmScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 12),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
             'History',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.bodyLarge?.color,
+            ),
+          ), // CHANGED
         ),
         ..._history.asMap().entries.map((entry) {
           final index = entry.key;
@@ -785,6 +830,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
                 });
               },
               child: _card(
+                theme: theme,
+                isDark: isDark,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -800,7 +847,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                               decoration: BoxDecoration(
                                 color: completed
                                     ? primaryGreen.withOpacity(0.1)
-                                    : Colors.grey.shade100,
+                                    : (isDark
+                                          ? Colors.white.withOpacity(0.06)
+                                          : Colors.grey.shade100), // CHANGED
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
@@ -810,17 +859,20 @@ class _KhatmScreenState extends State<KhatmScreen> {
                                 size: 18,
                                 color: completed
                                     ? primaryGreen
-                                    : Colors.grey.shade400,
+                                    : (isDark
+                                          ? Colors.white38
+                                          : Colors.grey.shade400), // CHANGED
                               ),
                             ),
                             const SizedBox(width: 12),
                             Text(
                               y.year.toString(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                                color: theme.textTheme.bodyLarge?.color,
                               ),
-                            ),
+                            ), // CHANGED
                           ],
                         ),
                         Row(
@@ -830,8 +882,9 @@ class _KhatmScreenState extends State<KhatmScreen> {
                               duration: const Duration(milliseconds: 200),
                               child: Icon(
                                 Icons.expand_more,
-                                color: Colors.grey.shade400,
-                              ),
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.4),
+                              ), // CHANGED
                             ),
                             const SizedBox(width: 4),
                             _TapScale(
@@ -865,40 +918,51 @@ class _KhatmScreenState extends State<KhatmScreen> {
                                   _row(
                                     'Target Khatms',
                                     y.targetCompletions.toString(),
+                                    theme,
                                   ),
-                                  _row('Pages / Day', y.pagesPerDay.toString()),
+                                  _row(
+                                    'Pages / Day',
+                                    y.pagesPerDay.toString(),
+                                    theme,
+                                  ),
                                   _row(
                                     'Completed Cycles',
                                     y.completedCycles.toString(),
+                                    theme,
                                   ),
                                   _row(
                                     'Pages Read',
                                     y.pagesReadTotal.toString(),
+                                    theme,
                                   ),
                                   _row(
                                     'Start Date',
                                     '${y.startDate.year}-${y.startDate.month}-${y.startDate.day}',
+                                    theme,
                                   ),
                                   if (y.endDate != null)
                                     _row(
                                       'End Date',
                                       '${y.endDate!.year}-${y.endDate!.month}-${y.endDate!.day}',
+                                      theme,
                                     ),
                                   const SizedBox(height: 14),
                                   Text(
                                     'Year Progress',
                                     style: TextStyle(
                                       fontSize: 11.5,
-                                      color: Colors.grey.shade500,
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.5),
                                       fontWeight: FontWeight.w600,
                                     ),
-                                  ),
+                                  ), // CHANGED
                                   const SizedBox(height: 6),
                                   _buildProgressBar(
                                     yearProgress,
                                     Colors.indigo.shade600,
                                     pagesReadInYear,
                                     totalTargetPages,
+                                    isDark,
                                   ),
                                 ],
                               ),
@@ -933,6 +997,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
   Future<void> _configurePlan() async {
     final activeYear = _activeYear;
+    final theme = Theme.of(context);
 
     if (activeYear != null) {
       final totalPages = activeYear.targetCompletions * 604;
@@ -943,18 +1008,25 @@ class _KhatmScreenState extends State<KhatmScreen> {
         await showDialog(
           context: context,
           builder: (_) => AlertDialog(
+            backgroundColor: theme.cardColor, // CHANGED
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
             ),
-            title: const Text("Active Plan Exists"),
+            title: Text(
+              "Active Plan Exists",
+              style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+            ), // CHANGED
             content: Text(
               "You already have an active Khatm plan for ${activeYear.year}. You must complete this plan before starting a new one.",
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+              ), // CHANGED
             ),
             actions: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
                 onPressed: () => Navigator.pop(context),
-                child: const Text("OK"),
+                child: const Text("OK", style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -999,26 +1071,30 @@ class _KhatmScreenState extends State<KhatmScreen> {
     }
   }
 
-  Widget _card({required Widget child}) {
+  Widget _card({
+    required Widget child,
+    required ThemeData theme,
+    required bool isDark,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor, // CHANGED
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
-          ),
+          ), // CHANGED
         ],
       ),
       child: child,
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(String label, String value, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -1026,12 +1102,19 @@ class _KhatmScreenState extends State<KhatmScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-          ),
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+              fontSize: 13,
+            ),
+          ), // CHANGED
           Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-          ),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: theme.textTheme.bodyLarge?.color,
+            ),
+          ), // CHANGED
         ],
       ),
     );
@@ -1100,20 +1183,23 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor, // CHANGED
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
-            ),
+            ), // CHANGED
           ],
         ),
         child: Column(
@@ -1179,11 +1265,16 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                     controller: _controller,
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // ADD
                     decoration: InputDecoration(
                       labelText: 'Completions per year',
                       hintText: 'e.g. 1, 2, 3...',
                       filled: true,
-                      fillColor: const Color(0xFFF4F6F8),
+                      fillColor: isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : const Color(0xFFF4F6F8), // CHANGED
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
@@ -1197,15 +1288,17 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: Colors.grey.shade700,
-                    ),
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.7,
+                      ),
+                    ), // CHANGED
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(child: _optionTile('January 1st', true)),
+                      Expanded(child: _optionTile('January 1st', true, isDark)),
                       const SizedBox(width: 10),
-                      Expanded(child: _optionTile('Today', false)),
+                      Expanded(child: _optionTile('Today', false, isDark)),
                     ],
                   ),
                 ],
@@ -1220,7 +1313,9 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.grey.shade300),
+                        side: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        ), // CHANGED
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -1228,10 +1323,12 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                       child: Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.7,
+                          ),
                           fontWeight: FontWeight.w600,
                         ),
-                      ),
+                      ), // CHANGED
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1249,7 +1346,9 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                             : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryGreen,
-                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledBackgroundColor: isDark
+                              ? Colors.white12
+                              : Colors.grey.shade300, // CHANGED
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -1258,7 +1357,10 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                         ),
                         child: const Text(
                           'Save',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -1272,7 +1374,7 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
     );
   }
 
-  Widget _optionTile(String label, bool value) {
+  Widget _optionTile(String label, bool value, bool isDark) {
     final selected = _startFromYearStart == value;
     return GestureDetector(
       onTap: () {
@@ -1285,7 +1387,9 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
         decoration: BoxDecoration(
           color: selected
               ? primaryGreen.withOpacity(0.1)
-              : const Color(0xFFF4F6F8),
+              : (isDark
+                    ? Colors.white.withOpacity(0.06)
+                    : const Color(0xFFF4F6F8)), // CHANGED
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? primaryGreen : Colors.transparent,
@@ -1297,7 +1401,9 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
             Icon(
               selected ? Icons.check_circle : Icons.circle_outlined,
               size: 18,
-              color: selected ? primaryGreen : Colors.grey.shade400,
+              color: selected
+                  ? primaryGreen
+                  : (isDark ? Colors.white38 : Colors.grey.shade400), // CHANGED
             ),
             const SizedBox(height: 6),
             Text(
@@ -1305,7 +1411,11 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: selected ? primaryGreen : Colors.grey.shade600,
+                color: selected
+                    ? primaryGreen
+                    : (isDark
+                          ? Colors.white60
+                          : Colors.grey.shade600), // CHANGED
               ),
             ),
           ],
@@ -1314,10 +1424,6 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
     );
   }
 }
-
-/// =======================
-/// SMALL UI WIDGETS
-/// =======================
 
 class _Header extends StatelessWidget {
   const _Header();

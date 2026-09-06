@@ -164,26 +164,35 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   Future<void> _deleteDua(int index) async {
+    final theme = Theme.of(context);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: theme.cardColor, // CHANGED
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text(
+          title: Text(
             "Delete Du'a?",
-            style: TextStyle(fontFamily: arabicFont),
+            style: TextStyle(
+              fontFamily: arabicFont,
+              color: theme.textTheme.bodyLarge?.color,
+            ), // CHANGED
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Text(
                 "Remove this prayer from your journal?",
-                style: TextStyle(fontFamily: arabicFont),
+                style: TextStyle(
+                  fontFamily: arabicFont,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ), // CHANGED
               ),
-              SizedBox(height: 8),
-              Text(
+              const SizedBox(height: 8),
+              const Text(
                 "Hold to delete",
                 style: TextStyle(
                   fontSize: 12,
@@ -230,6 +239,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return WillPopScope(
       onWillPop: () async {
         if (_isGalleryMode) {
@@ -241,7 +253,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F7F5),
+        backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
         appBar: AppBar(
           elevation: 0,
           centerTitle: true,
@@ -250,6 +262,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             style: TextStyle(
               fontFamily: arabicFont,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
           leading: _isGalleryMode
@@ -278,7 +291,11 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         body: Column(
           children: [
             if (!_isGalleryMode) _header(),
-            Expanded(child: _isGalleryMode ? _galleryView() : _listView()),
+            Expanded(
+              child: _isGalleryMode
+                  ? _galleryView(theme, isDark)
+                  : _listView(theme, isDark),
+            ),
           ],
         ),
       ),
@@ -375,16 +392,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _listView() {
-    if (_duaList.isEmpty) return _emptyState();
+  Widget _listView(ThemeData theme, bool isDark) {
+    if (_duaList.isEmpty) return _emptyState(theme);
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: _duaList.length,
-      itemBuilder: (_, i) => _duaCard(i),
+      itemBuilder: (_, i) => _duaCard(i, theme, isDark),
     );
   }
 
-  Widget _duaCard(int index) {
+  Widget _duaCard(int index, ThemeData theme, bool isDark) {
     return TweenAnimationBuilder<double>(
       key: ValueKey('dua_$index-${_duaList[index].hashCode}'),
       tween: Tween(begin: 0, end: 1),
@@ -402,19 +419,19 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.cardColor, // CHANGED
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: primaryGreen.withOpacity(0.1),
+                color: primaryGreen.withOpacity(isDark ? 0.15 : 0.1),
                 blurRadius: 18,
                 spreadRadius: 1,
-              ),
+              ), // CHANGED
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
-              ),
+              ), // CHANGED
             ],
           ),
           child: InkWell(
@@ -427,11 +444,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 children: [
                   Row(
                     children: [
+                      // 1. "Tap to view" + Icon (Placed FIRST to render on the RIGHT in RTL mode)
                       Text(
                         "Tap to view",
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade400,
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.4,
+                          ),
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -439,9 +459,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       Icon(
                         Icons.auto_stories_rounded,
                         size: 14,
-                        color: Colors.grey.shade400,
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.4,
+                        ),
                       ),
+
                       const Spacer(),
+
+                      // 2. Index Circle (Placed LAST to render on the LEFT in RTL mode)
                       Container(
                         width: 26,
                         height: 26,
@@ -469,16 +494,19 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     textAlign: TextAlign.right,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: arabicFont,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                       height: 1.7,
-                      color: Colors.black87,
+                      color: theme.textTheme.bodyLarge?.color, // CHANGED
                     ),
                   ),
-                  const Divider(height: 20),
-                  _cardActions(index),
+                  Divider(
+                    height: 20,
+                    color: isDark ? Colors.white.withOpacity(0.08) : null,
+                  ), // CHANGED
+                  _cardActions(index, isDark),
                 ],
               ),
             ),
@@ -488,7 +516,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _cardActions(int index) {
+  Widget _cardActions(int index, bool isDark) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -542,7 +570,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _galleryView() {
+  Widget _galleryView(ThemeData theme, bool isDark) {
     if (_pageController == null) return const SizedBox.shrink();
 
     return Stack(
@@ -561,15 +589,17 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardColor, // CHANGED
                       borderRadius: BorderRadius.circular(32),
-                      border: Border.all(color: primaryGreen.withOpacity(0.08)),
+                      border: Border.all(
+                        color: primaryGreen.withOpacity(isDark ? 0.15 : 0.08),
+                      ), // CHANGED
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
                           blurRadius: 30,
                           offset: const Offset(0, 12),
-                        ),
+                        ), // CHANGED
                       ],
                     ),
                     child: LayoutBuilder(
@@ -589,11 +619,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                                 minFontSize: fontSize,
                                 maxFontSize: fontSize,
                                 overflow: TextOverflow.visible,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: arabicFont,
                                   fontWeight: FontWeight.w700,
                                   height: 1.9,
-                                  color: Colors.black87,
+                                  color: theme
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color, // CHANGED
                                 ),
                               ),
                             ),
@@ -609,7 +642,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     child: Icon(
                       Icons.wb_sunny_outlined,
                       size: 100,
-                      color: Colors.green.withOpacity(0.05),
+                      color: Colors.green.withOpacity(
+                        isDark ? 0.08 : 0.05,
+                      ), // CHANGED
                     ),
                   ),
 
@@ -618,13 +653,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     right: 24,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.92),
+                        color: (isDark ? theme.cardColor : Colors.white)
+                            .withOpacity(0.92), // CHANGED
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withOpacity(
+                              isDark ? 0.3 : 0.08,
+                            ),
                             blurRadius: 12,
-                          ),
+                          ), // CHANGED
                         ],
                       ),
                       child: Column(
@@ -639,9 +677,10 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                             '${fontSize.round()}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.grey.shade500,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.5),
                               fontWeight: FontWeight.w600,
-                            ),
+                            ), // CHANGED
                           ),
                           IconButton(
                             icon: const Icon(Icons.remove),
@@ -658,7 +697,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           },
         ),
 
-        // Page counter
         Positioned(
           top: 8,
           left: 0,
@@ -686,7 +724,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(ThemeData theme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -706,15 +744,15 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               "Your Du'a Journal is Empty",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: arabicFont,
                 fontWeight: FontWeight.bold,
                 fontSize: 17,
-                color: Colors.black87,
-              ),
+                color: theme.textTheme.bodyLarge?.color,
+              ), // CHANGED
             ),
             const SizedBox(height: 8),
             Text(
@@ -722,27 +760,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: arabicFont,
-                color: Colors.black45,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
                 fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _showAddDialog,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text("Add your first du'a"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
+              ), // CHANGED
             ),
           ],
         ),
@@ -839,6 +859,9 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -847,14 +870,14 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.cardColor, // CHANGED
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
                 blurRadius: 30,
                 offset: const Offset(0, 12),
-              ),
+              ), // CHANGED
             ],
           ),
           child: Column(
@@ -917,7 +940,9 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF4F7F5),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.06)
+                        : const Color(0xFFF4F7F5), // CHANGED
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: _focusNode.hasFocus
@@ -934,18 +959,21 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                     textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                     cursorColor: primaryGreen,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: arabicFont,
                       fontSize: 18,
                       height: 1.8,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: "Enter your prayer here",
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // CHANGED
+                    decoration: InputDecoration(
+                      hintText: "اكتب دعاءك هنا...",
                       hintStyle: TextStyle(
-                        color: Colors.black38,
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.35,
+                        ),
                         fontFamily: arabicFont,
-                      ),
-                      contentPadding: EdgeInsets.all(16),
+                      ), // CHANGED
+                      contentPadding: const EdgeInsets.all(16),
                       border: InputBorder.none,
                     ),
                     onChanged: (_) => setState(() {}),
@@ -959,7 +987,12 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                   child: Text(
                     '${_controller.text.trim().length} characters',
                     textDirection: TextDirection.ltr,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                        0.4,
+                      ),
+                    ), // CHANGED
                   ),
                 ),
               ),
@@ -979,7 +1012,9 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                               : _handleSave,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryGreen,
-                            disabledBackgroundColor: Colors.grey.shade300,
+                            disabledBackgroundColor: isDark
+                                ? Colors.white12
+                                : Colors.grey.shade300, // CHANGED
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -991,6 +1026,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                             style: TextStyle(
                               fontFamily: arabicFont,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -1002,7 +1038,11 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                         onPressed: _handleCancel,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white24
+                                : Colors.grey.shade300,
+                          ), // CHANGED
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -1011,9 +1051,10 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                           "Cancel",
                           style: TextStyle(
                             fontFamily: arabicFont,
-                            color: Colors.grey.shade700,
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
                             fontWeight: FontWeight.w600,
-                          ),
+                          ), // CHANGED
                         ),
                       ),
                     ),
