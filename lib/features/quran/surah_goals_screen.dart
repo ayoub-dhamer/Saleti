@@ -8,6 +8,7 @@ import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
 import 'package:saleti/data/surah_pages.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:saleti/widgets/tap_scale.dart';
 part 'surah_goals_screen.g.dart';
 
@@ -254,7 +255,8 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       ],
                     ),
                   ),
-                TapScale(
+                IconAction(
+                  label: 'Delete goal for ${goal.surahName}',
                   onTap: () => _confirmDelete(goal),
                   child: Container(
                     padding: const EdgeInsets.all(8),
@@ -430,7 +432,12 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                   ),
                 ),
                 const SizedBox(width: 10),
-                TapScale(
+                IconAction(
+                  label: goal.isCompleted
+                      ? '${goal.surahName} goal already completed'
+                      : goal.isExpired
+                      ? '${goal.surahName} goal expired'
+                      : 'Mark one recitation of ${goal.surahName} complete',
                   onTap: goal.isCompleted || goal.isExpired
                       ? () {}
                       : () async {
@@ -438,7 +445,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
-                              backgroundColor: theme.cardColor, // CHANGED
+                              backgroundColor: theme.cardColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -447,13 +454,13 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                                 style: TextStyle(
                                   color: theme.textTheme.bodyLarge?.color,
                                 ),
-                              ), // CHANGED
+                              ),
                               content: Text(
                                 'Did you finish reciting this surah?',
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
                                       ?.withOpacity(0.7),
-                                ), // CHANGED
+                                ),
                               ),
                               actions: [
                                 TextButton(
@@ -486,7 +493,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       color: (goal.isCompleted || goal.isExpired)
                           ? (isDark
                                 ? Colors.white.withOpacity(0.06)
-                                : Colors.grey.shade100) // CHANGED
+                                : Colors.grey.shade100)
                           : primaryGreen.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -494,7 +501,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       Icons.add,
                       color: (goal.isCompleted || goal.isExpired)
                           ? (isDark ? Colors.white38 : Colors.grey.shade400)
-                          : primaryGreen, // CHANGED
+                          : primaryGreen,
                     ),
                   ),
                 ),
@@ -522,7 +529,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
             label,
             style: TextStyle(
               fontSize: 10,
-              color: isDark ? Colors.white54 : Colors.grey.shade500,
+              color: isDark ? Colors.white70 : Colors.grey.shade600,
               fontWeight: FontWeight.w600,
             ),
           ), // CHANGED
@@ -813,7 +820,8 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          TapScale(
+          IconAction(
+            label: 'Add a new surah goal',
             onTap: () {
               HapticFeedback.selectionClick();
               onAdd();

@@ -251,7 +251,7 @@ class _AnimatedMainCard extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.55,
+                          0.6,
                         ),
                         fontSize: 13,
                       ), // CHANGED

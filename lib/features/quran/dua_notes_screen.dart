@@ -2,6 +2,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:saleti/widgets/tap_scale.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -341,11 +342,11 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           ),
           Row(
             children: [
-              _headerButton(
-                _isGalleryMode
-                    ? Icons.list_rounded
-                    : Icons.auto_stories_rounded,
-                () {
+              IconAction(
+                label: _isGalleryMode
+                    ? 'Switch to list view'
+                    : 'Switch to gallery view',
+                onTap: () {
                   if (_duaList.isEmpty) return;
                   HapticFeedback.selectionClick();
                   setState(() {
@@ -361,30 +362,41 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     }
                   });
                 },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white30),
+                  ),
+                  child: Icon(
+                    _isGalleryMode
+                        ? Icons.list_rounded
+                        : Icons.auto_stories_rounded,
+                    color: Colors.white,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
-              _headerButton(Icons.add, () {
-                HapticFeedback.selectionClick();
-                _showAddDialog();
-              }),
+              IconAction(
+                label: "Add a new dua",
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _showAddDialog();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white30),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.white),
+                ),
+              ),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _headerButton(IconData icon, VoidCallback onTap) {
-    return TapScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.15),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white30),
-        ),
-        child: Icon(icon, color: Colors.white),
       ),
     );
   }
@@ -447,7 +459,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                            0.4,
+                            0.6,
                           ),
                           fontStyle: FontStyle.italic,
                         ),
@@ -464,6 +476,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       const Spacer(),
 
                       // 2. Index Circle (Placed LAST to render on the LEFT in RTL mode)
+                      // Index Circle (Placed LAST to render on the LEFT in RTL mode)
                       Container(
                         width: 26,
                         height: 26,
@@ -472,13 +485,19 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                           color: primaryGreen.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: Text(
-                          '${index + 1}',
-                          textDirection: TextDirection.ltr,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: primaryGreen,
+                        // ADD: same text-scale lock — this is a fixed 26x26 circle
+                        child: MediaQuery(
+                          data: MediaQuery.of(
+                            context,
+                          ).copyWith(textScaler: const TextScaler.linear(1.0)),
+                          child: Text(
+                            '${index + 1}',
+                            textDirection: TextDirection.ltr,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: primaryGreen,
+                            ),
                           ),
                         ),
                       ),
@@ -668,6 +687,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                           IconButton(
                             icon: const Icon(Icons.add),
                             color: primaryGreen,
+                            tooltip: 'Increase text size',
                             onPressed: () => _increaseFont(i),
                           ),
                           Text(
@@ -675,14 +695,19 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.5),
+                                  ?.withOpacity(
+                                    0.6,
+                                  ), // also bumped per contrast fix
                               fontWeight: FontWeight.w600,
-                            ), // CHANGED
+                            ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.remove),
-                            color: primaryGreen,
-                            onPressed: () => _decreaseFont(i),
+                          IconAction(
+                            label: 'Decrease text size',
+                            onTap: () => _decreaseFont(i),
+                            child: const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Icon(Icons.remove, color: primaryGreen),
+                            ),
                           ),
                         ],
                       ),
@@ -885,7 +910,8 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                         ),
                       ),
                     ),
-                    GestureDetector(
+                    IconAction(
+                      label: 'Close',
                       onTap: _handleCancel,
                       child: Container(
                         padding: const EdgeInsets.all(6),
@@ -957,7 +983,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                     style: TextStyle(
                       fontSize: 11,
                       color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.4,
+                        0.6,
                       ),
                     ), // CHANGED
                   ),

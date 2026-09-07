@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:saleti/widgets/tap_scale.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
@@ -383,7 +384,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       ),
                     ],
                   ),
-                  TapScale(
+                  IconAction(
+                    label: 'Delete khatm record for ${_activeYear!.year}',
                     onTap: () => _confirmDeleteYear(_activeYear!.year),
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -561,7 +563,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  TapScale(
+                  IconAction(
+                    label: 'Log a completed reading cycle',
                     onTap: _confirmAddCycle,
                     child: Container(
                       padding: const EdgeInsets.all(14),
@@ -597,7 +600,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: isDark ? Colors.white54 : Colors.grey.shade500,
+              color: isDark ? Colors.white70 : Colors.grey.shade600,
               fontWeight: FontWeight.w600,
             ),
           ), // CHANGED
@@ -897,7 +900,8 @@ class _KhatmScreenState extends State<KhatmScreen> {
                               ), // CHANGED
                             ),
                             const SizedBox(width: 4),
-                            TapScale(
+                            IconAction(
+                              label: 'Delete khatm record for ${y.year}',
                               onTap: () => _confirmDeleteYear(y.year),
                               child: Container(
                                 padding: const EdgeInsets.all(8),

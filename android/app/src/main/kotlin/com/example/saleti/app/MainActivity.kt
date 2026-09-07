@@ -71,6 +71,25 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "startFridayReminder" -> {
+                        val intent = Intent(this, FridayReminderService::class.java).apply {
+                            action = FridayReminderService.ACTION_START
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                        else startService(intent)
+                        result.success(null)
+                    }
+
+                    "stopFridayReminder" -> {
+                        // Safe to call even if the service isn't currently running — it
+                        // just hits the ACTION_STOP branch and stops itself immediately.
+                        val intent = Intent(this, FridayReminderService::class.java).apply {
+                            action = FridayReminderService.ACTION_STOP
+                        }
+                        startService(intent)
+                        result.success(null)
+                    }
+
                     else -> result.notImplemented()
                 }
             }

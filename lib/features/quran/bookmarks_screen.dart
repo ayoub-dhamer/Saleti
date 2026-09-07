@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
@@ -349,7 +350,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.5), // CHANGED
+                                      ?.withOpacity(0.6), // CHANGED
                                   fontSize: 12,
                                 ),
                               ),
@@ -359,7 +360,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       ],
                     ),
                   ),
-                  _TapScale(
+                  IconAction(
+                    label: 'Delete bookmark for page ${b.page}',
                     onTap: () => _confirmDelete(b),
                     child: Container(
                       padding: const EdgeInsets.all(10),

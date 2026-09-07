@@ -15,7 +15,6 @@ final FlutterLocalNotificationsPlugin _notifications =
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔕 Silent reminder notification
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   final notifications = FlutterLocalNotificationsPlugin();
 
@@ -42,8 +41,6 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
 class NotificationService {
   static const _key = 'prayer_settings';
 
-  // ADD: single source of truth for prayer -> alarm ID base, used by both
-  // cancelPrayerAlarms() and rescheduleAllForToday()'s alarmId() helper.
   static const Map<String, int> _prayerAlarmBase = {
     'fajr': 1000,
     'dhuhr': 2000,
@@ -52,7 +49,10 @@ class NotificationService {
     'isha': 5000,
   };
 
-  static const int fridayReminderNotificationId = 8888;
+  // CHANGED: fridayReminderNotificationId removed — the Friday reminder is
+  // now a native foreground-service notification (see FridayReminderService.kt),
+  // no longer posted or cancelled via flutter_local_notifications, so this
+  // ID has no remaining use.
   static const int fridayReminderAlarmId = 8001;
   static const int fridayReminderEndAlarmId = 8002;
 
@@ -89,7 +89,7 @@ class NotificationService {
         const Duration(hours: 1),
         rebootCatchUpAlarmId,
         dailyRescheduleCallback,
-        exact: false, // doesn't need to be exact — it's just a safety net
+        exact: false,
         wakeup: true,
         rescheduleOnReboot: true,
       );
@@ -117,11 +117,6 @@ class NotificationService {
       );
     } catch (e) {
       debugPrint('Failed to schedule alarm $id at $time: $e');
-      // Scheduling silently failed — most likely SCHEDULE_EXACT_ALARM was
-      // revoked after onboarding. We don't retry here since a retry would
-      // hit the same permission wall; the next place the user opens
-      // PrayerTimesScreen, _initializeSystemPermissions() re-checks
-      // ExactAlarmPermission and can prompt again.
     }
   }
 
@@ -170,7 +165,6 @@ class NotificationService {
 
     if (estimatedTime.isBefore(DateTime.now())) return;
 
-    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
     await _safeOneShot(
       estimatedTime,
       eidAlarmId,
@@ -185,9 +179,6 @@ class NotificationService {
   }
 
   /// Single source of truth for "cancel + reschedule everything for today".
-  /// Both the manual refresh path (PrayerTimesScreen) and the midnight
-  /// rescheduler (daily_rescheduler.dart) should call this instead of
-  /// duplicating the loop.
   static Future<void> rescheduleAllForToday(PrayerTimes prayerTimes) async {
     final map = {
       'fajr': prayerTimes.fajr,
@@ -197,7 +188,6 @@ class NotificationService {
       'isha': prayerTimes.isha,
     };
 
-    // CHANGED: was a local `alarmId()` closure duplicating _prayerAlarmBase
     for (final entry in map.entries) {
       final prayer = entry.key;
       final time = entry.value;
@@ -241,12 +231,14 @@ class NotificationService {
   static Future<void> init() async {
     await AndroidAlarmManager.initialize();
 
+    // CHANGED: dropped onDidReceiveNotificationResponse /
+    // onDidReceiveBackgroundNotificationResponse — those only existed to
+    // handle the old Friday "Done" action button, which is now a native
+    // PendingIntent on FridayReminderService's own notification and never
+    // routes back through flutter_local_notifications at all.
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _notifications.initialize(
       const InitializationSettings(android: androidInit),
-      onDidReceiveNotificationResponse:
-          _handleFridayNotificationResponse, // ADD
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     final androidPlugin = _notifications
@@ -263,7 +255,11 @@ class NotificationService {
       ),
     );
 
-    // ADD: Friday reminder channel
+    // KEPT: still needed here, even though the Friday reminder notification
+    // itself moved to FridayReminderService.kt — eidReminderCallback below
+    // posts to this same channel ID via flutter_local_notifications, and
+    // that channel must exist before the first Eid ever fires, not just
+    // after the first Friday reminder happens to run.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         'friday_reminder_channel',
@@ -296,12 +292,9 @@ class NotificationService {
   }
 
   // ----------------------------------------------------------
-  // FRIDAY REMINDER (ADD — new section)
+  // FRIDAY REMINDER
   // ----------------------------------------------------------
 
-  /// Schedules the next Friday reminder at the given local time.
-  /// Safe to call repeatedly (e.g. on every app start) — it just
-  /// recomputes and overwrites the same alarm ID.
   static Future<void> scheduleFridayReminder({
     int hour = 8,
     int minute = 0,
@@ -321,7 +314,6 @@ class NotificationService {
       nextFriday = nextFriday.add(const Duration(days: 7));
     }
 
-    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
     await _safeOneShot(
       nextFriday,
       fridayReminderAlarmId,
@@ -330,8 +322,6 @@ class NotificationService {
     );
   }
 
-  /// Schedules a cleanup alarm for the end of the current day (midnight),
-  /// which force-dismisses the reminder if the user never tapped "Done".
   static Future<void> scheduleFridayReminderEnd() async {
     final now = DateTime.now();
     final endOfDay = DateTime(
@@ -340,7 +330,6 @@ class NotificationService {
       now.day,
     ).add(const Duration(days: 1));
 
-    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
     await _safeOneShot(
       endOfDay,
       fridayReminderEndAlarmId,
@@ -352,7 +341,9 @@ class NotificationService {
   static Future<void> cancelFridayReminder() async {
     await AndroidAlarmManager.cancel(fridayReminderAlarmId);
     await AndroidAlarmManager.cancel(fridayReminderEndAlarmId);
-    await _notifications.cancel(fridayReminderNotificationId);
+
+    const platform = MethodChannel('azan_service');
+    await platform.invokeMethod('stopFridayReminder');
   }
 
   static Future<void> loadEidOffset() async {
@@ -378,7 +369,9 @@ class NotificationService {
   }) async {
     final displayName = SpecialDayHelper.prettyPrayerName(prayer, time);
 
-    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    // CHANGED: dropped the unused 'playAzan' param — alarmCallback no
+    // longer branches on it (that dead branch was removed earlier), so
+    // passing it here served no purpose.
     await _safeOneShot(
       time,
       id,
@@ -386,7 +379,6 @@ class NotificationService {
       params: {
         'title': 'Prayer Reminder',
         'body': '$displayName in $minutes minutes',
-        'playAzan': false,
       },
     );
   }
@@ -400,7 +392,7 @@ class NotificationService {
     required DateTime time,
     required String prayer,
     required double volume,
-    required bool azanEnabled, // default true
+    required bool azanEnabled,
   }) async {
     try {
       await _platform.invokeMethod('scheduleAzanNative', {
@@ -408,23 +400,27 @@ class NotificationService {
         'timestamp': time.millisecondsSinceEpoch,
         'prayer': prayer,
         'volume': volume,
-        'azanEnabled': azanEnabled, // pass to native
+        'azanEnabled': azanEnabled,
       });
-    } on PlatformException catch (e) {
-      debugPrint('Failed to schedule native Azan: ${e.message}');
+    } catch (e) {
+      debugPrint('Failed to schedule native Azan: $e');
     }
   }
 
   static Future<void> stopAzan() async {
-    await _platform.invokeMethod('stopAzan');
+    try {
+      await _platform.invokeMethod('stopAzan');
+    } catch (e) {
+      debugPrint('Failed to stop Azan: $e');
+    }
   }
 
   static Future<void> cancelAzan(int id) async {
     const platform = MethodChannel('azan_service');
     try {
       await platform.invokeMethod('cancelAzanNative', {'id': id});
-    } on PlatformException catch (e) {
-      debugPrint('Failed to cancel Azan: ${e.message}');
+    } catch (e) {
+      debugPrint('Failed to cancel Azan: $e');
     }
   }
 
@@ -442,7 +438,6 @@ class NotificationService {
       5,
     ).add(const Duration(days: 1));
 
-    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
     await _safeOneShot(
       midnight,
       9999,
@@ -453,48 +448,16 @@ class NotificationService {
 }
 
 // ----------------------------------------------------------
-// TOP-LEVEL CALLBACKS (required by android_alarm_manager_plus
-// and flutter_local_notifications background dispatch)
+// TOP-LEVEL CALLBACKS
 // ----------------------------------------------------------
 
 @pragma('vm:entry-point')
 Future<void> fridayReminderCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final notifications = FlutterLocalNotificationsPlugin();
+  const platform = MethodChannel('azan_service');
+  await platform.invokeMethod('startFridayReminder');
 
-  await notifications.initialize(
-    const InitializationSettings(android: androidInit),
-    onDidReceiveNotificationResponse: _handleFridayNotificationResponse,
-    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-  );
-  const androidDetails = AndroidNotificationDetails(
-    'friday_reminder_channel',
-    'Friday Reminder',
-    channelDescription: "Weekly reminder to prepare for Salat al-Jumu'ah",
-    importance: Importance.max,
-    priority: Priority.high,
-    ongoing: true, // prevents swipe-to-dismiss
-    autoCancel: false, // tapping the body won't dismiss it either
-    playSound: true,
-    actions: [
-      AndroidNotificationAction(
-        'friday_done',
-        'Done',
-        showsUserInterface: false,
-        cancelNotification: true,
-      ),
-    ],
-  );
-  await notifications.show(
-    NotificationService.fridayReminderNotificationId,
-    "It's Jumu'ah Day",
-    "Today is Friday — shower and read Surah Al-Kahf to get ready for Salat al-Jumu'ah.",
-    const NotificationDetails(android: androidDetails),
-  );
-
-  // Reschedule for next week, and arm the end-of-day cleanup
   await NotificationService.scheduleFridayReminder();
   await NotificationService.scheduleFridayReminderEnd();
 }
@@ -502,31 +465,17 @@ Future<void> fridayReminderCallback() async {
 @pragma('vm:entry-point')
 Future<void> fridayReminderEndCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final notifications = FlutterLocalNotificationsPlugin();
-  await notifications.initialize(
-    const InitializationSettings(android: androidInit),
-  );
-  await notifications.cancel(NotificationService.fridayReminderNotificationId);
+
+  const platform = MethodChannel('azan_service');
+  await platform.invokeMethod('stopFridayReminder');
 }
 
-/// Handles the "Done" action tap while the app is alive (foreground/background).
-@pragma('vm:entry-point')
-void _handleFridayNotificationResponse(NotificationResponse response) async {
-  if (response.actionId == 'friday_done') {
-    final notifications = FlutterLocalNotificationsPlugin();
-    await notifications.cancel(
-      NotificationService.fridayReminderNotificationId,
-    );
-  }
-}
-
-/// Handles the "Done" action tap when the app process is terminated.
-/// Must be a top-level function annotated with @pragma('vm:entry-point').
-@pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse response) {
-  _handleFridayNotificationResponse(response);
-}
+// REMOVED: _handleFridayNotificationResponse and notificationTapBackground.
+// Both only existed to react to a tap on the old flutter_local_notifications
+// "Done" action, which no longer exists — the Done button is now a native
+// PendingIntent wired directly to FridayReminderService's ACTION_STOP, so
+// nothing on the Dart side ever needs to observe a notification response
+// for this anymore.
 
 @pragma('vm:entry-point')
 Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {
@@ -547,7 +496,7 @@ Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {
     "It's time for Eid prayer — estimated based on today's sunrise. Confirm the exact time with your local mosque.",
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'friday_reminder_channel', // reuse the existing high-importance channel
+        'friday_reminder_channel',
         'Friday Reminder',
         importance: Importance.max,
         priority: Priority.high,

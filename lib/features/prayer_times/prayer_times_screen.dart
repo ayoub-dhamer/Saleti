@@ -11,6 +11,7 @@ import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/special_day_helper.dart';
 import 'package:saleti/utils/theme_controller.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -1061,6 +1062,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         activeColor: Colors.green,
                         isActive: setting['reminder'] == true,
                         isDark: isDark,
+                        semanticLabel: setting['reminder'] == true
+                            ? 'Reminder on for ${_prettyName(prayerKey)}. Double tap to turn off.'
+                            : 'Reminder off for ${_prettyName(prayerKey)}. Double tap to turn on.',
                         onTap: () async {
                           HapticFeedback.selectionClick();
                           setState(
@@ -1092,6 +1096,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         activeColor: Colors.blue,
                         isActive: setting['azan'] == true,
                         isDark: isDark,
+                        semanticLabel: setting['azan'] == true
+                            ? 'Azan sound on for ${_prettyName(prayerKey)}. Double tap to turn off.'
+                            : 'Azan sound off for ${_prettyName(prayerKey)}. Double tap to turn on.',
                         onTap: () async {
                           HapticFeedback.selectionClick();
                           setState(() => setting['azan'] = !setting['azan']);
@@ -1164,7 +1171,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   ),
                 ),
               ),
-              GestureDetector(
+              // CHANGED: was a bare GestureDetector around an icon with no
+              // accessible name — a screen reader announced nothing tappable here.
+              IconAction(
+                label: 'Adjust Eid prayer time offset',
                 onTap: () => _showEidOffsetPicker(context),
                 child: const Icon(
                   Icons.tune_rounded,
@@ -1257,6 +1267,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     required bool isActive,
     required bool isDark,
     required VoidCallback onTap,
+    required String semanticLabel,
     VoidCallback? onLongPress,
   }) {
     return GestureDetector(
@@ -1507,30 +1518,30 @@ class _ThemeCycleButtonState extends State<ThemeCycleButton> {
     AppThemeMode.system => 'Auto mode — tap for Light',
   };
 
+  // In _ThemeCycleButtonState.build() — replace the outer GestureDetector+Tooltip
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: _tooltip,
-      child: GestureDetector(
-        onTap: _cycle,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1FA45B).withOpacity(0.1),
-            shape: BoxShape.circle,
+    return IconAction(
+      label:
+          _tooltip, // reuse the existing getter — was already a good description
+      onTap: _cycle,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1FA45B).withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, anim) => ScaleTransition(
+            scale: anim,
+            child: RotationTransition(turns: anim, child: child),
           ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            transitionBuilder: (child, anim) => ScaleTransition(
-              scale: anim,
-              child: RotationTransition(turns: anim, child: child),
-            ),
-            child: Icon(
-              _icon,
-              key: ValueKey(_icon),
-              color: const Color(0xFF1FA45B),
-              size: 18,
-            ),
+          child: Icon(
+            _icon,
+            key: ValueKey(_icon),
+            color: const Color(0xFF1FA45B),
+            size: 18,
           ),
         ),
       ),

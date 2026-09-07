@@ -7,6 +7,7 @@ import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -341,8 +342,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         key: ValueKey('$isAhead-$isBehind-$diff'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors
-              .white, // ADD: solid backdrop so the colored text stays legible regardless of theme/background behind it
+          // ADD: solid backdrop so the colored text stays legible regardless of theme/background behind it
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
@@ -571,24 +571,17 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             Positioned(
               top: 8,
               left: 8,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _toggleLectureMode(false),
-                  borderRadius: BorderRadius.circular(30),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white24, width: 1),
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+              child: IconAction(
+                label: 'Exit full screen',
+                onTap: () => _toggleLectureMode(false),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 1),
                   ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 24),
                 ),
               ),
             ),

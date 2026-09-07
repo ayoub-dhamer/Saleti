@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:saleti/utils/prayer_cache.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class QiblaScreen extends StatefulWidget {
@@ -466,7 +467,13 @@ class _QiblaScreenState extends State<QiblaScreen> {
           if (_showCalibrationHint) _calibrationHint(isDark),
           Expanded(
             child: Center(
-              child: _compass(angle, difference, isAligned, theme, isDark),
+              child: Semantics(
+                liveRegion: true, // announces changes without needing re-focus
+                label: isAligned
+                    ? 'Facing the Qibla'
+                    : '$difference degrees off — turn ${difference > 180 ? "left" : "right"} to align',
+                child: _compass(angle, difference, isAligned, theme, isDark),
+              ),
             ),
           ),
         ],
@@ -506,7 +513,8 @@ class _QiblaScreenState extends State<QiblaScreen> {
               ],
             ),
           ),
-          GestureDetector(
+          IconAction(
+            label: 'Refresh location',
             onTap: _refreshLocation,
             child: Container(
               padding: const EdgeInsets.all(10),
@@ -556,7 +564,8 @@ class _QiblaScreenState extends State<QiblaScreen> {
                 ), // CHANGED
               ),
             ),
-            GestureDetector(
+            IconAction(
+              label: 'Dismiss calibration tip',
               onTap: _dismissCalibrationHint,
               child: Padding(
                 padding: const EdgeInsets.all(4),
@@ -564,7 +573,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   Icons.close,
                   size: 16,
                   color: isDark ? Colors.white38 : Colors.black45,
-                ), // CHANGED
+                ),
               ),
             ),
           ],
@@ -804,7 +813,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
           'Ensure phone is on a flat surface',
           style: TextStyle(
             color: theme.textTheme.bodyMedium?.color?.withOpacity(
-              0.3,
+              0.6,
             ), // CHANGED
             fontSize: 12,
             letterSpacing: 0.5,

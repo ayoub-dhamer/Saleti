@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quran/quran.dart';
+import 'package:saleti/widgets/icon_action.dart';
 import '../../data/surah_pages.dart';
 import 'mushaf_page_screen.dart';
 
@@ -144,7 +145,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
             ),
           ),
           if (_query.isNotEmpty)
-            GestureDetector(
+            IconAction(
+              label: 'Clear search',
               onTap: () {
                 HapticFeedback.selectionClick();
                 _searchController.clear();
@@ -155,14 +157,16 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withOpacity(0.08)
-                      : Colors.grey.shade100, // CHANGED
+                      : Colors.grey.shade100,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.close,
                   size: 16,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
-                ), // CHANGED
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                    0.6,
+                  ), // also bumped
+                ),
               ),
             ),
         ],
@@ -403,11 +407,18 @@ class _SurahListScreenState extends State<SurahListScreen> {
         ],
       ),
       child: Center(
-        child: Text(
-          number.toString(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+        // ADD: pin this small numeral to 1.0x scale so the fixed 48x48 circle
+        // never clips when the user has increased system font size.
+        child: MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.0)),
+          child: Text(
+            number.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
