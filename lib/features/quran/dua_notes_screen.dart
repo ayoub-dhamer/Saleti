@@ -2,6 +2,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
+import 'package:saleti/widgets/tap_scale.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -242,15 +243,11 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isGalleryMode) {
-          setState(() {
-            _isGalleryMode = false;
-          });
-          return false;
-        }
-        return true;
+    return PopScope(
+      canPop: !_isGalleryMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() => _isGalleryMode = false);
       },
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
@@ -378,7 +375,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   Widget _headerButton(IconData icon, VoidCallback onTap) {
-    return _TapScale(
+    return TapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(10),
@@ -543,7 +540,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return _TapScale(
+    return TapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -766,36 +763,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Small reusable scale-on-tap wrapper for header/action buttons.
-class _TapScale extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const _TapScale({required this.child, required this.onTap});
-
-  @override
-  State<_TapScale> createState() => _TapScaleState();
-}
-
-class _TapScaleState extends State<_TapScale> {
-  double _scale = 1;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _scale = 0.9),
-      onTapUp: (_) => setState(() => _scale = 1),
-      onTapCancel: () => setState(() => _scale = 1),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _scale,
-        duration: const Duration(milliseconds: 100),
-        child: widget.child,
       ),
     );
   }

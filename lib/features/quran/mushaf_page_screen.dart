@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quran/quran.dart' as quran;
 import 'package:saleti/data/footer_list.dart';
-import 'package:saleti/data/surah_page_map.dart';
-import 'package:saleti/data/surahs_names.dart';
+import 'package:saleti/data/surah_pages.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/khatm_service.dart';
@@ -239,13 +239,11 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   }
 
   String _getSurahNameFromPage(int page) {
-    int closestPage = 1;
-    for (final p in surahByPage.keys) {
-      if (p <= page && p >= closestPage) {
-        closestPage = p;
-      }
+    for (int i = 114; i >= 1; i--) {
+      final start = surahStartPages[i] ?? 1;
+      if (page >= start) return quran.getSurahName(i);
     }
-    return surahByPage[closestPage] ?? 'Unknown Surah';
+    return 'Unknown Surah';
   }
 
   Future<void> _goToFirstPage() async {
@@ -511,8 +509,10 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       );
     }
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
         if (widget.readingMode == ReadingMode.khatm) {
           final pagesRead = _calculatePagesRead(
             _sessionStartPage,
@@ -522,9 +522,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             await KhatmService().logPagesRead(pagesRead);
           }
         }
-
-        Navigator.pop(context, true);
-        return false;
+        if (context.mounted) Navigator.pop(context, true);
       },
       child: Stack(
         children: [
@@ -871,14 +869,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     widget.surahGoal != null) {
                   final liveProgress = getSurahProgressFromPage(
                     _currentPage,
-                    widget.surahGoal!.surahName,
+                    widget.surahGoal!.surahNumber,
                   );
 
-                  final surahEntry = surahs.firstWhere(
-                    (s) => s['english'] == widget.surahGoal!.surahName,
-                    orElse: () => {"arabic": widget.surahGoal!.surahName},
+                  // CHANGED: Arabic name now comes straight from the quran package
+                  final String arabicName = quran.getSurahNameArabic(
+                    widget.surahGoal!.surahNumber,
                   );
-                  final String arabicName = surahEntry['arabic']!;
 
                   if (liveProgress != null) {
                     final current = liveProgress['current'];
@@ -913,13 +910,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  Map<String, int>? getSurahProgressFromPage(int page, String englishName) {
-    final surahEntry = surahs.firstWhere(
-      (s) => s['english'] == englishName,
-      orElse: () => {},
-    );
-    if (surahEntry.isEmpty) return null;
-    final String arabicGoalName = surahEntry['arabic']!;
+  // CHANGED: was `getSurahProgressFromPage(int page, String englishName)`,
+  // looking up the Arabic name via the `surahs` list. Now takes the surah
+  // number directly (SurahGoal already stores it) and gets the Arabic name
+  // from the quran package — no local surahs table needed.
+  Map<String, int>? getSurahProgressFromPage(int page, int surahNumber) {
+    final String arabicGoalName = quran.getSurahNameArabic(surahNumber);
 
     final pageData = footerList[page];
     if (pageData == null) return null;
@@ -960,45 +956,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       match.group(1)!.trim(),
       int.parse(match.group(2)!),
       int.parse(match.group(3)!),
-    );
-  }
-
-  Widget surahProgressBar({
-    required int current,
-    required int total,
-    bool dimmed = false,
-  }) {
-    final progress = total == 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
-
-    return SizedBox(
-      width: 90,
-      height: 12,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress == 1
-                    ? Colors.amber
-                    : (dimmed ? Colors.white38 : Colors.white),
-              ),
-              minHeight: 12,
-            ),
-          ),
-          Text(
-            '$current / $total',
-            style: const TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1153,19 +1110,4 @@ class SurahProgress {
   final int total;
 
   SurahProgress(this.name, this.current, this.total);
-}
-
-SurahProgress parseSurah(String input) {
-  final regex = RegExp(r'(.+?)\s+(\d+)\s*/\s*(\d+)$');
-  final match = regex.firstMatch(input);
-
-  if (match == null) {
-    return SurahProgress(input, 0, 1);
-  }
-
-  return SurahProgress(
-    match.group(1)!.trim(),
-    int.parse(match.group(2)!),
-    int.parse(match.group(3)!),
-  );
 }

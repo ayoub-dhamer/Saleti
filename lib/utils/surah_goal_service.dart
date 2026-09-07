@@ -49,5 +49,3 @@ class SurahGoalService {
     await box.clear();
   }
 }
-
-class DuplicateGoalException implements Exception {}

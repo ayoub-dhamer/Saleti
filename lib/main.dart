@@ -37,6 +37,7 @@ void main() async {
 
   await AndroidAlarmManager.initialize();
   await NotificationService.scheduleDailyRescheduler();
+  await NotificationService.scheduleRebootCatchUp();
   await NotificationService.scheduleFridayReminder();
 
   // ADD: catch the case where the app is opened already on Eid day

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:saleti/widgets/fade_indexed_stack.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 
 import '../prayer_times/prayer_times_screen.dart';
@@ -44,29 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // scrolls through every page in between. IndexedStack + AnimatedSwitcher
       // keeps all pages alive (preserving isActive/tab state) but only ever
       // cross-fades directly between the two pages actually being switched to.
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) =>
-            FadeTransition(opacity: animation, child: child),
-        layoutBuilder: (currentChild, previousChildren) {
-          // Keeps the IndexedStack sized correctly during the cross-fade
-          return Stack(
-            children: [
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
-          );
-        },
-        child: IndexedStack(
-          key: ValueKey(
-            selected,
-          ), // triggers AnimatedSwitcher's fade on tab change
-          index: selected,
-          children: pages,
-        ),
-      ),
+      body: FadeIndexedStack(index: selected, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
+import 'package:saleti/widgets/tap_scale.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
@@ -52,9 +53,18 @@ class KhatmYear extends HiveObject {
     this.startFromYearStart = false,
   });
 
-  DateTime get planEndDate => startFromYearStart
-      ? DateTime(year, 12, 31)
-      : DateTime(startDate.year + 1, startDate.month, startDate.day);
+  DateTime get planEndDate {
+    if (startFromYearStart) return DateTime(year, 12, 31);
+
+    // FIXED: previously DateTime(startDate.year + 1, startDate.month, startDate.day)
+    // silently rolled Feb 29 -> Mar 1 in non-leap target years. Clamp instead.
+    final targetYear = startDate.year + 1;
+    final daysInTargetMonth = DateTime(targetYear, startDate.month + 1, 0).day;
+    final day = startDate.day > daysInTargetMonth
+        ? daysInTargetMonth
+        : startDate.day;
+    return DateTime(targetYear, startDate.month, day);
+  }
 }
 
 @HiveType(typeId: 21)
@@ -373,7 +383,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                       ),
                     ],
                   ),
-                  _TapScale(
+                  TapScale(
                     onTap: () => _confirmDeleteYear(_activeYear!.year),
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -551,7 +561,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  _TapScale(
+                  TapScale(
                     onTap: _confirmAddCycle,
                     child: Container(
                       padding: const EdgeInsets.all(14),
@@ -887,7 +897,7 @@ class _KhatmScreenState extends State<KhatmScreen> {
                               ), // CHANGED
                             ),
                             const SizedBox(width: 4),
-                            _TapScale(
+                            TapScale(
                               onTap: () => _confirmDeleteYear(y.year),
                               child: Container(
                                 padding: const EdgeInsets.all(8),
@@ -1116,36 +1126,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
             ),
           ), // CHANGED
         ],
-      ),
-    );
-  }
-}
-
-/// Small reusable scale-on-tap wrapper.
-class _TapScale extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const _TapScale({required this.child, required this.onTap});
-
-  @override
-  State<_TapScale> createState() => _TapScaleState();
-}
-
-class _TapScaleState extends State<_TapScale> {
-  double _scale = 1;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _scale = 0.9),
-      onTapUp: (_) => setState(() => _scale = 1),
-      onTapCancel: () => setState(() => _scale = 1),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _scale,
-        duration: const Duration(milliseconds: 100),
-        child: widget.child,
       ),
     );
   }

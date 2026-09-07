@@ -42,18 +42,6 @@ class KhatmService {
   /// Save or update a year
   Future<void> saveYear(KhatmYear year) async => await year.save();
 
-  /// Add daily log
-  Future<void> addDailyLog(DailyKhatmLog log) async {
-    final box = await _logBox;
-    await box.put('${log.year}-${log.date}', log);
-  }
-
-  /// Get daily log for a specific date
-  Future<DailyKhatmLog?> getLog(int year, String date) async {
-    final box = await _logBox;
-    return box.get('$year-$date');
-  }
-
   /// Deactivate all active years
   Future<void> deactivateAll() async {
     final box = await _yearBox;
@@ -85,7 +73,18 @@ class KhatmService {
     // CHANGED: use the same end-date rule as KhatmYear.planEndDate
     final endDate = startFromYearStart
         ? DateTime(year, 12, 31)
-        : DateTime(startDate.year + 1, startDate.month, startDate.day);
+        : () {
+            final targetYear = startDate.year + 1;
+            final daysInTargetMonth = DateTime(
+              targetYear,
+              startDate.month + 1,
+              0,
+            ).day;
+            final day = startDate.day > daysInTargetMonth
+                ? daysInTargetMonth
+                : startDate.day;
+            return DateTime(targetYear, startDate.month, day);
+          }();
 
     int remainingDays = endDate.difference(startDate).inDays + 1;
     if (remainingDays <= 0) remainingDays = 1;

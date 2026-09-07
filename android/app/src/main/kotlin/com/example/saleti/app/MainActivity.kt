@@ -1,4 +1,4 @@
-package com.example.saleti
+package com.saleti.app
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -43,13 +43,25 @@ class MainActivity : FlutterActivity() {
                         val volume = (args?.get("volume") as? Double ?: 1.0).toFloat()
                         val azanEnabled = args?.get("azanEnabled") as? Boolean ?: true
 
-                        if (azanEnabled) {
+                        // CHANGED: scheduleAzan/cancelAzan now report success/failure
+                        // back through `result` instead of always calling result.success(null)
+                        // unconditionally, so Dart can know if scheduling silently failed.
+                        val scheduled = if (azanEnabled) {
                             scheduleAzan(id, prayer, timestamp, volume, azanEnabled)
                         } else {
                             cancelAzan(id)
+                            true
                         }
 
-                        result.success(null)
+                        if (scheduled) {
+                            result.success(null)
+                        } else {
+                            result.error(
+                                "SCHEDULE_FAILED",
+                                "Could not schedule exact alarm — permission may have been revoked",
+                                null
+                            )
+                        }
                     }
 
                     "cancelAzanNative" -> {
@@ -94,22 +106,41 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun scheduleAzan(id: Int, prayer: String, timestamp: Long, volume: Float, azanEnabled: Boolean) {
+    /// Returns true if the exact alarm was scheduled successfully, false if
+    /// it failed (most likely SCHEDULE_EXACT_ALARM was revoked by the user
+    /// after onboarding — this permission can be pulled at any time from
+    /// system settings, independent of what was granted at first launch).
+    private fun scheduleAzan(
+        id: Int,
+        prayer: String,
+        timestamp: Long,
+        volume: Float,
+        azanEnabled: Boolean
+    ): Boolean {
         val pendingIntent = getAzanPendingIntent(id, prayer, volume, azanEnabled)
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                timestamp,
-                pendingIntent
-            )
-        } else {
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP,
-                timestamp,
-                pendingIntent
-            )
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    timestamp,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    timestamp,
+                    pendingIntent
+                )
+            }
+            true
+        } catch (e: SecurityException) {
+            // SCHEDULE_EXACT_ALARM revoked — degrade silently rather than
+            // crash the method channel call from Dart. Caller reports this
+            // back to Dart via result.error so it's not a silent failure there.
+            e.printStackTrace()
+            false
         }
     }
 
@@ -118,20 +149,20 @@ class MainActivity : FlutterActivity() {
             action = AzanService.ACTION_PLAY_AZAN
         }
 
-    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    } else {
-        PendingIntent.FLAG_UPDATE_CURRENT
-    }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
 
-    val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        PendingIntent.getForegroundService(this, id, intent, flags)
-    } else {
-        PendingIntent.getService(this, id, intent, flags)
-    }
+        val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, id, intent, flags)
+        } else {
+            PendingIntent.getService(this, id, intent, flags)
+        }
 
-    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    alarmManager.cancel(pendingIntent)
-    pendingIntent.cancel()
-}
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
 }

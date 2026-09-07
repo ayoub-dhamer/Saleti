@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
@@ -64,9 +63,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     }
   }
 
+  final ValueNotifier<DateTime> _nowNotifier = ValueNotifier(DateTime.now());
+
   void _startTicker() {
     _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => now = DateTime.now());
+      _nowNotifier.value = DateTime.now(); // no setState — no full rebuild
     });
   }
 
@@ -79,6 +80,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopTicker();
+    _nowNotifier.dispose();
     super.dispose();
   }
 
@@ -357,59 +359,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   Future<void> _scheduleAllNotifications() async {
     if (prayerTimes == null) return;
-
-    final map = {
-      'fajr': prayerTimes!.fajr,
-      'dhuhr': prayerTimes!.dhuhr,
-      'asr': prayerTimes!.asr,
-      'maghrib': prayerTimes!.maghrib,
-      'isha': prayerTimes!.isha,
-    };
-
-    for (final e in map.entries) {
-      final prayer = e.key;
-      final time = e.value;
-      final setting = NotificationService.prayerSettings[prayer]!;
-
-      await AndroidAlarmManager.cancel(_alarmId(prayer, 'reminder'));
-      await AndroidAlarmManager.cancel(_alarmId(prayer, 'azan'));
-
-      if (setting['reminder'] == true) {
-        final m = setting['minutesBefore'] as int;
-        final t = time.subtract(Duration(minutes: m));
-        if (t.isAfter(DateTime.now())) {
-          await NotificationService.scheduleReminder(
-            id: _alarmId(prayer, 'reminder'),
-            time: t,
-            prayer: prayer,
-            minutes: m,
-          );
-        }
-      }
-
-      if (setting['azan'] == true && time.isAfter(DateTime.now())) {
-        await NotificationService.scheduleAzanNative(
-          id: _alarmId(prayer, 'azan'),
-          time: time,
-          prayer: prayer,
-          volume: _getVolume(setting),
-          azanEnabled: setting['azan'],
-        );
-      }
-    }
-
-    await NotificationService.scheduleDailyRescheduler();
-  }
-
-  int _alarmId(String prayer, String type) {
-    const base = {
-      'fajr': 1000,
-      'dhuhr': 2000,
-      'asr': 3000,
-      'maghrib': 4000,
-      'isha': 5000,
-    };
-    return base[prayer]! + (type == 'azan' ? 1 : 2);
+    await NotificationService.rescheduleAllForToday(prayerTimes!);
   }
 
   Future<void> _useCachedLocation() async {
@@ -603,7 +553,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         : prayerTimes!.nextPrayer();
 
     DateTime nextTime = prayerTimes!.timeForPrayer(nextPrayer)!;
-    if (nextTime.isBefore(now)) {
+    if (nextTime.isBefore(DateTime.now())) {
       nextTime = nextTime.add(const Duration(days: 1));
     }
 
@@ -619,12 +569,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             const SizedBox(height: 16),
             _clockCard(), // UNCHANGED — left exactly as-is per request
             const SizedBox(height: 16),
-            _upcomingPrayer(
-              nextPrayer,
-              nextTime,
-              previousTime,
-              nextTime.difference(now),
-            ),
+            _upcomingPrayer(nextPrayer, nextTime, previousTime),
             const SizedBox(height: 8),
             Expanded(child: _prayerList(theme, isDark)),
           ],
@@ -790,12 +735,15 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               left: 0,
               right: 0,
               child: Center(
-                child: Text(
-                  DateFormat('HH:mm').format(now),
-                  style: const TextStyle(
-                    fontSize: 52,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                child: ValueListenableBuilder<DateTime>(
+                  valueListenable: _nowNotifier,
+                  builder: (context, now, _) => Text(
+                    DateFormat('HH:mm').format(now),
+                    style: const TextStyle(
+                      fontSize: 52,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
                   ),
                 ),
               ),
@@ -812,13 +760,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     Prayer nextPrayer,
     DateTime time,
     DateTime previousTime,
-    Duration remaining,
   ) {
     final totalWindow = time.difference(previousTime).inSeconds;
-    final elapsed = now.difference(previousTime).inSeconds;
-    final progress = totalWindow > 0
-        ? (elapsed / totalWindow).clamp(0.0, 1.0)
-        : 0.0;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -849,66 +792,80 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             ),
           ],
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 46,
-              height: 46,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: progress),
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, _) => CircularProgressIndicator(
-                      value: value,
-                      strokeWidth: 3,
-                      backgroundColor: Colors.white.withOpacity(0.25),
-                      valueColor: const AlwaysStoppedAnimation(Colors.white),
-                    ),
+        child: ValueListenableBuilder<DateTime>(
+          valueListenable: _nowNotifier,
+          builder: (context, now, _) {
+            final elapsed = now.difference(previousTime).inSeconds;
+            final progress = totalWindow > 0
+                ? (elapsed / totalWindow).clamp(0.0, 1.0)
+                : 0.0;
+            final remaining = time.difference(now);
+
+            return Row(
+              children: [
+                SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: progress),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) =>
+                            CircularProgressIndicator(
+                              value: value,
+                              strokeWidth: 3,
+                              backgroundColor: Colors.white.withOpacity(0.25),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Colors.white,
+                              ),
+                            ),
+                      ),
+                      const Icon(
+                        Icons.timer_outlined,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ],
                   ),
-                  const Icon(
-                    Icons.timer_outlined,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Next: ${_prettyName(nextPrayer.name)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'At ${DateFormat('hh:mm a').format(time)}',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  _formatDuration(remaining),
+                  style: const TextStyle(
                     color: Colors.white,
-                    size: 18,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 19,
+                    letterSpacing: 0.5,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Next: ${_prettyName(nextPrayer.name)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  Text(
-                    'At ${DateFormat('hh:mm a').format(time)}',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              _formatDuration(remaining),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 19,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -986,7 +943,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final setting = NotificationService.prayerSettings[prayerKey]!;
 
             final isNext = next.name.toLowerCase() == prayerKey;
-            final alarmId = _alarmId(prayerKey, 'azan');
+            final alarmId = NotificationService.alarmId(prayerKey, 'azan');
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),

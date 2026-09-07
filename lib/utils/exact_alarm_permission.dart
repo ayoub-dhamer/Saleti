@@ -17,7 +17,7 @@ class ExactAlarmPermission {
       const intent = AndroidIntent(
         action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
         data:
-            'package:com.example.saleti', // CHANGED (was 'package:your.package.name')
+            'package:com.example.saleti.app', // CHANGED (was 'package:your.package.name')
       );
 
       try {

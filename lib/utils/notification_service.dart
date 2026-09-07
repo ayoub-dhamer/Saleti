@@ -15,16 +15,6 @@ final FlutterLocalNotificationsPlugin _notifications =
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final bool isAzan = params['playAzan'] == true;
-
-  if (isAzan) {
-    // ✅ START FOREGROUND SERVICE (PASS PRAYER NAME)
-    const platform = MethodChannel('azan_service');
-    final prayerName = params['prayer'] ?? 'Prayer';
-    await platform.invokeMethod('startAzan', {'prayer': prayerName});
-    return;
-  }
-
   // 🔕 Silent reminder notification
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   final notifications = FlutterLocalNotificationsPlugin();
@@ -52,6 +42,16 @@ Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
 class NotificationService {
   static const _key = 'prayer_settings';
 
+  // ADD: single source of truth for prayer -> alarm ID base, used by both
+  // cancelPrayerAlarms() and rescheduleAllForToday()'s alarmId() helper.
+  static const Map<String, int> _prayerAlarmBase = {
+    'fajr': 1000,
+    'dhuhr': 2000,
+    'asr': 3000,
+    'maghrib': 4000,
+    'isha': 5000,
+  };
+
   static const int fridayReminderNotificationId = 8888;
   static const int fridayReminderAlarmId = 8001;
   static const int fridayReminderEndAlarmId = 8002;
@@ -61,6 +61,69 @@ class NotificationService {
 
   static const int eidNotificationId = 7777;
   static const int eidAlarmId = 7001;
+
+  static const int rebootCatchUpAlarmId = 9998;
+
+  static int alarmId(String prayer, String type) {
+    return _prayerAlarmBase[prayer]! + (type == 'azan' ? 1 : 2);
+  }
+
+  static Future<void> cancelPrayerAlarms() async {
+    for (final base in _prayerAlarmBase.values) {
+      await AndroidAlarmManager.cancel(base + 1); // azan
+      await AndroidAlarmManager.cancel(base + 2); // reminder
+    }
+  }
+
+  /// Safety net for the gap left by scheduling Azan via raw native AlarmManager
+  /// (bypassing android_alarm_manager_plus's own reboot-rescheduling). A plain
+  /// reboot wipes all AlarmManager entries; only alarms registered *through*
+  /// this plugin with rescheduleOnReboot get automatically re-armed after boot.
+  /// This periodic alarm rides that mechanism to re-run rescheduleAllForToday
+  /// roughly hourly, so a mid-day reboot recovers within ~1hr instead of
+  /// silently missing the rest of the day's prayers until midnight or the
+  /// user reopening the app.
+  static Future<void> scheduleRebootCatchUp() async {
+    try {
+      await AndroidAlarmManager.periodic(
+        const Duration(hours: 1),
+        rebootCatchUpAlarmId,
+        dailyRescheduleCallback,
+        exact: false, // doesn't need to be exact — it's just a safety net
+        wakeup: true,
+        rescheduleOnReboot: true,
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule reboot catch-up alarm: $e');
+    }
+  }
+
+  static Future<void> _safeOneShot(
+    DateTime time,
+    int id,
+    Function callback, {
+    Map<String, dynamic>? params,
+    bool rescheduleOnReboot = false,
+  }) async {
+    try {
+      await AndroidAlarmManager.oneShotAt(
+        time,
+        id,
+        callback,
+        exact: true,
+        wakeup: true,
+        params: params ?? {},
+        rescheduleOnReboot: rescheduleOnReboot,
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule alarm $id at $time: $e');
+      // Scheduling silently failed — most likely SCHEDULE_EXACT_ALARM was
+      // revoked after onboarding. We don't retry here since a retry would
+      // hit the same permission wall; the next place the user opens
+      // PrayerTimesScreen, _initializeSystemPermissions() re-checks
+      // ExactAlarmPermission and can prompt again.
+    }
+  }
 
   static Map<String, Map<String, dynamic>> prayerSettings = {
     'fajr': {
@@ -97,7 +160,7 @@ class NotificationService {
   }) async {
     final eidName = SpecialDayHelper.eidNameFor(DateTime.now());
     if (eidName == null || todaysPrayerTimes == null) {
-      return; // not Eid today, or no location available yet
+      return;
     }
 
     final estimatedTime = SpecialDayHelper.estimatedEidTime(
@@ -105,15 +168,13 @@ class NotificationService {
       offsetMinutes: eidOffsetMinutes,
     );
 
-    // Don't schedule for a time that's already passed today
     if (estimatedTime.isBefore(DateTime.now())) return;
 
-    await AndroidAlarmManager.oneShotAt(
+    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    await _safeOneShot(
       estimatedTime,
       eidAlarmId,
       eidReminderCallback,
-      exact: true,
-      wakeup: true,
       params: {'eidName': eidName},
     );
   }
@@ -121,6 +182,56 @@ class NotificationService {
   static Future<void> cancelEidReminder() async {
     await AndroidAlarmManager.cancel(eidAlarmId);
     await _notifications.cancel(eidNotificationId);
+  }
+
+  /// Single source of truth for "cancel + reschedule everything for today".
+  /// Both the manual refresh path (PrayerTimesScreen) and the midnight
+  /// rescheduler (daily_rescheduler.dart) should call this instead of
+  /// duplicating the loop.
+  static Future<void> rescheduleAllForToday(PrayerTimes prayerTimes) async {
+    final map = {
+      'fajr': prayerTimes.fajr,
+      'dhuhr': prayerTimes.dhuhr,
+      'asr': prayerTimes.asr,
+      'maghrib': prayerTimes.maghrib,
+      'isha': prayerTimes.isha,
+    };
+
+    // CHANGED: was a local `alarmId()` closure duplicating _prayerAlarmBase
+    for (final entry in map.entries) {
+      final prayer = entry.key;
+      final time = entry.value;
+      final setting = prayerSettings[prayer]!;
+
+      await AndroidAlarmManager.cancel(alarmId(prayer, 'reminder'));
+      await AndroidAlarmManager.cancel(alarmId(prayer, 'azan'));
+
+      if (setting['reminder'] == true) {
+        final minutes = setting['minutesBefore'] as int;
+        final reminderTime = time.subtract(Duration(minutes: minutes));
+        if (reminderTime.isAfter(DateTime.now())) {
+          await scheduleReminder(
+            id: alarmId(prayer, 'reminder'),
+            time: reminderTime,
+            prayer: prayer,
+            minutes: minutes,
+          );
+        }
+      }
+
+      if (setting['azan'] == true && time.isAfter(DateTime.now())) {
+        await scheduleAzanNative(
+          id: alarmId(prayer, 'azan'),
+          time: time,
+          prayer: prayer,
+          volume: (setting['volume'] is double) ? setting['volume'] : 1.0,
+          azanEnabled: true,
+        );
+      }
+    }
+
+    await scheduleEidReminderIfApplicable(todaysPrayerTimes: prayerTimes);
+    await scheduleDailyRescheduler();
   }
 
   // ----------------------------------------------------------
@@ -206,16 +317,15 @@ class NotificationService {
       minute,
     ).add(Duration(days: daysUntilFriday));
 
-    // If today IS Friday but the time already passed, roll to next week
     if (daysUntilFriday == 0 && nextFriday.isBefore(now)) {
       nextFriday = nextFriday.add(const Duration(days: 7));
     }
-    await AndroidAlarmManager.oneShotAt(
+
+    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    await _safeOneShot(
       nextFriday,
       fridayReminderAlarmId,
       fridayReminderCallback,
-      exact: true,
-      wakeup: true,
       rescheduleOnReboot: true,
     );
   }
@@ -230,12 +340,11 @@ class NotificationService {
       now.day,
     ).add(const Duration(days: 1));
 
-    await AndroidAlarmManager.oneShotAt(
+    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    await _safeOneShot(
       endOfDay,
       fridayReminderEndAlarmId,
       fridayReminderEndCallback,
-      exact: true,
-      wakeup: true,
       rescheduleOnReboot: true,
     );
   }
@@ -258,17 +367,6 @@ class NotificationService {
   }
 
   // ----------------------------------------------------------
-  // CANCEL
-  // ----------------------------------------------------------
-
-  static Future<void> cancelPrayerAlarms() async {
-    for (final base in [1000, 2000, 3000, 4000, 5000]) {
-      await AndroidAlarmManager.cancel(base + 1); // azan
-      await AndroidAlarmManager.cancel(base + 2); // reminder
-    }
-  }
-
-  // ----------------------------------------------------------
   // REMINDER (DART)
   // ----------------------------------------------------------
 
@@ -278,14 +376,13 @@ class NotificationService {
     required String prayer,
     required int minutes,
   }) async {
-    final displayName = SpecialDayHelper.prettyPrayerName(prayer, time); // ADD
+    final displayName = SpecialDayHelper.prettyPrayerName(prayer, time);
 
-    await AndroidAlarmManager.oneShotAt(
+    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    await _safeOneShot(
       time,
       id,
       alarmCallback,
-      exact: true,
-      wakeup: true,
       params: {
         'title': 'Prayer Reminder',
         'body': '$displayName in $minutes minutes',
@@ -322,14 +419,6 @@ class NotificationService {
     await _platform.invokeMethod('stopAzan');
   }
 
-  static Future<void> testAzan(String prayer) async {
-    await _platform.invokeMethod('startAzan', {'prayer': prayer});
-  }
-
-  static Future<void> stopTestAzan() async {
-    await _platform.invokeMethod('stopAzan');
-  }
-
   static Future<void> cancelAzan(int id) async {
     const platform = MethodChannel('azan_service');
     try {
@@ -353,12 +442,11 @@ class NotificationService {
       5,
     ).add(const Duration(days: 1));
 
-    await AndroidAlarmManager.oneShotAt(
+    // CHANGED: was a direct AndroidAlarmManager.oneShotAt call
+    await _safeOneShot(
       midnight,
       9999,
       dailyRescheduleCallback,
-      exact: true,
-      wakeup: true,
       rescheduleOnReboot: true,
     );
   }
