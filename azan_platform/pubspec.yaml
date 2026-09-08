@@ -1,0 +1,24 @@
+name: azan_platform
+description: >
+  Local-only plugin exposing Azan/Friday-reminder native scheduling on the
+  "azan_service" channel. Exists purely so this channel gets registered on
+  every Flutter engine — including the headless one android_alarm_manager_plus
+  creates for background callbacks — which a channel set up only in
+  MainActivity.configureFlutterEngine() never reaches.
+version: 0.0.1
+publish_to: "none"
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.saleti.azan_platform
+        pluginClass: AzanPlatformPlugin
+
+dependencies:
+  flutter:
+    sdk: flutter
