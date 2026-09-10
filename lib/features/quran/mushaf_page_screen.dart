@@ -10,6 +10,8 @@ import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:saleti/utils/mushaf_data_service.dart';
+import 'package:saleti/features/quran/mushaf_text_page.dart';
 
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
@@ -80,6 +82,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     if (widget.readingMode == ReadingMode.khatm) {
       _loadKhatmYear();
     }
+    MushafDataService().load().then((_) {
+      if (mounted) setState(() {}); // triggers rebuild once text data is ready
+    });
   }
 
   Future<void> _loadKhatmYear() async {
@@ -341,17 +346,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Container(
         key: ValueKey('$isAhead-$isBehind-$diff'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          // ADD: solid backdrop so the colored text stays legible regardless of theme/background behind it
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
+
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -492,7 +487,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (_pageController == null) {
+    if (_pageController == null || !MushafDataService().isLoaded) {
       return Scaffold(
         backgroundColor: theme
             .scaffoldBackgroundColor, // CHANGED: was hardcoded Colors.white
@@ -681,22 +676,18 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     0,
                     _isLectureMode ? 0 : 64,
                   ),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.zero,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // NOTE: intentionally untouched — scanned mushaf pages
-                          // are printed white/black; not inverted for dark mode,
-                          // consistent with how virtually every Quran app handles this.
-                          Image.asset(
-                            'assets/mushaf/$pageNumber.png',
-                            fit: _isLectureMode ? BoxFit.fill : BoxFit.cover,
-                          ),
-                        ],
-                      ),
+                  child: Container(
+                    color: _isLectureMode
+                        ? Colors.black
+                        : Theme.of(context).scaffoldBackgroundColor,
+                    child: MushafTextPage(
+                      pageNumber: pageNumber,
+                      isLectureMode: _isLectureMode,
+                      textColor: _isLectureMode
+                          ? Colors.white
+                          : (Theme.of(context).textTheme.bodyLarge?.color ??
+                                Colors.black),
+                      accentColor: primaryGreen,
                     ),
                   ),
                 ),
@@ -838,22 +829,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Text(
-              '$_currentPage',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
+
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,

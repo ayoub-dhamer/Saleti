@@ -92,8 +92,10 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/mushaf/
     - assets/images/mosque.png
+    - assets/data/mushaf_complete.json
+    - assets/images/mushaf_frame_dark.png
+    - assets/images/mushaf_frame_light.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -132,3 +134,6 @@ flutter:
         - asset: assets/fonts/Amiri-Regular.ttf
         - asset: assets/fonts/Amiri-Bold.ttf
           weight: 700
+    - family: UthmanicHafs # ADD
+      fonts:
+        - asset: assets/fonts/UthmanicHafs.ttf

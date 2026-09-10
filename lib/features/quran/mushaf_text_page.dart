@@ -1,0 +1,258 @@
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:flutter/material.dart';
+import 'package:quran/quran.dart' as quran;
+import 'package:saleti/data/juz_data.dart';
+import 'package:saleti/utils/mushaf_data_service.dart';
+
+class MushafTextPage extends StatelessWidget {
+  final int pageNumber;
+  final bool isLectureMode;
+  final Color textColor;
+  final Color accentColor;
+
+  const MushafTextPage({
+    super.key,
+    required this.pageNumber,
+    this.isLectureMode = false,
+    this.textColor = Colors.black,
+    this.accentColor = const Color(0xFF1FA45B),
+  });
+
+  static const int _totalSlots = 15;
+
+  static const double _frameInsetLeft = 0.10;
+  static const double _frameInsetRight = 0.10;
+  static const double _frameInsetTop = 0.095;
+  static const double _frameInsetBottom = 0.095;
+
+  @override
+  Widget build(BuildContext context) {
+    final page = MushafDataService().getPage(pageNumber);
+
+    if (page == null) {
+      return const Center(child: Text('Page not available'));
+    }
+
+    if (isLectureMode) {
+      return _buildContent(page);
+    }
+
+    final isDarkMode =
+        Theme.of(context).brightness == Brightness.dark ||
+        textColor.computeLuminance() > 0.5;
+
+    final frameAsset = isDarkMode
+        ? 'assets/images/mushaf_frame_dark.png'
+        : 'assets/images/mushaf_frame_light.png';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(frameAsset, fit: BoxFit.fill),
+            Positioned(
+              left: width * _frameInsetLeft,
+              right: width * _frameInsetRight,
+              top: height * _frameInsetTop,
+              bottom: height * _frameInsetBottom,
+              child: _buildContent(page),
+            ),
+            Positioned(
+              top: height * 0.02,
+              right: width * 0.20,
+              child: _cornerLabel(_juzLabel(page)),
+            ),
+            Positioned(
+              top: height * 0.02,
+              left: width * 0.2,
+              child: _cornerLabel(_surahLabel(page)),
+            ),
+            Positioned(
+              bottom: height * 0.01,
+              left: 0,
+              right: 0,
+              child: Center(child: _cornerLabel('$pageNumber')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(MushafPageData page) {
+    final lineMap = {for (final l in page.lines) l.lineNumber: l};
+    final slots = <Widget>[];
+
+    int i = 1;
+    while (i <= _totalSlots) {
+      if (lineMap.containsKey(i)) {
+        slots.add(Expanded(child: _buildTextLine(lineMap[i]!)));
+        i++;
+      } else {
+        final gapStart = i;
+        while (i <= _totalSlots && !lineMap.containsKey(i)) {
+          i++;
+        }
+        final gapLen = i - gapStart;
+
+        int? nextSurah;
+        if (i <= _totalSlots &&
+            lineMap.containsKey(i) &&
+            lineMap[i]!.elements.isNotEmpty) {
+          nextSurah = lineMap[i]!.elements.first.surah;
+        }
+
+        slots.add(
+          Expanded(
+            flex: gapLen,
+            child: nextSurah != null
+                ? _surahBanner(
+                    nextSurah,
+                    includeBismillah: gapLen >= 2 && nextSurah != 9,
+                  )
+                : const SizedBox.shrink(),
+          ),
+        );
+      }
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isLectureMode ? 20 : 8,
+        vertical: isLectureMode ? 16 : 4,
+      ),
+      child: Column(mainAxisSize: MainAxisSize.max, children: slots),
+    );
+  }
+
+  Widget _cornerLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'Amiri',
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+        color: textColor,
+      ),
+    );
+  }
+
+  String _juzLabel(MushafPageData page) {
+    final juz = juzForPage(page.pageNumber);
+    return 'الجزء $juz';
+  }
+
+  String _surahLabel(MushafPageData page) {
+    if (page.lines.isEmpty || page.lines.first.elements.isEmpty) {
+      return page.surahsOnPage.isNotEmpty ? page.surahsOnPage.first : '';
+    }
+    final surahNumber = page.lines.first.elements.first.surah;
+    return quran.getSurahNameArabic(surahNumber);
+  }
+
+  Widget _buildTextLine(MushafLine line) {
+    final spans = <InlineSpan>[];
+
+    for (final el in line.elements) {
+      if (el.type == 'word') {
+        spans.add(TextSpan(text: '${el.text}  '));
+      } else if (el.type == 'ayah_end') {
+        spans.add(
+          TextSpan(
+            text: ' ${el.symbol}${el.numberAr} ',
+            style: TextStyle(
+              fontFamily: 'Amiri',
+              color: accentColor,
+              fontWeight: FontWeight.bold,
+              fontSize: isLectureMode ? 22 : 18,
+            ),
+          ),
+        );
+      }
+    }
+
+    return Center(
+      child: FittedBox(
+        // ADD: safety net against vertical overflow in tight slots
+        fit: BoxFit.scaleDown,
+        child: AutoSizeText.rich(
+          TextSpan(children: spans),
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.justify,
+          maxLines: 1,
+          minFontSize: 12,
+          overflowReplacement: const SizedBox.shrink(),
+          style: TextStyle(
+            fontFamily: 'Amiri',
+            fontSize: isLectureMode ? 28 : 21,
+            height: 1.6,
+            letterSpacing: 0.3,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _surahBanner(int surahNumber, {required bool includeBismillah}) {
+    final arabicName = quran.getSurahNameArabic(surahNumber);
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize
+            .min, // CHANGED: was implicit max — min lets FittedBox measure natural size correctly
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 5,
+            ), // CHANGED: tightened from 20/6
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: accentColor.withOpacity(0.6),
+                width: 1.2,
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'سورة $arabicName',
+              style: TextStyle(
+                fontFamily: 'Amiri',
+                fontWeight: FontWeight.bold,
+                fontSize: isLectureMode
+                    ? 24
+                    : 20, // CHANGED: unified closer to body text scale (was 25/19 — now 24/20, less of a mismatch)
+                color: textColor,
+                height:
+                    1.1, // ADD: tighter line box, avoids extra baked-in padding
+              ),
+            ),
+          ),
+          if (includeBismillah)
+            Padding(
+              padding: const EdgeInsets.only(
+                top: 4,
+              ), // CHANGED: was 6, tightened
+              child: Text(
+                'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
+                style: TextStyle(
+                  fontFamily: 'Amiri',
+                  fontSize: isLectureMode
+                      ? 24
+                      : 20, // CHANGED: matches surah-name size now for visual consistency
+                  height: 1.2, // CHANGED: was 1.4, tightened
+                  color: textColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
