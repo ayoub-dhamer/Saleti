@@ -195,45 +195,8 @@ class MushafTextPage extends StatelessWidget {
     double fontSize,
     double availableWidth,
   ) {
-    // Collect ordered segments (words + ayah-end markers), matching the
-    // original element order exactly.
     final segments = line.elements;
     if (segments.isEmpty) return const SizedBox.shrink();
-
-    const double ayahBadgePadding =
-        6; // 3px each side, matches the Padding below
-    final double ayahFootprint = _ayahBadgeSize + ayahBadgePadding;
-
-    // Measure the natural (unspaced) width of all the words combined.
-    final wordText = segments
-        .where((e) => e.type == 'word')
-        .map((e) => e.text ?? '')
-        .join();
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: wordText,
-        style: TextStyle(
-          fontFamily: 'Amiri',
-          fontSize: isLectureMode ? _lectureFontSize : fontSize,
-          letterSpacing: 0.3,
-        ),
-      ),
-      textDirection: TextDirection.rtl,
-      maxLines: 1,
-    )..layout();
-
-    final ayahCount = segments.where((e) => e.type == 'ayah_end').length;
-    final naturalContentWidth = tp.width + (ayahCount * ayahFootprint);
-
-    final numberOfGaps = segments.length - 1;
-    final extraSpace = availableWidth - naturalContentWidth;
-
-    // Distribute all extra space evenly between segments. Clamp to a small
-    // minimum so words never visually touch, even in a rare edge case.
-    final double gapWidth = numberOfGaps > 0
-        ? (extraSpace / numberOfGaps).clamp(6.0, double.infinity)
-        : 0;
 
     final renderSpans = <InlineSpan>[];
 
@@ -241,13 +204,28 @@ class MushafTextPage extends StatelessWidget {
       final el = segments[i];
 
       if (el.type == 'word') {
-        renderSpans.add(TextSpan(text: el.text));
-      } else {
+        renderSpans.add(
+          TextSpan(
+            text: el.text,
+            style: TextStyle(
+              fontFamily: 'Amiri',
+              fontSize: isLectureMode ? _lectureFontSize : fontSize,
+              color: textColor,
+              // Slight word spacing aids full justification alignment
+              wordSpacing: 1.5,
+            ),
+          ),
+        );
+        // Append standard space between words
+        if (i < segments.length - 1) {
+          renderSpans.add(const TextSpan(text: ' '));
+        }
+      } else if (el.type == 'ayah_end') {
         renderSpans.add(
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: SizedBox(
                 width: _ayahBadgeSize,
                 height: _ayahBadgeSize,
@@ -261,7 +239,7 @@ class MushafTextPage extends StatelessWidget {
                       el.numberAr ?? '',
                       style: TextStyle(
                         fontFamily: 'Amiri',
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: accentColor,
                         height: 1,
@@ -273,43 +251,23 @@ class MushafTextPage extends StatelessWidget {
             ),
           ),
         );
-      }
-
-      // Insert the computed gap AFTER this segment, except after the last one —
-      // this is what guarantees every line starts and ends at exactly the
-      // same x-position, regardless of word count.
-      if (i < segments.length - 1) {
-        renderSpans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: SizedBox(width: gapWidth),
-          ),
-        );
+        if (i < segments.length - 1) {
+          renderSpans.add(const TextSpan(text: ' '));
+        }
       }
     }
 
-    final textWidget = Text.rich(
-      TextSpan(children: renderSpans),
-      textDirection: TextDirection.rtl,
-      maxLines: 1,
-      overflow: TextOverflow.visible,
-      style: TextStyle(
-        fontFamily: 'Amiri',
-        fontSize: isLectureMode ? _lectureFontSize : fontSize,
-        letterSpacing: 0.3,
-        color: textColor,
+    return SizedBox(
+      width: availableWidth,
+      child: Text.rich(
+        TextSpan(children: renderSpans),
+        textDirection: TextDirection.rtl,
+        textAlign: TextAlign.justify, // Native browser/OS justification engine
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.visible,
       ),
     );
-
-    // SizedBox pins the line to exactly `availableWidth` — combined with the
-    // computed gaps summing to fill that width, this guarantees identical
-    // start/end edges across every line on the page.
-    return numberOfGaps > 0
-        ? SizedBox(width: availableWidth, child: textWidget)
-        : SizedBox(
-            width: availableWidth,
-            child: Center(child: textWidget),
-          ); // fallback for a pathological single-segment line
   }
 
   Widget _surahBanner(int surahNumber, {required bool includeBismillah}) {
