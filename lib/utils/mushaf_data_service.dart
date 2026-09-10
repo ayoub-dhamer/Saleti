@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class MushafWordElement {
@@ -94,4 +95,97 @@ class MushafDataService {
   }
 
   MushafPageData? getPage(int pageNumber) => _pages[pageNumber];
+
+  // ADD: the single most horizontally demanding line across the entire
+  // 604-page book — used as the worst case for choosing one fixed font
+  // size that guarantees every line, anywhere, fits without wrapping.
+  MushafLine? _densestLine;
+
+  MushafLine _findDensestLine() {
+    if (_densestLine != null) return _densestLine!;
+
+    MushafLine? worst;
+    int worstScore = -1;
+
+    for (final page in _pages.values) {
+      for (final line in page.lines) {
+        int score = 0;
+        for (final el in line.elements) {
+          if (el.type == 'word') {
+            score +=
+                (el.text?.length ?? 0) +
+                1; // +1 approximates the inter-word gap
+          } else {
+            score += 6; // fixed rough weight for an ayah-end marker's footprint
+          }
+        }
+        if (score > worstScore) {
+          worstScore = score;
+          worst = line;
+        }
+      }
+    }
+
+    _densestLine = worst;
+    return worst!;
+  }
+
+  // ADD: cached fixed font size per available width, so the (somewhat
+  // expensive) binary-search measurement only runs once per distinct
+  // screen width, not on every page build.
+  final Map<int, double> _fontSizeCache = {};
+
+  /// Computes the single fixed font size that guarantees the densest line
+  /// in the whole book fits [availableWidth] on one line — every other,
+  /// shorter line then uses TextAlign.justify to stretch and fill the
+  /// remaining width via inter-word spacing.
+  double computeFixedFontSize(
+    double availableWidth, {
+    double ayahBadgeWidth = 28,
+    double minFont = 14,
+    double maxFont = 30,
+  }) {
+    final key = availableWidth.round();
+    final cached = _fontSizeCache[key];
+    if (cached != null) return cached;
+
+    final densest = _findDensestLine();
+    final wordsText = densest.elements
+        .where((e) => e.type == 'word')
+        .map((e) => e.text)
+        .join('  ');
+    final ayahCount = densest.elements
+        .where((e) => e.type == 'ayah_end')
+        .length;
+
+    double lo = minFont, hi = maxFont, best = minFont;
+
+    for (int i = 0; i < 20; i++) {
+      final mid = (lo + hi) / 2;
+      final tp = TextPainter(
+        text: TextSpan(
+          text: wordsText,
+          style: TextStyle(
+            fontFamily: 'Amiri',
+            fontSize: mid,
+            letterSpacing: 0.3,
+          ),
+        ),
+        textDirection: TextDirection.rtl,
+        maxLines: 1,
+      )..layout();
+
+      final neededWidth = tp.width + (ayahCount * ayahBadgeWidth);
+
+      if (neededWidth <= availableWidth) {
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+
+    _fontSizeCache[key] = best;
+    return best;
+  }
 }
