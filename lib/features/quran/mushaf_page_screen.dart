@@ -322,49 +322,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  Widget _buildKhatmPaceIndicator() {
-    final diff = _khatmPaceDiff;
-    if (diff == null) return const SizedBox.shrink();
-
-    final bool isAhead = diff > 0;
-    final bool isBehind = diff < 0;
-
-    final Color color = isBehind ? Colors.red.shade600 : Colors.indigo.shade600;
-
-    final String label = isAhead
-        ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
-        : isBehind
-        ? '${diff.abs()} ${diff.abs() == 1 ? 'page' : 'pages'} behind'
-        : 'On track';
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: ScaleTransition(scale: anim, child: child),
-      ),
-      child: Container(
-        key: ValueKey('$isAhead-$isBehind-$diff'),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSecondHeader() {
     final isBookmarked = _bookmarkedPages.contains(_currentPage);
     return Container(
@@ -554,13 +511,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ],
             ),
           ),
-
-          if (!_isLectureMode && widget.readingMode == ReadingMode.khatm)
-            Positioned(
-              top: 120,
-              right: 30,
-              child: SafeArea(bottom: false, child: _buildKhatmPaceIndicator()),
-            ),
 
           if (_isLectureMode)
             Positioned(
@@ -785,9 +735,16 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
     final String? nextSurah = footer['nextSurah'];
 
+    // Base styling for all three pill boxes
+    final badgeDecoration = BoxDecoration(
+      color: Colors.white.withOpacity(0.18),
+      borderRadius: BorderRadius.circular(5),
+      border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+    );
+
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
@@ -798,38 +755,63 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // 1. LEFT BOX: Next Surah
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: widget.readingMode == ReadingMode.goal || nextSurah == null
-                  ? const SizedBox()
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.navigate_next_rounded,
-                          size: 12,
-                          color: Colors.white70,
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            nextSurah,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                  ? const SizedBox.shrink()
+                  : Container(
+                      height: 24,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: badgeDecoration,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Next',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.4,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              nextSurah,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
             ),
           ),
 
+          const SizedBox(width: 6),
+
+          // 2. CENTER BOX: Khatm Pace Indicator
+          if (widget.readingMode == ReadingMode.khatm)
+            Center(
+              child: SizedBox(
+                height: 24,
+                child: Center(child: _buildKhatmPaceIndicator(badgeDecoration)),
+              ),
+            ),
+
+          if (widget.readingMode == ReadingMode.khatm) const SizedBox(width: 6),
+
+          // 3. RIGHT BOX: Current Surah & Progress
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
@@ -841,7 +823,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     widget.surahGoal!.surahNumber,
                   );
 
-                  // CHANGED: Arabic name now comes straight from the quran package
                   final String arabicName = quran.getSurahNameArabic(
                     widget.surahGoal!.surahNumber,
                   );
@@ -850,28 +831,155 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     final current = liveProgress['current'];
                     final total = liveProgress['total'];
 
-                    return surahRowFromString(
-                      "$arabicName $current / $total",
-                      dimmed: false,
+                    return _buildFooterSurahBox(
+                      name: arabicName,
+                      current: current,
+                      total: total,
+                      badgeDecoration: badgeDecoration,
                     );
                   } else {
-                    return surahRowFromString(arabicName, dimmed: true);
+                    return _buildFooterSurahBox(
+                      name: arabicName,
+                      badgeDecoration: badgeDecoration,
+                    );
                   }
                 } else {
-                  if (surahsInFooter.isEmpty) return const SizedBox();
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      surahRowFromString(surahsInFooter[0]),
-                      if (surahsInFooter.length > 1)
-                        surahRowFromString(surahsInFooter[1]),
-                      if (surahsInFooter.length > 2)
-                        surahRowFromString(surahsInFooter[2]),
-                    ],
+                  if (surahsInFooter.isEmpty) return const SizedBox.shrink();
+
+                  final parsed = parseSurah(surahsInFooter[0]);
+                  return _buildFooterSurahBox(
+                    name: parsed.name,
+                    current: parsed.current > 0 ? parsed.current : null,
+                    total: parsed.total > 0 ? parsed.total : null,
+                    badgeDecoration: badgeDecoration,
                   );
                 }
               }(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Updated Khatm Pace Indicator matching height & background decoration
+  Widget _buildKhatmPaceIndicator(BoxDecoration badgeDecoration) {
+    final diff = _khatmPaceDiff;
+    if (diff == null) return const SizedBox.shrink();
+
+    final bool isAhead = diff > 0;
+    final bool isBehind = diff < 0;
+
+    final Color textColor = isBehind
+        ? Colors.red.shade300
+        : isAhead
+        ? Colors.indigo.shade200
+        : const Color(0xFFA3E635); // Light vibrant green for contrast
+
+    final String label = isAhead
+        ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
+        : isBehind
+        ? '${diff.abs()} ${diff.abs() == 1 ? 'page' : 'pages'} behind'
+        : 'On track';
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: ScaleTransition(scale: anim, child: child),
+      ),
+      child: Container(
+        key: ValueKey('$isAhead-$isBehind-$diff'),
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: badgeDecoration,
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 8.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.4,
+              color: textColor,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Helper method for the Right Section pill
+  Widget _buildFooterSurahBox({
+    required String name,
+    int? current,
+    int? total,
+    required BoxDecoration badgeDecoration,
+  }) {
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: badgeDecoration,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (current != null && total != null) ...[
+            const SizedBox(width: 4),
+            _compactProgressBar(current: current, total: total, dimmed: false),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Progress bar scaled for 24px container height
+  Widget _compactProgressBar({
+    required int current,
+    required int total,
+    bool dimmed = false,
+  }) {
+    final progress = total == 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
+
+    return SizedBox(
+      width: 42,
+      height: 8,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.white24,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress == 1
+                    ? Colors.amber
+                    : (dimmed ? Colors.white38 : Colors.white),
+              ),
+              minHeight: 8,
+            ),
+          ),
+          Text(
+            '$current/$total',
+            style: const TextStyle(
+              fontSize: 6.5,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+              height: 1,
             ),
           ),
         ],
@@ -954,46 +1062,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             current: parsed.current,
             total: parsed.total,
             dimmed: dimmed,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactProgressBar({
-    required int current,
-    required int total,
-    bool dimmed = false,
-  }) {
-    final progress = total == 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
-
-    return SizedBox(
-      width: 70,
-      height: 10,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress == 1
-                    ? Colors.amber
-                    : (dimmed ? Colors.white38 : Colors.white),
-              ),
-              minHeight: 10,
-            ),
-          ),
-          Text(
-            '$current/$total',
-            style: const TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-              height: 1,
-            ),
           ),
         ],
       ),

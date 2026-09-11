@@ -67,22 +67,20 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _confirmDelete(BookmarkItem b) async {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: theme.cardColor, // ADD
+          backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
             'Delete Bookmark?',
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color), // ADD
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
           ),
-
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -90,7 +88,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                 'Remove page ${b.page} from your bookmarks?',
                 style: TextStyle(
                   color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ), // ADD
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -99,9 +97,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               ),
             ],
           ),
-
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -125,8 +121,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: theme
-          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -142,10 +137,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         ),
         title: const Text(
           'Bookmarks',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ), // ADD: explicit white on the green gradient
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
       body: Column(
@@ -218,7 +210,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.bodyLarge?.color,
-              ), // CHANGED
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -227,7 +219,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               style: TextStyle(
                 color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
                 fontSize: 13,
-              ), // CHANGED
+              ),
             ),
           ],
         ),
@@ -269,20 +261,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               );
             },
             child: Container(
-              margin: const EdgeInsets.only(bottom: 14),
+              margin: const EdgeInsets.only(bottom: 4),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: theme.cardColor, // CHANGED: was hardcoded Colors.white
+                color: theme.cardColor,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(
-                      isDark ? 0.3 : 0.04,
-                    ), // CHANGED
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
               ),
               child: Row(
                 children: [
@@ -298,7 +281,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       ),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.bookmark_rounded,
                       color: primaryGreen,
                       size: 26,
@@ -314,7 +297,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: theme.textTheme.bodyLarge?.color, // CHANGED
+                            color: theme.textTheme.bodyLarge?.color,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -328,7 +311,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                               decoration: BoxDecoration(
                                 color: primaryGreen.withOpacity(
                                   isDark ? 0.18 : 0.1,
-                                ), // CHANGED
+                                ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -350,7 +333,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.6), // CHANGED
+                                      ?.withOpacity(0.6),
                                   fontSize: 12,
                                 ),
                               ),

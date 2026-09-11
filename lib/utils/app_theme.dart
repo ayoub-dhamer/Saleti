@@ -10,7 +10,7 @@ class AppColors {
 
   // Dark mode surfaces — dark neutral, not pure black (easier on the eyes,
   // and keeps the green gradient headers from looking harsh against true black)
-  static const Color darkBackground = Color(0xFF121417);
+  static const Color darkBackground = Color(0xFF000000);
   static const Color darkCard = Color(0xFF1C1F23);
   static const Color darkCardAlt = Color(0xFF23262B);
 }

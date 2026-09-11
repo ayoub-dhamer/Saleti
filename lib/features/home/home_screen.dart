@@ -18,9 +18,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int selected = 0;
 
-  static const Color primaryGreen = Color(0xFF1FA45B);
-  static const Color secondaryGreen = Color(0xFF4FC3A1);
-
   List<Widget> get pages => [
     PrayerTimesScreen(isActive: selected == 0),
     const HijriCalendarScreen(),
@@ -62,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
             bubbleFillStyle: BubbleFillStyle.fill,
             opacity: isDark ? 0.25 : 0.15,
           ),
-          backgroundColor: theme.cardColor,
+          backgroundColor: theme.scaffoldBackgroundColor,
           elevation: 0,
           items: [
             BottomBarItem(

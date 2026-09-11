@@ -57,8 +57,7 @@ class QuranScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme
-          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
@@ -188,8 +187,6 @@ class _AnimatedMainCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = theme.brightness == Brightness.dark;
-
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 280 + (index.clamp(0, 6) * 45)),
@@ -207,15 +204,8 @@ class _AnimatedMainCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: theme.cardColor, // CHANGED: was hardcoded Colors.white
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), // CHANGED
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
           child: Row(
             children: [
@@ -244,7 +234,7 @@ class _AnimatedMainCard extends StatelessWidget {
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                         color: theme.textTheme.bodyLarge?.color,
-                      ), // CHANGED
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -254,7 +244,7 @@ class _AnimatedMainCard extends StatelessWidget {
                           0.6,
                         ),
                         fontSize: 13,
-                      ), // CHANGED
+                      ),
                     ),
                   ],
                 ),
@@ -262,9 +252,7 @@ class _AnimatedMainCard extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: 26,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                  0.3,
-                ), // CHANGED: was Colors.grey
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.3),
               ),
             ],
           ),

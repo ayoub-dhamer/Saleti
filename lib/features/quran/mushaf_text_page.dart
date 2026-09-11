@@ -19,7 +19,7 @@ class MushafTextPage extends StatelessWidget {
 
   static const int _totalSlots = 15;
   static const double _ayahBadgeSize =
-      26; // ADD: fixed pixel size, doesn't scale with font
+      18; // ADD: fixed pixel size, doesn't scale with font
   static const double _bodyFontSize = 21;
   static const double _lectureFontSize = 27;
 
@@ -208,15 +208,12 @@ class MushafTextPage extends StatelessWidget {
           TextSpan(
             text: el.text,
             style: TextStyle(
-              fontFamily: 'Amiri',
-              fontSize: isLectureMode ? _lectureFontSize : fontSize,
+              fontFamily: _quranFontFamily,
+              fontSize: fontSize,
               color: textColor,
-              // Slight word spacing aids full justification alignment
-              wordSpacing: 1.5,
             ),
           ),
         );
-        // Append standard space between words
         if (i < segments.length - 1) {
           renderSpans.add(const TextSpan(text: ' '));
         }
@@ -225,24 +222,24 @@ class MushafTextPage extends StatelessWidget {
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
               child: SizedBox(
                 width: _ayahBadgeSize,
                 height: _ayahBadgeSize,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: accentColor, width: 1.4),
+                    border: Border.all(color: accentColor, width: 1.0),
                   ),
                   child: Center(
                     child: Text(
                       el.numberAr ?? '',
                       style: TextStyle(
-                        fontFamily: 'Amiri',
-                        fontSize: 11,
+                        fontFamily: _quranFontFamily,
+                        fontSize: 8.5,
                         fontWeight: FontWeight.bold,
                         color: accentColor,
-                        height: 1,
+                        height: 1.0,
                       ),
                     ),
                   ),
@@ -262,10 +259,9 @@ class MushafTextPage extends StatelessWidget {
       child: Text.rich(
         TextSpan(children: renderSpans),
         textDirection: TextDirection.rtl,
-        textAlign: TextAlign.justify, // Native browser/OS justification engine
-        maxLines: 1,
+        textAlign: TextAlign
+            .justify, // Distributes spacing naturally without changing font scale
         softWrap: false,
-        overflow: TextOverflow.visible,
       ),
     );
   }

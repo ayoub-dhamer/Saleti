@@ -39,8 +39,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: theme
-          .scaffoldBackgroundColor, // CHANGED: was hardcoded Color(0xFFF4F6F8)
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -109,35 +108,26 @@ class _SurahListScreenState extends State<SurahListScreen> {
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: theme.cardColor, // CHANGED: was hardcoded Colors.white
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ), // CHANGED
-        ],
       ),
       child: Row(
         children: [
           Icon(
             Icons.search,
             color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
-          ), // CHANGED
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: (v) => setState(() => _query = v),
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-              ), // ADD: input text color
+              style: TextStyle(color: theme.textTheme.bodyLarge?.color),
               decoration: InputDecoration(
                 hintText: 'Search Surah...',
                 hintStyle: TextStyle(
                   color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
-                ), // ADD
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -163,9 +153,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 child: Icon(
                   Icons.close,
                   size: 16,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                    0.6,
-                  ), // also bumped
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
                 ),
               ),
             ),
@@ -200,7 +188,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.bodyLarge?.color,
-              ), // CHANGED
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -208,7 +196,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
               style: TextStyle(
                 color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
                 fontSize: 12.5,
-              ), // CHANGED
+              ),
             ),
           ],
         ),
@@ -280,18 +268,11 @@ class _SurahListScreenState extends State<SurahListScreen> {
         );
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
+        margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: theme.cardColor, // CHANGED: was hardcoded Colors.white
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ), // CHANGED
-          ],
+          color: theme.cardColor,
         ),
         child: Row(
           children: [
@@ -308,7 +289,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: theme.textTheme.bodyLarge?.color,
-                    ), // CHANGED
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -316,7 +297,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                     style: TextStyle(
                       color: theme.textTheme.bodyMedium?.color?.withOpacity(
                         0.55,
-                      ), // CHANGED
+                      ),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -373,14 +354,14 @@ class _SurahListScreenState extends State<SurahListScreen> {
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withOpacity(0.06)
-            : const Color(0xFFF4F6F8), // CHANGED
+            : const Color(0xFFF4F6F8),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 10.5,
-          color: isDark ? Colors.white70 : Colors.grey.shade600, // CHANGED
+          color: isDark ? Colors.white70 : Colors.grey.shade600,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -398,17 +379,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: primaryGreen.withOpacity(0.2),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
       child: Center(
-        // ADD: pin this small numeral to 1.0x scale so the fixed 48x48 circle
-        // never clips when the user has increased system font size.
         child: MediaQuery(
           data: MediaQuery.of(
             context,

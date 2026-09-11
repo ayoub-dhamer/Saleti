@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:saleti/widgets/icon_action.dart';
-import 'package:saleti/widgets/tap_scale.dart';
 import '../../utils/khatm_service.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
