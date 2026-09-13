@@ -96,6 +96,8 @@ flutter:
     - assets/data/mushaf_complete.json
     - assets/images/mushaf_frame_dark.png
     - assets/images/mushaf_frame_light.png
+    - assets/images/surah_name_frame_light.png
+    - assets/images/surah_name_frame_dark.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

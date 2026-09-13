@@ -2,11 +2,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Single source of truth for the Quran font family — used both here (for
+/// sizing measurements) and in MushafTextPage (for actual rendering), so
+/// the two can never silently drift apart.
+const String kQuranFontFamily = 'amiri';
+
 class MushafWordElement {
   final String type; // 'word' or 'ayah_end'
   final int surah;
   final int ayah;
-  final String? text;
+  String? text;
   final String? symbol;
   final String? numberAr;
 
@@ -27,6 +32,17 @@ class MushafWordElement {
       text: json['text'],
       symbol: json['symbol'],
       numberAr: json['number_ar'],
+    );
+  }
+
+  MushafWordElement clone() {
+    return MushafWordElement(
+      type: type,
+      surah: surah,
+      ayah: ayah,
+      text: text,
+      symbol: symbol,
+      numberAr: numberAr,
     );
   }
 }
@@ -96,96 +112,73 @@ class MushafDataService {
 
   MushafPageData? getPage(int pageNumber) => _pages[pageNumber];
 
-  // ADD: the single most horizontally demanding line across the entire
-  // 604-page book — used as the worst case for choosing one fixed font
-  // size that guarantees every line, anywhere, fits without wrapping.
-  MushafLine? _densestLine;
-
-  MushafLine _findDensestLine() {
-    if (_densestLine != null) return _densestLine!;
-
-    MushafLine? worst;
-    int worstScore = -1;
-
-    for (final page in _pages.values) {
-      for (final line in page.lines) {
-        int score = 0;
-        for (final el in line.elements) {
-          if (el.type == 'word') {
-            score +=
-                (el.text?.length ?? 0) +
-                1; // +1 approximates the inter-word gap
-          } else {
-            score += 6; // fixed rough weight for an ayah-end marker's footprint
-          }
-        }
-        if (score > worstScore) {
-          worstScore = score;
-          worst = line;
-        }
+  /// Builds the exact plain-text representation of a line as it will
+  /// actually be rendered (words + ayah-end marker glyphs), for measurement
+  /// purposes. Must match _buildSpansFromSegments' text content exactly,
+  /// or the sizing calculation will silently drift from the real render.
+  String _plainLineText(MushafLine line) {
+    final buffer = StringBuffer();
+    for (int i = 0; i < line.elements.length; i++) {
+      final el = line.elements[i];
+      if (el.type == 'word') {
+        buffer.write(el.text ?? '');
+      } else if (el.type == 'ayah_end') {
+        buffer.write('\u06DD${el.numberAr ?? ''}');
       }
+      if (i < line.elements.length - 1) buffer.write(' ');
     }
-
-    _densestLine = worst;
-    return worst!;
+    return buffer.toString();
   }
 
-  // ADD: cached fixed font size per available width, so the (somewhat
-  // expensive) binary-search measurement only runs once per distinct
-  // screen width, not on every page build.
   final Map<int, double> _fontSizeCache = {};
 
-  /// Computes the single fixed font size that guarantees the densest line
-  /// in the whole book fits [availableWidth] on one line — every other,
-  /// shorter line then uses TextAlign.justify to stretch and fill the
-  /// remaining width via inter-word spacing.
+  /// Computes the single fixed font size that guarantees the single widest
+  /// natural line in the whole book fits [availableWidth] on one line.
+  /// CHANGED: previously scored lines with a crude word-length heuristic
+  /// and measured using 'Amiri' — a font never actually used for rendering.
+  /// Now measures every line's TRUE natural width directly, in the SAME
+  /// font (kQuranFontFamily) actually used to render it, then scales
+  /// linearly to fit — both more accurate and simpler than a binary search.
   double computeFixedFontSize(
     double availableWidth, {
-    double ayahBadgeWidth = 28,
-    double minFont = 14,
-    double maxFont = 30,
+    double referenceFontSize = 20,
+    double minFont = 12,
+    double maxFont = 34,
   }) {
     final key = availableWidth.round();
     final cached = _fontSizeCache[key];
     if (cached != null) return cached;
 
-    final densest = _findDensestLine();
-    final wordsText = densest.elements
-        .where((e) => e.type == 'word')
-        .map((e) => e.text)
-        .join('  ');
-    final ayahCount = densest.elements
-        .where((e) => e.type == 'ayah_end')
-        .length;
+    double maxNaturalWidth = 0;
 
-    double lo = minFont, hi = maxFont, best = minFont;
+    for (final page in _pages.values) {
+      for (final line in page.lines) {
+        final text = _plainLineText(line);
+        if (text.isEmpty) continue;
 
-    for (int i = 0; i < 20; i++) {
-      final mid = (lo + hi) / 2;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: wordsText,
-          style: TextStyle(
-            fontFamily: 'Amiri',
-            fontSize: mid,
-            letterSpacing: 0.3,
+        final tp = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: const TextStyle(
+              fontFamily: kQuranFontFamily,
+              fontSize: 20, // fixed reference size for measurement
+            ),
           ),
-        ),
-        textDirection: TextDirection.rtl,
-        maxLines: 1,
-      )..layout();
+          textDirection: TextDirection.rtl,
+          maxLines: 1,
+        )..layout();
 
-      final neededWidth = tp.width + (ayahCount * ayahBadgeWidth);
-
-      if (neededWidth <= availableWidth) {
-        best = mid;
-        lo = mid;
-      } else {
-        hi = mid;
+        if (tp.width > maxNaturalWidth) maxNaturalWidth = tp.width;
       }
     }
 
-    _fontSizeCache[key] = best;
-    return best;
+    double fontSize = maxNaturalWidth > 0
+        ? (availableWidth / maxNaturalWidth) * referenceFontSize
+        : maxFont;
+
+    fontSize = fontSize.clamp(minFont, maxFont);
+
+    _fontSizeCache[key] = fontSize;
+    return fontSize;
   }
 }

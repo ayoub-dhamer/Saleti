@@ -440,14 +440,22 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
+  // In mushaf_page_screen.dart - Replace the Stack children overlay in build():
+
+  // In mushaf_page_screen.dart
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Resolve background and text colors dynamically for lecture mode
+    final lectureBgColor = theme.scaffoldBackgroundColor;
+    final lectureTextColor = isDarkMode ? Colors.white : Colors.black;
 
     if (_pageController == null || !MushafDataService().isLoaded) {
       return Scaffold(
-        backgroundColor: theme
-            .scaffoldBackgroundColor, // CHANGED: was hardcoded Colors.white
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -479,13 +487,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Stack(
         children: [
           Scaffold(
-            // CHANGED: lecture mode stays black (intentional immersive backdrop);
-            // normal mode now follows theme instead of hardcoded white, since the
-            // page image no longer has side padding and this mostly shows at
-            // the very top/bottom edges (e.g. behind the animated header).
-            backgroundColor: _isLectureMode
-                ? Colors.black
-                : theme.scaffoldBackgroundColor,
+            // Use theme scaffold background color instead of hardcoded black
+            backgroundColor: theme.scaffoldBackgroundColor,
             appBar: _isLectureMode ? null : _buildAppBar(),
             body: Column(
               children: [
@@ -502,92 +505,80 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 ),
                 Expanded(
                   child: Container(
-                    color: _isLectureMode
-                        ? Colors.black
-                        : theme.scaffoldBackgroundColor, // CHANGED
-                    child: _buildReadingArea(),
+                    color: theme.scaffoldBackgroundColor,
+                    child: _buildReadingArea(lectureTextColor, lectureBgColor),
                   ),
                 ),
               ],
             ),
           ),
 
+          // TOP BAR OVERLAY FOR LECTURE MODE
           if (_isLectureMode)
             Positioned(
-              top: 8,
-              left: 8,
-              child: IconAction(
-                label: 'Exit full screen',
-                onTap: () => _toggleLectureMode(false),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 24),
-                ),
-              ),
-            ),
-
-          if (_isLastPage &&
-              _isPageSettled &&
-              widget.readingMode == ReadingMode.khatm)
-            Positioned(
-              bottom: _isLectureMode ? 10 : 67,
-              left: 10,
-              child: SizedBox(
-                height: 35,
-                child: _AnimatedActionButton(
-                  label: 'Restart Cycle',
-                  onTap: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        backgroundColor: theme.cardColor, // CHANGED
-                        title: Text(
-                          'Finish Cycle?',
-                          style: TextStyle(
-                            color: theme.textTheme.bodyLarge?.color,
-                          ),
-                        ), // CHANGED
-                        content: Text(
-                          'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
-                          ), // CHANGED
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: [
+                  IconAction(
+                    label: 'Exit full screen',
+                    onTap: () => _toggleLectureMode(false),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.black54 : Colors.white70,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDarkMode ? Colors.white24 : Colors.black12,
+                          width: 1,
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryGreen,
-                            ),
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text(
-                              'Yes',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        ],
                       ),
-                    );
-
-                    if (confirm == true) {
-                      final isLastCycle = await _isLastKhatmCycle();
-                      await _goToFirstPage();
-                      if (!context.mounted) return;
-                      if (isLastCycle) {
-                        Navigator.pop(context, true);
-                      }
-                    }
-                  },
-                ),
+                      child: Icon(
+                        Icons.close,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.readingMode == ReadingMode.khatm) ...[
+                    _buildKhatmPaceIndicator(
+                      BoxDecoration(
+                        color: isDarkMode
+                            ? Colors.white.withOpacity(0.18)
+                            : Colors.black.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDarkMode ? Colors.white24 : Colors.black12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.black54 : Colors.white70,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.white24 : Colors.black12,
+                      ),
+                    ),
+                    child: Text(
+                      '$_currentPage / 604',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
@@ -595,7 +586,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  Widget _buildReadingArea() {
+  Widget _buildReadingArea(Color lectureTextColor, Color lectureBgColor) {
     return Stack(
       children: [
         PageView.builder(
@@ -627,14 +618,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     _isLectureMode ? 0 : 64,
                   ),
                   child: Container(
+                    // FIX: Use lectureBgColor instead of hardcoded Colors.black
                     color: _isLectureMode
-                        ? Colors.black
+                        ? lectureBgColor
                         : Theme.of(context).scaffoldBackgroundColor,
                     child: MushafTextPage(
                       pageNumber: pageNumber,
                       isLectureMode: _isLectureMode,
                       textColor: _isLectureMode
-                          ? Colors.white
+                          ? lectureTextColor
                           : (Theme.of(context).textTheme.bodyLarge?.color ??
                                 Colors.black),
                       accentColor: primaryGreen,
@@ -657,20 +649,20 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
-                              backgroundColor: theme.cardColor, // CHANGED
+                              backgroundColor: theme.cardColor,
                               title: Text(
                                 'Mark Surah Completed?',
                                 style: TextStyle(
                                   color: theme.textTheme.bodyLarge?.color,
                                 ),
-                              ), // CHANGED
+                              ),
                               content: Text(
                                 'You reached the end of ${widget.surahGoal!.surahName}. '
                                 'Do you want to count this recitation toward your goal?',
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
                                       ?.withOpacity(0.7),
-                                ), // CHANGED
+                                ),
                               ),
                               actions: [
                                 TextButton(

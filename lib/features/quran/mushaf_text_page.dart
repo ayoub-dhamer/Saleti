@@ -6,28 +6,31 @@ import 'package:saleti/utils/mushaf_data_service.dart';
 class MushafTextPage extends StatelessWidget {
   final int pageNumber;
   final bool isLectureMode;
-  final Color textColor;
+  final Color? textColor;
   final Color accentColor;
 
   const MushafTextPage({
     super.key,
     required this.pageNumber,
     this.isLectureMode = false,
-    this.textColor = Colors.black,
+    this.textColor,
     this.accentColor = const Color(0xFF1FA45B),
   });
 
   static const int _totalSlots = 15;
-  static const double _ayahBadgeSize =
-      18; // ADD: fixed pixel size, doesn't scale with font
-  static const double _bodyFontSize = 21;
+  static const double _bodyFontSize = 27;
   static const double _lectureFontSize = 27;
 
-  static const double _frameInsetLeft = 0.10;
-  static const double _frameInsetRight = 0.10;
-  static const double _frameInsetTop = 0.095;
-  static const double _frameInsetBottom = 0.095;
-  static const String _quranFontFamily = 'amiri';
+  static const double _frameInsetLeft = 0.095;
+  static const double _frameInsetRight = 0.095;
+  static const double _frameInsetTop = 0.06;
+  static const double _frameInsetBottom = 0.06;
+
+  // mushaf_text_page.dart
+
+  // mushaf_text_page.dart
+
+  // In mushaf_text_page.dart
 
   @override
   Widget build(BuildContext context) {
@@ -37,13 +40,13 @@ class MushafTextPage extends StatelessWidget {
       return const Center(child: Text('Page not available'));
     }
 
-    if (isLectureMode) {
-      return _buildContent(page);
-    }
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    final isDarkMode =
-        Theme.of(context).brightness == Brightness.dark ||
-        textColor.computeLuminance() > 0.5;
+    // Resolves to custom passed textColor (light mode -> black, dark mode -> white)
+    final Color resolvedTextColor =
+        textColor ?? (isDarkMode ? Colors.white : Colors.black);
+
+    final ayahEndColor = isDarkMode ? accentColor : Colors.lightBlue;
 
     final frameAsset = isDarkMode
         ? 'assets/images/mushaf_frame_dark.png'
@@ -57,42 +60,47 @@ class MushafTextPage extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(frameAsset, fit: BoxFit.fill),
+            if (!isLectureMode) Image.asset(frameAsset, fit: BoxFit.fill),
             Positioned(
-              left: width * _frameInsetLeft,
-              right: width * _frameInsetRight,
-              top: height * _frameInsetTop,
-              bottom: height * _frameInsetBottom,
-              child: _buildContent(page),
+              left: isLectureMode ? 0 : width * _frameInsetLeft,
+              right: isLectureMode ? 0 : width * _frameInsetRight,
+              top: isLectureMode ? 0 : height * _frameInsetTop,
+              bottom: isLectureMode ? 0 : height * _frameInsetBottom,
+              child: _buildContent(page, ayahEndColor, resolvedTextColor),
             ),
-            Positioned(
-              top: height * 0.02,
-              right: width * 0.20,
-              child: _cornerLabel(_juzLabel(page)),
-            ),
-            Positioned(
-              top: height * 0.02,
-              left: width * 0.2,
-              child: _cornerLabel(_surahLabel(page)),
-            ),
-            Positioned(
-              bottom: height * 0.01,
-              left: 0,
-              right: 0,
-              child: Center(child: _cornerLabel('$pageNumber')),
-            ),
+            if (!isLectureMode) ...[
+              Positioned(
+                top: height * 0.02,
+                right: width * 0.20,
+                child: _cornerLabel(_juzLabel(page), resolvedTextColor),
+              ),
+              Positioned(
+                top: height * 0.02,
+                left: width * 0.2,
+                child: _cornerLabel(_surahLabel(page), resolvedTextColor),
+              ),
+              Positioned(
+                bottom: height * 0.01,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _cornerLabel('$pageNumber', resolvedTextColor),
+                ),
+              ),
+            ],
           ],
         );
       },
     );
   }
 
-  Widget _buildContent(MushafPageData page) {
+  Widget _buildContent(
+    MushafPageData page,
+    Color ayahEndColor,
+    Color effectiveTextColor,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // CHANGED: one fixed font size, computed once for this available
-        // width and reused for every line on the page (and every other
-        // page at the same width, via the service's cache).
         final availableTextWidth =
             constraints.maxWidth - (isLectureMode ? 40 : 16);
         final fontSize = MushafDataService().computeFixedFontSize(
@@ -101,6 +109,8 @@ class MushafTextPage extends StatelessWidget {
 
         final lineMap = {for (final l in page.lines) l.lineNumber: l};
         final slots = <Widget>[];
+
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
         int i = 1;
         while (i <= _totalSlots) {
@@ -111,7 +121,9 @@ class MushafTextPage extends StatelessWidget {
                   child: _buildTextLine(
                     lineMap[i]!,
                     fontSize,
-                    constraints.maxWidth - (isLectureMode ? 40 : 16),
+                    availableTextWidth,
+                    ayahEndColor,
+                    effectiveTextColor,
                   ),
                 ),
               ),
@@ -134,11 +146,6 @@ class MushafTextPage extends StatelessWidget {
             slots.add(
               Expanded(
                 flex: gapLen,
-                // CHANGED: OverflowBox instead of shrinking — the banner
-                // renders at its natural fixed-font size; on very tight
-                // header gaps it may slightly overlap the neighboring slot
-                // rather than shrinking text, per your request to keep
-                // sizes fixed everywhere.
                 child: nextSurah != null
                     ? OverflowBox(
                         maxHeight: double.infinity,
@@ -146,6 +153,8 @@ class MushafTextPage extends StatelessWidget {
                         child: _surahBanner(
                           nextSurah,
                           includeBismillah: gapLen >= 2 && nextSurah != 9,
+                          effectiveTextColor: effectiveTextColor,
+                          isDarkMode: isDarkMode,
                         ),
                       )
                     : const SizedBox.shrink(),
@@ -165,14 +174,14 @@ class MushafTextPage extends StatelessWidget {
     );
   }
 
-  Widget _cornerLabel(String text) {
+  Widget _cornerLabel(String text, Color activeTextColor) {
     return Text(
       text,
       style: TextStyle(
-        fontFamily: _quranFontFamily,
+        fontFamily: kQuranFontFamily,
         fontWeight: FontWeight.bold,
         fontSize: 13,
-        color: textColor,
+        color: activeTextColor,
       ),
     );
   }
@@ -194,10 +203,135 @@ class MushafTextPage extends StatelessWidget {
     MushafLine line,
     double fontSize,
     double availableWidth,
+    Color ayahEndColor,
+    Color activeTextColor,
   ) {
     final segments = line.elements;
     if (segments.isEmpty) return const SizedBox.shrink();
 
+    final naturalSpans = _buildSpansFromSegments(
+      segments,
+      fontSize,
+      ayahEndColor,
+      activeTextColor,
+    );
+    final naturalWidth = _measureSpanWidth(naturalSpans);
+    final targetExtraWidth = (availableWidth - naturalWidth).clamp(
+      0.0,
+      double.infinity,
+    );
+
+    final kashidaSpans = targetExtraWidth > 0
+        ? _applyDynamicKashida(
+            segments,
+            fontSize,
+            targetExtraWidth,
+            ayahEndColor,
+            activeTextColor,
+          )
+        : naturalSpans;
+
+    final afterKashidaWidth = _measureSpanWidth(kashidaSpans);
+    final gapCount = segments.length - 1;
+    final leftover = availableWidth - afterKashidaWidth;
+    final topUpSpacing = (gapCount > 0 && leftover > 0)
+        ? leftover / gapCount
+        : 0.0;
+
+    return SizedBox(
+      width: availableWidth,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(wordSpacing: topUpSpacing),
+            children: kashidaSpans,
+          ),
+          textDirection: TextDirection.rtl,
+          softWrap: false,
+        ),
+      ),
+    );
+  }
+
+  double _measureSpanWidth(List<InlineSpan> spans) {
+    final painter = TextPainter(
+      text: TextSpan(children: spans),
+      textDirection: TextDirection.rtl,
+      maxLines: 1,
+    )..layout();
+    return painter.width;
+  }
+
+  List<InlineSpan> _applyDynamicKashida(
+    List<MushafWordElement> segments,
+    double fontSize,
+    double targetExtraWidth,
+    Color ayahEndColor,
+    Color activeTextColor,
+  ) {
+    const kashidaChar = 'ـ';
+    final mutatedSegments = segments.map((e) => e.clone()).toList();
+
+    final singleKashidaWidth = _measureSpanWidth([
+      TextSpan(
+        text: kashidaChar,
+        style: TextStyle(
+          fontFamily: kQuranFontFamily,
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+        ),
+      ),
+    ]);
+
+    if (singleKashidaWidth <= 0) {
+      return _buildSpansFromSegments(
+        segments,
+        fontSize,
+        ayahEndColor,
+        activeTextColor,
+      );
+    }
+
+    int kashidasToInsert = (targetExtraWidth / singleKashidaWidth).floor();
+
+    final stretchableRegex = RegExp(
+      r'([بتثجحخسشصضطظعغفقكلمنهي])((?:[\u064B-\u065F\u0670\u06D6-\u06ED])*)(?=[بتثجحخسشصضطظعغفقكلمنهي])',
+    );
+
+    while (kashidasToInsert > 0) {
+      bool insertedAny = false;
+
+      for (final el in mutatedSegments) {
+        if (el.type == 'word' && el.text != null && kashidasToInsert > 0) {
+          if (stretchableRegex.hasMatch(el.text!)) {
+            el.text = el.text!.replaceFirstMapped(
+              stretchableRegex,
+              (match) => '${match.group(1)}${match.group(2)}$kashidaChar',
+            );
+            kashidasToInsert--;
+            insertedAny = true;
+          }
+        }
+      }
+      if (!insertedAny) break;
+    }
+
+    return _buildSpansFromSegments(
+      mutatedSegments,
+      fontSize,
+      ayahEndColor,
+      activeTextColor,
+    );
+  }
+
+  List<InlineSpan> _buildSpansFromSegments(
+    List<MushafWordElement> segments,
+    double fontSize,
+    Color ayahEndColor,
+    Color activeTextColor,
+  ) {
     final renderSpans = <InlineSpan>[];
 
     for (int i = 0; i < segments.length; i++) {
@@ -206,120 +340,122 @@ class MushafTextPage extends StatelessWidget {
       if (el.type == 'word') {
         renderSpans.add(
           TextSpan(
-            text: el.text,
+            text: el.text ?? '',
             style: TextStyle(
-              fontFamily: _quranFontFamily,
+              fontFamily: kQuranFontFamily,
+              fontWeight: FontWeight.bold,
               fontSize: fontSize,
-              color: textColor,
+              color: activeTextColor,
             ),
           ),
         );
-        if (i < segments.length - 1) {
-          renderSpans.add(const TextSpan(text: ' '));
-        }
       } else if (el.type == 'ayah_end') {
         renderSpans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: SizedBox(
-                width: _ayahBadgeSize,
-                height: _ayahBadgeSize,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: accentColor, width: 1.0),
-                  ),
-                  child: Center(
-                    child: Text(
-                      el.numberAr ?? '',
-                      style: TextStyle(
-                        fontFamily: _quranFontFamily,
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.bold,
-                        color: accentColor,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          TextSpan(
+            text: '\u06DD${el.numberAr ?? ''}',
+            style: TextStyle(
+              fontFamily: kQuranFontFamily,
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+              color: ayahEndColor,
             ),
           ),
         );
-        if (i < segments.length - 1) {
-          renderSpans.add(const TextSpan(text: ' '));
-        }
+      }
+
+      if (i < segments.length - 1) {
+        renderSpans.add(const TextSpan(text: ' '));
       }
     }
 
-    return SizedBox(
-      width: availableWidth,
-      child: Text.rich(
-        TextSpan(children: renderSpans),
-        textDirection: TextDirection.rtl,
-        textAlign: TextAlign
-            .justify, // Distributes spacing naturally without changing font scale
-        softWrap: false,
-      ),
-    );
+    return renderSpans;
   }
 
-  Widget _surahBanner(int surahNumber, {required bool includeBismillah}) {
+  Widget _surahBanner(
+    int surahNumber, {
+    required bool includeBismillah,
+    required Color effectiveTextColor,
+    required bool isDarkMode,
+  }) {
     final arabicName = quran.getSurahNameArabic(surahNumber);
 
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Column(
-        mainAxisSize: MainAxisSize
-            .min, // CHANGED: was implicit max — min lets FittedBox measure natural size correctly
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 5,
-            ), // CHANGED: tightened from 20/6
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: accentColor.withOpacity(0.6),
-                width: 1.2,
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'سورة $arabicName',
-              style: TextStyle(
-                fontFamily: _quranFontFamily,
-                fontWeight: FontWeight.bold,
-                fontSize: isLectureMode
-                    ? _lectureFontSize
-                    : _bodyFontSize, // CHANGED: unified closer to body text scale (was 25/19 — now 24/20, less of a mismatch)
-                color: textColor,
-                height:
-                    1.1, // ADD: tighter line box, avoids extra baked-in padding
-              ),
+          SizedBox(
+            width: 350,
+            child: _surahBannerImage(
+              arabicName,
+              isDarkMode: isDarkMode,
+              textColor: effectiveTextColor,
             ),
           ),
           if (includeBismillah)
             Padding(
-              padding: const EdgeInsets.only(
-                top: 4,
-              ), // CHANGED: was 6, tightened
+              padding: const EdgeInsets.only(top: 6),
               child: Text(
                 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
                 style: TextStyle(
-                  fontFamily: _quranFontFamily,
-                  fontSize: isLectureMode
-                      ? _lectureFontSize
-                      : _bodyFontSize, // CHANGED: matches surah-name size now for visual consistency
-                  height: 1.2, // CHANGED: was 1.4, tightened
-                  color: textColor,
+                  fontFamily: kQuranFontFamily,
+                  fontSize: isLectureMode ? _lectureFontSize : _bodyFontSize,
+                  height: 1.2,
+                  color:
+                      effectiveTextColor, // Updated to use effectiveTextColor
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // ADD: the banner artwork with the surah name overlaid, kept clear of the
+  // ornate scroll medallions on each end.
+  Widget _surahBannerImage(
+    String arabicName, {
+    required bool isDarkMode,
+    required Color textColor,
+  }) {
+    final bannerAsset = isDarkMode
+        ? 'assets/images/surah_name_frame_dark.png'
+        : 'assets/images/surah_name_frame_light.png';
+
+    return AspectRatio(
+      aspectRatio: 550 / 62,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(bannerAsset, fit: BoxFit.fill),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: width * 0.16),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'سورة $arabicName',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontFamily: kQuranFontFamily,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isLectureMode
+                            ? _lectureFontSize
+                            : _bodyFontSize,
+                        color:
+                            textColor, // Updated to use non-null resolved textColor
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
