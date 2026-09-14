@@ -9,6 +9,18 @@ class MushafTextPage extends StatelessWidget {
   final Color? textColor;
   final Color accentColor;
 
+  static final Map<String, List<InlineSpan>> _lineSpanCache = {};
+  static final Map<double, double> _kashidaWidthCache = {};
+
+  String _getCacheKey({
+    required int pageNum,
+    required int lineNum,
+    required double width,
+    required bool isDark,
+  }) {
+    return '$pageNum-$lineNum-${width.toStringAsFixed(1)}-$isDark-$isLectureMode';
+  }
+
   const MushafTextPage({
     super.key,
     required this.pageNumber,
@@ -64,7 +76,7 @@ class MushafTextPage extends StatelessWidget {
             Positioned(
               left: isLectureMode ? 0 : width * _frameInsetLeft,
               right: isLectureMode ? 0 : width * _frameInsetRight,
-              top: isLectureMode ? 0 : height * _frameInsetTop,
+              top: isLectureMode ? 100 : height * _frameInsetTop,
               bottom: isLectureMode ? 0 : height * _frameInsetBottom,
               child: _buildContent(page, ayahEndColor, resolvedTextColor),
             ),
@@ -124,6 +136,8 @@ class MushafTextPage extends StatelessWidget {
                     availableTextWidth,
                     ayahEndColor,
                     effectiveTextColor,
+                    page.pageNumber,
+                    isDarkMode,
                   ),
                 ),
               ),
@@ -205,31 +219,49 @@ class MushafTextPage extends StatelessWidget {
     double availableWidth,
     Color ayahEndColor,
     Color activeTextColor,
+    int pageNum,
+    bool isDarkMode,
   ) {
     final segments = line.elements;
     if (segments.isEmpty) return const SizedBox.shrink();
 
-    final naturalSpans = _buildSpansFromSegments(
-      segments,
-      fontSize,
-      ayahEndColor,
-      activeTextColor,
-    );
-    final naturalWidth = _measureSpanWidth(naturalSpans);
-    final targetExtraWidth = (availableWidth - naturalWidth).clamp(
-      0.0,
-      double.infinity,
+    final cacheKey = _getCacheKey(
+      pageNum: pageNum,
+      lineNum: line.lineNumber,
+      width: availableWidth,
+      isDark: isDarkMode,
     );
 
-    final kashidaSpans = targetExtraWidth > 0
-        ? _applyDynamicKashida(
-            segments,
-            fontSize,
-            targetExtraWidth,
-            ayahEndColor,
-            activeTextColor,
-          )
-        : naturalSpans;
+    // 1. Retrieve cached spans if available
+    List<InlineSpan>? kashidaSpans = _lineSpanCache[cacheKey];
+
+    if (kashidaSpans == null) {
+      // 2. Compute only on cache miss
+      final naturalSpans = _buildSpansFromSegments(
+        segments,
+        fontSize,
+        ayahEndColor,
+        activeTextColor,
+      );
+      final naturalWidth = _measureSpanWidth(naturalSpans);
+      final targetExtraWidth = (availableWidth - naturalWidth).clamp(
+        0.0,
+        double.infinity,
+      );
+
+      kashidaSpans = targetExtraWidth > 0
+          ? _applyDynamicKashida(
+              segments,
+              fontSize,
+              targetExtraWidth,
+              ayahEndColor,
+              activeTextColor,
+            )
+          : naturalSpans;
+
+      // 3. Save to cache
+      _lineSpanCache[cacheKey] = kashidaSpans;
+    }
 
     final afterKashidaWidth = _measureSpanWidth(kashidaSpans);
     final gapCount = segments.length - 1;
@@ -264,6 +296,24 @@ class MushafTextPage extends StatelessWidget {
     return painter.width;
   }
 
+  double _getKashidaWidth(double fontSize) {
+    return _kashidaWidthCache.putIfAbsent(fontSize, () {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: 'ـ',
+          style: TextStyle(
+            fontFamily: kQuranFontFamily,
+            fontWeight: FontWeight.bold,
+            fontSize: fontSize,
+          ),
+        ),
+        textDirection: TextDirection.rtl,
+        maxLines: 1,
+      )..layout();
+      return painter.width;
+    });
+  }
+
   List<InlineSpan> _applyDynamicKashida(
     List<MushafWordElement> segments,
     double fontSize,
@@ -272,18 +322,7 @@ class MushafTextPage extends StatelessWidget {
     Color activeTextColor,
   ) {
     const kashidaChar = 'ـ';
-    final mutatedSegments = segments.map((e) => e.clone()).toList();
-
-    final singleKashidaWidth = _measureSpanWidth([
-      TextSpan(
-        text: kashidaChar,
-        style: TextStyle(
-          fontFamily: kQuranFontFamily,
-          fontWeight: FontWeight.bold,
-          fontSize: fontSize,
-        ),
-      ),
-    ]);
+    final singleKashidaWidth = _getKashidaWidth(fontSize);
 
     if (singleKashidaWidth <= 0) {
       return _buildSpansFromSegments(
@@ -295,27 +334,33 @@ class MushafTextPage extends StatelessWidget {
     }
 
     int kashidasToInsert = (targetExtraWidth / singleKashidaWidth).floor();
+    if (kashidasToInsert <= 0) {
+      return _buildSpansFromSegments(
+        segments,
+        fontSize,
+        ayahEndColor,
+        activeTextColor,
+      );
+    }
 
+    final mutatedSegments = segments.map((e) => e.clone()).toList();
     final stretchableRegex = RegExp(
       r'([بتثجحخسشصضطظعغفقكلمنهي])((?:[\u064B-\u065F\u0670\u06D6-\u06ED])*)(?=[بتثجحخسشصضطظعغفقكلمنهي])',
     );
 
-    while (kashidasToInsert > 0) {
-      bool insertedAny = false;
-
-      for (final el in mutatedSegments) {
-        if (el.type == 'word' && el.text != null && kashidasToInsert > 0) {
-          if (stretchableRegex.hasMatch(el.text!)) {
-            el.text = el.text!.replaceFirstMapped(
-              stretchableRegex,
-              (match) => '${match.group(1)}${match.group(2)}$kashidaChar',
-            );
+    // Distribute kashidas in a single pass instead of a while loop
+    for (final el in mutatedSegments) {
+      if (kashidasToInsert <= 0) break;
+      if (el.type == 'word' && el.text != null) {
+        final matches = stretchableRegex.allMatches(el.text!).toList();
+        if (matches.isNotEmpty) {
+          // Insert available kashidas across eligible spots in this word
+          el.text = el.text!.replaceFirstMapped(stretchableRegex, (match) {
             kashidasToInsert--;
-            insertedAny = true;
-          }
+            return '${match.group(1)}${match.group(2)}$kashidaChar';
+          });
         }
       }
-      if (!insertedAny) break;
     }
 
     return _buildSpansFromSegments(

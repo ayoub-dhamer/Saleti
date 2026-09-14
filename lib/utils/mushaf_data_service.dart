@@ -2,13 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Single source of truth for the Quran font family — used both here (for
-/// sizing measurements) and in MushafTextPage (for actual rendering), so
-/// the two can never silently drift apart.
-const String kQuranFontFamily = 'amiri';
+const String kQuranFontFamily = 'UthmanicHafs';
 
 class MushafWordElement {
-  final String type; // 'word' or 'ayah_end'
+  final String type;
   final int surah;
   final int ayah;
   String? text;
@@ -86,8 +83,11 @@ class MushafPageData {
 }
 
 /// Loads and caches the full 604-page Uthmani-script Qur'an text dataset.
-/// Parsed once, kept in memory for the lifetime of the app.
-class MushafDataService {
+/// CHANGED: now also a ChangeNotifier — listeners are notified once the
+/// one-time "widest line in the book" scan finishes in the background,
+/// so a page built before that's ready can refine its font size shortly
+/// after, instead of the calling code blocking on it.
+class MushafDataService extends ChangeNotifier {
   static final MushafDataService _instance = MushafDataService._internal();
   factory MushafDataService() => _instance;
   MushafDataService._internal();
@@ -95,6 +95,15 @@ class MushafDataService {
   final Map<int, MushafPageData> _pages = {};
   bool _loaded = false;
   bool get isLoaded => _loaded;
+
+  static const double _referenceFontSize = 20;
+  static const double _fallbackFontSize =
+      20; // used instantly, before the one-time scan finishes
+
+  // CHANGED: this is now the ONLY expensive value, computed exactly once
+  // per app session — not once per distinct availableWidth like before.
+  double? _maxNaturalWidthAtReference;
+  bool _isWarmingUp = false;
 
   Future<void> load() async {
     if (_loaded) return;
@@ -108,14 +117,15 @@ class MushafDataService {
     });
 
     _loaded = true;
+
+    // ADD: fire-and-forget — starts warming up the expensive measurement
+    // right away, in the background, typically well before the user has
+    // navigated to the Mushaf screen at all.
+    _warmUpMaxNaturalWidth();
   }
 
   MushafPageData? getPage(int pageNumber) => _pages[pageNumber];
 
-  /// Builds the exact plain-text representation of a line as it will
-  /// actually be rendered (words + ayah-end marker glyphs), for measurement
-  /// purposes. Must match _buildSpansFromSegments' text content exactly,
-  /// or the sizing calculation will silently drift from the real render.
   String _plainLineText(MushafLine line) {
     final buffer = StringBuffer();
     for (int i = 0; i < line.elements.length; i++) {
@@ -130,26 +140,15 @@ class MushafDataService {
     return buffer.toString();
   }
 
-  final Map<int, double> _fontSizeCache = {};
+  // ADD: the one-time scan, broken into small chunks with a yield between
+  // each, so even if it's still running when the reader opens, it never
+  // blocks a single frame for long — the UI stays smooth throughout.
+  Future<void> _warmUpMaxNaturalWidth() async {
+    if (_isWarmingUp || _maxNaturalWidthAtReference != null) return;
+    _isWarmingUp = true;
 
-  /// Computes the single fixed font size that guarantees the single widest
-  /// natural line in the whole book fits [availableWidth] on one line.
-  /// CHANGED: previously scored lines with a crude word-length heuristic
-  /// and measured using 'Amiri' — a font never actually used for rendering.
-  /// Now measures every line's TRUE natural width directly, in the SAME
-  /// font (kQuranFontFamily) actually used to render it, then scales
-  /// linearly to fit — both more accurate and simpler than a binary search.
-  double computeFixedFontSize(
-    double availableWidth, {
-    double referenceFontSize = 20,
-    double minFont = 12,
-    double maxFont = 34,
-  }) {
-    final key = availableWidth.round();
-    final cached = _fontSizeCache[key];
-    if (cached != null) return cached;
-
-    double maxNaturalWidth = 0;
+    double maxWidth = 0;
+    int pagesProcessed = 0;
 
     for (final page in _pages.values) {
       for (final line in page.lines) {
@@ -161,21 +160,52 @@ class MushafDataService {
             text: text,
             style: const TextStyle(
               fontFamily: kQuranFontFamily,
-              fontSize: 20, // fixed reference size for measurement
+              fontSize: _referenceFontSize,
             ),
           ),
           textDirection: TextDirection.rtl,
           maxLines: 1,
         )..layout();
 
-        if (tp.width > maxNaturalWidth) maxNaturalWidth = tp.width;
+        if (tp.width > maxWidth) maxWidth = tp.width;
+      }
+
+      pagesProcessed++;
+      if (pagesProcessed % 40 == 0) {
+        // Yield back to the event loop every 40 pages — keeps this from
+        // ever freezing a single frame, even during the one-time warm-up.
+        await Future.delayed(Duration.zero);
       }
     }
 
-    double fontSize = maxNaturalWidth > 0
-        ? (availableWidth / maxNaturalWidth) * referenceFontSize
-        : maxFont;
+    _maxNaturalWidthAtReference = maxWidth;
+    _isWarmingUp = false;
+    notifyListeners(); // lets any open Mushaf screen refine its font size now that the real value is ready
+  }
 
+  final Map<int, double> _fontSizeCache = {};
+
+  /// CHANGED: now always fast and synchronous-safe to call from build().
+  /// Returns instantly — either the real best-fit size (if the one-time
+  /// scan has already finished, which is the common case since it starts
+  /// warming up as soon as the JSON loads) or a sensible fallback while
+  /// that's still running in the background.
+  double computeFixedFontSize(
+    double availableWidth, {
+    double minFont = 12,
+    double maxFont = 34,
+  }) {
+    if (_maxNaturalWidthAtReference == null) {
+      _warmUpMaxNaturalWidth(); // no-op if already running
+      return _fallbackFontSize.clamp(minFont, maxFont);
+    }
+
+    final key = availableWidth.round();
+    final cached = _fontSizeCache[key];
+    if (cached != null) return cached;
+
+    double fontSize =
+        (availableWidth / _maxNaturalWidthAtReference!) * _referenceFontSize;
     fontSize = fontSize.clamp(minFont, maxFont);
 
     _fontSizeCache[key] = fontSize;

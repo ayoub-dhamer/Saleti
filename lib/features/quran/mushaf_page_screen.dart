@@ -40,6 +40,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   int _currentPage = 1;
   Set<int> _bookmarkedPages = {};
   bool _isLectureMode = false;
+  bool _isLoading = true;
 
   bool _isLastPage = false;
   bool _isPageSettled = true;
@@ -50,12 +51,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   static const Color secondaryGreen = Color(0xFF4FC3A1);
 
   int get _firstPage {
-    if (widget.readingMode == ReadingMode.free) {
-      return 1;
-    }
-    if (widget.readingMode == ReadingMode.khatm) {
-      return _sessionStartPage;
-    }
+    if (widget.readingMode == ReadingMode.free) return 1;
+    if (widget.readingMode == ReadingMode.khatm) return _sessionStartPage;
     return widget.startPage;
   }
 
@@ -83,8 +80,58 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _loadKhatmYear();
     }
     MushafDataService().load().then((_) {
-      if (mounted) setState(() {}); // triggers rebuild once text data is ready
+      if (mounted) setState(() {});
     });
+    MushafDataService().addListener(_onMushafDataChanged); // ADD
+  }
+
+  void _onMushafDataChanged() {
+    // ADD
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Pre-cache frame images to prevent latency when opening or switching modes
+    precacheImage(
+      const AssetImage('assets/images/mushaf_frame_dark.png'),
+      context,
+    );
+    precacheImage(
+      const AssetImage('assets/images/mushaf_frame_light.png'),
+      context,
+    );
+    precacheImage(
+      const AssetImage('assets/images/surah_name_frame_dark.png'),
+      context,
+    );
+    precacheImage(
+      const AssetImage('assets/images/surah_name_frame_light.png'),
+      context,
+    );
+  }
+
+  Future<void> _loadInitialData() async {
+    // 1. Load basic preferences first
+    await _initPage();
+    await _loadBookmarks();
+    if (widget.readingMode == ReadingMode.khatm) {
+      await _loadKhatmYear();
+    }
+
+    // 2. Yield to the event loop so Flutter paints the loader and starts animating
+    await Future.delayed(Duration.zero);
+
+    // 3. Load heavy text data and initialize controller
+    await MushafDataService().load();
+    await _initPageController();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadKhatmYear() async {
@@ -133,9 +180,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _sessionEndPage = initialPage;
 
       final initialIndex = initialPage - _firstPage;
-
       _pageController = PageController(initialPage: initialIndex);
-
       _isLastPage =
           widget.readingMode == ReadingMode.khatm && _currentPage == 604;
     } else {
@@ -148,8 +193,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
 
     _pageController!.addListener(_handleScrollSettleCheck);
-
-    setState(() {});
   }
 
   void _handleScrollSettleCheck() {
@@ -160,7 +203,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     if (rawPage == null) return;
 
     final settled = (rawPage - rawPage.roundToDouble()).abs() < 0.001;
-
     if (settled != _isPageSettled) {
       setState(() => _isPageSettled = settled);
     }
@@ -168,6 +210,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   @override
   void dispose() {
+    MushafDataService().removeListener(_onMushafDataChanged); // ADD
+
     WakelockPlus.disable();
     if (_isLectureMode) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -181,7 +225,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final initialPage = await _loadLastPage();
     _sessionStartPage = initialPage;
     _sessionEndPage = initialPage;
-    setState(() {});
   }
 
   void _toggleLectureMode(bool enable) {
@@ -231,7 +274,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       list.removeAt(existsIndex);
     } else {
       final now = DateTime.now();
-
       final dateTime =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -252,30 +294,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return 'Unknown Surah';
   }
 
-  Future<void> _goToFirstPage() async {
-    if (widget.readingMode != ReadingMode.khatm) return;
-
-    final pagesRead = _calculatePagesRead(
-      _sessionStartPage,
-      _sessionEndPage + 1,
-    );
-
-    if (pagesRead > 0) {
-      await KhatmService().logPagesRead(pagesRead);
-    }
-
-    _sessionStartPage = 1;
-    _sessionEndPage = 1;
-
-    await _saveLastPage(1);
-    _pageController?.jumpToPage(0);
-
-    setState(() {
-      _currentPage = 1;
-      _isLastPage = false;
-    });
-  }
-
   int _calculatePagesRead(int start, int end) {
     if (end >= start) {
       return end - start;
@@ -284,21 +302,23 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
-  Future<bool> _isLastKhatmCycle() async {
-    final service = KhatmService();
-    final active = await service.getActiveYear();
-
-    if (active == null) return false;
-
-    final totalPagesTarget = 604 * active.targetCompletions;
-    final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
-
-    return (actualPages + (604 - _sessionStartPage + 1)) >= totalPagesTarget;
-  }
-
   bool get _isLastSurahPage {
     if (widget.endPage == null) return false;
     return _currentPage == widget.endPage;
+  }
+
+  void _precacheAdjacentPages(int currentPage) {
+    // Determine next and previous page numbers within valid Mushaf bounds (1 to 604)
+    final nextPage = currentPage + 1;
+    final prevPage = currentPage - 1;
+
+    // Touch/load page data asynchronously in the background
+    if (nextPage <= _lastPage) {
+      MushafDataService().getPage(nextPage);
+    }
+    if (prevPage >= _firstPage) {
+      MushafDataService().getPage(prevPage);
+    }
   }
 
   AppBar _buildAppBar() {
@@ -335,12 +355,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         children: [
           Row(
             children: [
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 6),
-                    const Text(
+                    SizedBox(height: 6),
+                    Text(
                       'Swipe to flip pages',
                       style: TextStyle(color: Colors.white70),
                     ),
@@ -440,33 +460,40 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  // In mushaf_page_screen.dart - Replace the Stack children overlay in build():
-
-  // In mushaf_page_screen.dart
+  Widget _buildLoadingView(ThemeData theme) {
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: _buildAppBar(),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _SpinningLoader(),
+            SizedBox(height: 20),
+            Text(
+              'Loading Mushaf...',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: primaryGreen,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    // Resolve background and text colors dynamically for lecture mode
     final lectureBgColor = theme.scaffoldBackgroundColor;
     final lectureTextColor = isDarkMode ? Colors.white : Colors.black;
 
-    if (_pageController == null || !MushafDataService().isLoaded) {
-      return Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.menu_book_rounded, size: 48, color: primaryGreen),
-              SizedBox(height: 16),
-              CircularProgressIndicator(color: primaryGreen),
-            ],
-          ),
-        ),
-      );
+    if (_isLoading || _pageController == null) {
+      return _buildLoadingView(theme);
     }
 
     return PopScope(
@@ -487,7 +514,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Stack(
         children: [
           Scaffold(
-            // Use theme scaffold background color instead of hardcoded black
             backgroundColor: theme.scaffoldBackgroundColor,
             appBar: _isLectureMode ? null : _buildAppBar(),
             body: Column(
@@ -512,8 +538,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ],
             ),
           ),
-
-          // TOP BAR OVERLAY FOR LECTURE MODE
           if (_isLectureMode)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
@@ -595,14 +619,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           itemCount: _pageCount,
           onPageChanged: (index) {
             final page = _firstPage + index;
-
             setState(() {
               _currentPage = page;
               _sessionEndPage = page;
               _isLastPage = page == 604;
             });
-
             _saveLastPage(page);
+            // Pre-warm next and previous page data asynchronously
+            _precacheAdjacentPages(page);
           },
           itemBuilder: (context, index) {
             final pageNumber = _firstPage + index;
@@ -618,7 +642,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     _isLectureMode ? 0 : 64,
                   ),
                   child: Container(
-                    // FIX: Use lectureBgColor instead of hardcoded Colors.black
                     color: _isLectureMode
                         ? lectureBgColor
                         : Theme.of(context).scaffoldBackgroundColor,
@@ -633,7 +656,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     ),
                   ),
                 ),
-
                 if (_isLastSurahPage &&
                     _isPageSettled &&
                     widget.surahGoal != null)
@@ -686,7 +708,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                           if (confirm == true) {
                             final service = SurahGoalService();
                             await service.incrementProgress(widget.surahGoal!);
-
                             if (!context.mounted) return;
                             Navigator.pop(context, true);
                           }
@@ -698,7 +719,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             );
           },
         ),
-
         Positioned(
           left: 0,
           right: 0,
@@ -727,7 +747,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
     final String? nextSurah = footer['nextSurah'];
 
-    // Base styling for all three pill boxes
     final badgeDecoration = BoxDecoration(
       color: Colors.white.withOpacity(0.18),
       borderRadius: BorderRadius.circular(5),
@@ -749,7 +768,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 1. LEFT BOX: Next Surah
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
@@ -789,10 +807,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     ),
             ),
           ),
-
           const SizedBox(width: 6),
-
-          // 2. CENTER BOX: Khatm Pace Indicator
           if (widget.readingMode == ReadingMode.khatm)
             Center(
               child: SizedBox(
@@ -800,10 +815,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 child: Center(child: _buildKhatmPaceIndicator(badgeDecoration)),
               ),
             ),
-
           if (widget.readingMode == ReadingMode.khatm) const SizedBox(width: 6),
-
-          // 3. RIGHT BOX: Current Surah & Progress
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
@@ -854,7 +866,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  // Updated Khatm Pace Indicator matching height & background decoration
   Widget _buildKhatmPaceIndicator(BoxDecoration badgeDecoration) {
     final diff = _khatmPaceDiff;
     if (diff == null) return const SizedBox.shrink();
@@ -866,7 +877,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         ? Colors.red.shade300
         : isAhead
         ? Colors.indigo.shade200
-        : const Color(0xFFA3E635); // Light vibrant green for contrast
+        : const Color(0xFFA3E635);
 
     final String label = isAhead
         ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
@@ -901,7 +912,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  // Helper method for the Right Section pill
   Widget _buildFooterSurahBox({
     required String name,
     int? current,
@@ -938,7 +948,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  // Progress bar scaled for 24px container height
   Widget _compactProgressBar({
     required int current,
     required int total,
@@ -979,13 +988,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  // CHANGED: was `getSurahProgressFromPage(int page, String englishName)`,
-  // looking up the Arabic name via the `surahs` list. Now takes the surah
-  // number directly (SurahGoal already stores it) and gets the Arabic name
-  // from the quran package — no local surahs table needed.
   Map<String, int>? getSurahProgressFromPage(int page, int surahNumber) {
     final String arabicGoalName = quran.getSurahNameArabic(surahNumber);
-
     final pageData = footerList[page];
     if (pageData == null) return null;
 
@@ -1025,38 +1029,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       match.group(1)!.trim(),
       int.parse(match.group(2)!),
       int.parse(match.group(3)!),
-    );
-  }
-
-  Widget surahRowFromString(String raw, {bool dimmed = false}) {
-    final parsed = parseSurah(raw);
-
-    return SizedBox(
-      height: 18,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              parsed.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: dimmed ? Colors.white70 : Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          _compactProgressBar(
-            current: parsed.current,
-            total: parsed.total,
-            dimmed: dimmed,
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1139,4 +1111,37 @@ class SurahProgress {
   final int total;
 
   SurahProgress(this.name, this.current, this.total);
+}
+
+class _SpinningLoader extends StatefulWidget {
+  const _SpinningLoader();
+
+  @override
+  State<_SpinningLoader> createState() => _SpinningLoaderState();
+}
+
+class _SpinningLoaderState extends State<_SpinningLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(
+      turns: _controller,
+      child: const Icon(
+        Icons.autorenew_rounded,
+        size: 48,
+        color: Color(0xFF1FA45B),
+      ),
+    );
+  }
 }
