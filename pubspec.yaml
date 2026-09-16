@@ -1,5 +1,5 @@
 name: saleti
-description: "A new Flutter project."
+description: "An Islamic App, designed to help muslims with their prayers and din"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -136,6 +136,3 @@ flutter:
         - asset: assets/fonts/Amiri-Regular.ttf
         - asset: assets/fonts/Amiri-Bold.ttf
           weight: 700
-    - family: UthmanicHafs # ADD
-      fonts:
-        - asset: assets/fonts/UthmanicHafs.ttf

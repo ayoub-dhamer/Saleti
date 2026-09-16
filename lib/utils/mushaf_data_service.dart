@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-const String kQuranFontFamily = 'UthmanicHafs';
+const String kQuranFontFamily = 'amiri';
 
 class MushafWordElement {
   final String type;
@@ -82,6 +84,22 @@ class MushafPageData {
   }
 }
 
+/// Runs on a background isolate via [compute] so decoding the (potentially
+/// several-MB) mushaf JSON and building tens of thousands of
+/// MushafPageData/MushafLine/MushafWordElement objects never blocks the UI
+/// thread. This has to stay a top-level function — that's a requirement of
+/// compute() — which also conveniently keeps it free of any dependency on
+/// Flutter bindings, since those aren't available on a background isolate.
+Map<int, MushafPageData> _parseMushafPages(String raw) {
+  final Map<String, dynamic> decoded = jsonDecode(raw);
+  final pages = <int, MushafPageData>{};
+  decoded.forEach((key, value) {
+    final pageNum = int.parse(key);
+    pages[pageNum] = MushafPageData.fromJson(value);
+  });
+  return pages;
+}
+
 /// Loads and caches the full 604-page Uthmani-script Qur'an text dataset.
 /// CHANGED: now also a ChangeNotifier — listeners are notified once the
 /// one-time "widest line in the book" scan finishes in the background,
@@ -100,27 +118,35 @@ class MushafDataService extends ChangeNotifier {
   static const double _fallbackFontSize =
       20; // used instantly, before the one-time scan finishes
 
-  // CHANGED: this is now the ONLY expensive value, computed exactly once
-  // per app session — not once per distinct availableWidth like before.
+  // This is the only expensive value or scan involved. CHANGED: with the
+  // SharedPreferences cache in _warmUpMaxNaturalWidth below, it's now
+  // genuinely computed once per install rather than once per cold start.
   double? _maxNaturalWidthAtReference;
   bool _isWarmingUp = false;
+
+  // CHANGED: key for the persisted max-width cache. Bump the trailing
+  // version whenever kQuranFontFamily or mushaf_complete.json changes —
+  // that invalidates any value already cached on a user's device and
+  // forces a fresh scan on their next launch.
+  static const String _maxWidthCacheKey = 'mushaf_max_line_width_v1';
 
   Future<void> load() async {
     if (_loaded) return;
 
     final raw = await rootBundle.loadString('assets/data/mushaf_complete.json');
-    final Map<String, dynamic> decoded = jsonDecode(raw);
 
-    decoded.forEach((key, value) {
-      final pageNum = int.parse(key);
-      _pages[pageNum] = MushafPageData.fromJson(value);
-    });
+    // CHANGED: decoding the JSON and building every page/line/word object
+    // now happens on a background isolate via compute(), so this first
+    // load() of the session — however large mushaf_complete.json is —
+    // never blocks the UI thread while it parses.
+    final parsedPages = await compute(_parseMushafPages, raw);
+    _pages.addAll(parsedPages);
 
     _loaded = true;
 
-    // ADD: fire-and-forget — starts warming up the expensive measurement
-    // right away, in the background, typically well before the user has
-    // navigated to the Mushaf screen at all.
+    // fire-and-forget — starts warming up (or reading the cached) max
+    // width right away, in the background, typically well before the
+    // user has navigated to the Mushaf screen at all.
     _warmUpMaxNaturalWidth();
   }
 
@@ -140,12 +166,28 @@ class MushafDataService extends ChangeNotifier {
     return buffer.toString();
   }
 
-  // ADD: the one-time scan, broken into small chunks with a yield between
-  // each, so even if it's still running when the reader opens, it never
-  // blocks a single frame for long — the UI stays smooth throughout.
+  // The one-time scan, broken into small chunks with a yield between each,
+  // so even if it's still running when the reader opens, it never blocks
+  // a single frame for long — the UI stays smooth throughout.
+  // CHANGED: now checks a persisted cache first. This is the part that
+  // actually fixes "lags every time the app is freshly opened" — before,
+  // this ~8,000-line TextPainter scan reran from scratch on every cold
+  // start, since nothing survived past the in-memory singleton. Now it
+  // only ever runs for real once per install (or once per
+  // _maxWidthCacheKey version bump); every later launch just reads one
+  // cached double.
   Future<void> _warmUpMaxNaturalWidth() async {
     if (_isWarmingUp || _maxNaturalWidthAtReference != null) return;
     _isWarmingUp = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getDouble(_maxWidthCacheKey);
+    if (cached != null) {
+      _maxNaturalWidthAtReference = cached;
+      _isWarmingUp = false;
+      notifyListeners();
+      return;
+    }
 
     double maxWidth = 0;
     int pagesProcessed = 0;
@@ -180,6 +222,7 @@ class MushafDataService extends ChangeNotifier {
 
     _maxNaturalWidthAtReference = maxWidth;
     _isWarmingUp = false;
+    await prefs.setDouble(_maxWidthCacheKey, maxWidth);
     notifyListeners(); // lets any open Mushaf screen refine its font size now that the real value is ready
   }
 

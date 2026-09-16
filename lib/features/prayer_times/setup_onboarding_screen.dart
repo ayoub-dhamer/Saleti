@@ -596,24 +596,37 @@ class _OnboardingPage extends StatelessWidget {
   });
 
   IconData _iconForStep(String title) {
-    if (title.contains('Location')) return Icons.location_on_rounded;
-    if (title.contains('Notification'))
+    if (title.contains('Location')) {
+      return Icons.location_on_rounded;
+    }
+    if (title.contains('Notification')) {
       return Icons.notifications_active_rounded;
-    if (title.contains('Battery')) return Icons.battery_saver_rounded;
-    if (title.contains('Exact')) return Icons.alarm_rounded;
-    if (title.contains('Confirm')) return Icons.check_circle_rounded;
+    }
+    if (title.contains('Battery')) {
+      return Icons.battery_saver_rounded;
+    }
+    if (title.contains('Exact')) {
+      return Icons.alarm_rounded;
+    }
+    if (title.contains('Confirm')) {
+      return Icons.check_circle_rounded;
+    }
     return Icons.check_circle;
   }
 
   String _whyItMatters(String title) {
-    if (title.contains('Location'))
+    if (title.contains('Location')) {
       return 'Used only to calculate Fajr, Dhuhr, Asr, Maghrib and Isha for your area.';
-    if (title.contains('Notification'))
+    }
+    if (title.contains('Notification')) {
       return 'Lets Saleti alert you a few minutes before each prayer.';
-    if (title.contains('Battery'))
+    }
+    if (title.contains('Battery')) {
       return 'Without this, Android may silence the Azan while the screen is off.';
-    if (title.contains('Exact'))
+    }
+    if (title.contains('Exact')) {
       return 'Keeps prayer alerts accurate to the minute.';
+    }
     return '';
   }
 

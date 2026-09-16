@@ -1346,7 +1346,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                         vertical: 8,
                       ),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(
+                      separatorBuilder: (_, _) => Divider(
                         height: 1,
                         color: isDark
                             ? Colors.white.withOpacity(0.08)

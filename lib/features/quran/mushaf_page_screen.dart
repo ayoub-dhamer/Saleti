@@ -40,7 +40,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   int _currentPage = 1;
   Set<int> _bookmarkedPages = {};
   bool _isLectureMode = false;
-  bool _isLoading = true;
 
   bool _isLastPage = false;
   bool _isPageSettled = true;
@@ -51,8 +50,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   static const Color secondaryGreen = Color(0xFF4FC3A1);
 
   int get _firstPage {
-    if (widget.readingMode == ReadingMode.free) return 1;
-    if (widget.readingMode == ReadingMode.khatm) return _sessionStartPage;
+    if (widget.readingMode == ReadingMode.free) {
+      return 1;
+    }
+    if (widget.readingMode == ReadingMode.khatm) {
+      return _sessionStartPage;
+    }
     return widget.startPage;
   }
 
@@ -88,50 +91,6 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   void _onMushafDataChanged() {
     // ADD
     if (mounted) setState(() {});
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Pre-cache frame images to prevent latency when opening or switching modes
-    precacheImage(
-      const AssetImage('assets/images/mushaf_frame_dark.png'),
-      context,
-    );
-    precacheImage(
-      const AssetImage('assets/images/mushaf_frame_light.png'),
-      context,
-    );
-    precacheImage(
-      const AssetImage('assets/images/surah_name_frame_dark.png'),
-      context,
-    );
-    precacheImage(
-      const AssetImage('assets/images/surah_name_frame_light.png'),
-      context,
-    );
-  }
-
-  Future<void> _loadInitialData() async {
-    // 1. Load basic preferences first
-    await _initPage();
-    await _loadBookmarks();
-    if (widget.readingMode == ReadingMode.khatm) {
-      await _loadKhatmYear();
-    }
-
-    // 2. Yield to the event loop so Flutter paints the loader and starts animating
-    await Future.delayed(Duration.zero);
-
-    // 3. Load heavy text data and initialize controller
-    await MushafDataService().load();
-    await _initPageController();
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   Future<void> _loadKhatmYear() async {
@@ -180,7 +139,9 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _sessionEndPage = initialPage;
 
       final initialIndex = initialPage - _firstPage;
+
       _pageController = PageController(initialPage: initialIndex);
+
       _isLastPage =
           widget.readingMode == ReadingMode.khatm && _currentPage == 604;
     } else {
@@ -193,6 +154,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
 
     _pageController!.addListener(_handleScrollSettleCheck);
+
+    setState(() {});
   }
 
   void _handleScrollSettleCheck() {
@@ -203,6 +166,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     if (rawPage == null) return;
 
     final settled = (rawPage - rawPage.roundToDouble()).abs() < 0.001;
+
     if (settled != _isPageSettled) {
       setState(() => _isPageSettled = settled);
     }
@@ -225,6 +189,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final initialPage = await _loadLastPage();
     _sessionStartPage = initialPage;
     _sessionEndPage = initialPage;
+    setState(() {});
   }
 
   void _toggleLectureMode(bool enable) {
@@ -274,6 +239,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       list.removeAt(existsIndex);
     } else {
       final now = DateTime.now();
+
       final dateTime =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -294,6 +260,30 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     return 'Unknown Surah';
   }
 
+  Future<void> _goToFirstPage() async {
+    if (widget.readingMode != ReadingMode.khatm) return;
+
+    final pagesRead = _calculatePagesRead(
+      _sessionStartPage,
+      _sessionEndPage + 1,
+    );
+
+    if (pagesRead > 0) {
+      await KhatmService().logPagesRead(pagesRead);
+    }
+
+    _sessionStartPage = 1;
+    _sessionEndPage = 1;
+
+    await _saveLastPage(1);
+    _pageController?.jumpToPage(0);
+
+    setState(() {
+      _currentPage = 1;
+      _isLastPage = false;
+    });
+  }
+
   int _calculatePagesRead(int start, int end) {
     if (end >= start) {
       return end - start;
@@ -302,23 +292,21 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
   }
 
+  Future<bool> _isLastKhatmCycle() async {
+    final service = KhatmService();
+    final active = await service.getActiveYear();
+
+    if (active == null) return false;
+
+    final totalPagesTarget = 604 * active.targetCompletions;
+    final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
+
+    return (actualPages + (604 - _sessionStartPage + 1)) >= totalPagesTarget;
+  }
+
   bool get _isLastSurahPage {
     if (widget.endPage == null) return false;
     return _currentPage == widget.endPage;
-  }
-
-  void _precacheAdjacentPages(int currentPage) {
-    // Determine next and previous page numbers within valid Mushaf bounds (1 to 604)
-    final nextPage = currentPage + 1;
-    final prevPage = currentPage - 1;
-
-    // Touch/load page data asynchronously in the background
-    if (nextPage <= _lastPage) {
-      MushafDataService().getPage(nextPage);
-    }
-    if (prevPage >= _firstPage) {
-      MushafDataService().getPage(prevPage);
-    }
   }
 
   AppBar _buildAppBar() {
@@ -355,12 +343,12 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(height: 6),
-                    Text(
+                    const SizedBox(height: 6),
+                    const Text(
                       'Swipe to flip pages',
                       style: TextStyle(color: Colors.white70),
                     ),
@@ -460,40 +448,33 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
-  Widget _buildLoadingView(ThemeData theme) {
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: _buildAppBar(),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            _SpinningLoader(),
-            SizedBox(height: 20),
-            Text(
-              'Loading Mushaf...',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: primaryGreen,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // In mushaf_page_screen.dart - Replace the Stack children overlay in build():
+
+  // In mushaf_page_screen.dart
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
+    // Resolve background and text colors dynamically for lecture mode
     final lectureBgColor = theme.scaffoldBackgroundColor;
     final lectureTextColor = isDarkMode ? Colors.white : Colors.black;
 
-    if (_isLoading || _pageController == null) {
-      return _buildLoadingView(theme);
+    if (_pageController == null || !MushafDataService().isLoaded) {
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.menu_book_rounded, size: 48, color: primaryGreen),
+              SizedBox(height: 16),
+              CircularProgressIndicator(color: primaryGreen),
+            ],
+          ),
+        ),
+      );
     }
 
     return PopScope(
@@ -514,6 +495,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       child: Stack(
         children: [
           Scaffold(
+            // Use theme scaffold background color instead of hardcoded black
             backgroundColor: theme.scaffoldBackgroundColor,
             appBar: _isLectureMode ? null : _buildAppBar(),
             body: Column(
@@ -538,6 +520,8 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
               ],
             ),
           ),
+
+          // TOP BAR OVERLAY FOR LECTURE MODE
           if (_isLectureMode)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
@@ -605,6 +589,65 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                 ],
               ),
             ),
+          if (_isLastPage &&
+              _isPageSettled &&
+              widget.readingMode == ReadingMode.khatm)
+            Positioned(
+              bottom: _isLectureMode ? 10 : 67,
+              left: 10,
+              child: SizedBox(
+                height: 35,
+                child: _AnimatedActionButton(
+                  label: 'Restart Cycle',
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: theme.cardColor, // CHANGED
+                        title: Text(
+                          'Finish Cycle?',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                        ), // CHANGED
+                        content: Text(
+                          'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.7),
+                          ), // CHANGED
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text(
+                              'Yes',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      final isLastCycle = await _isLastKhatmCycle();
+                      await _goToFirstPage();
+                      if (!context.mounted) return;
+                      if (isLastCycle) {
+                        Navigator.pop(context, true);
+                      }
+                    }
+                  },
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -619,14 +662,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           itemCount: _pageCount,
           onPageChanged: (index) {
             final page = _firstPage + index;
+
             setState(() {
               _currentPage = page;
               _sessionEndPage = page;
               _isLastPage = page == 604;
             });
+
             _saveLastPage(page);
-            // Pre-warm next and previous page data asynchronously
-            _precacheAdjacentPages(page);
           },
           itemBuilder: (context, index) {
             final pageNumber = _firstPage + index;
@@ -642,6 +685,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     _isLectureMode ? 0 : 64,
                   ),
                   child: Container(
+                    // FIX: Use lectureBgColor instead of hardcoded Colors.black
                     color: _isLectureMode
                         ? lectureBgColor
                         : Theme.of(context).scaffoldBackgroundColor,
@@ -656,6 +700,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                     ),
                   ),
                 ),
+
                 if (_isLastSurahPage &&
                     _isPageSettled &&
                     widget.surahGoal != null)
@@ -708,6 +753,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
                           if (confirm == true) {
                             final service = SurahGoalService();
                             await service.incrementProgress(widget.surahGoal!);
+
                             if (!context.mounted) return;
                             Navigator.pop(context, true);
                           }
@@ -719,6 +765,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             );
           },
         ),
+
         Positioned(
           left: 0,
           right: 0,
@@ -746,6 +793,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       footer['surahs'] ?? const [],
     );
     final String? nextSurah = footer['nextSurah'];
+    final bool isKhatm = widget.readingMode == ReadingMode.khatm;
 
     final badgeDecoration = BoxDecoration(
       color: Colors.white.withOpacity(0.18),
@@ -753,9 +801,136 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
     );
 
+    final Widget infoRow = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          flex: 1,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: widget.readingMode == ReadingMode.goal || nextSurah == null
+                ? const SizedBox.shrink()
+                : Container(
+                    height: 24,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: badgeDecoration,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Next',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              nextSurah,
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          flex: surahsInFooter.length > 1 ? 2 : 1,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: () {
+              if (widget.readingMode == ReadingMode.goal &&
+                  widget.surahGoal != null) {
+                final liveProgress = getSurahProgressFromPage(
+                  _currentPage,
+                  widget.surahGoal!.surahNumber,
+                );
+
+                final String arabicName = quran.getSurahNameArabic(
+                  widget.surahGoal!.surahNumber,
+                );
+
+                if (liveProgress != null) {
+                  final current = liveProgress['current'];
+                  final total = liveProgress['total'];
+
+                  return _buildFooterSurahBox(
+                    name: arabicName,
+                    current: current,
+                    total: total,
+                    badgeDecoration: badgeDecoration,
+                  );
+                } else {
+                  return _buildFooterSurahBox(
+                    name: arabicName,
+                    badgeDecoration: badgeDecoration,
+                  );
+                }
+              } else {
+                if (surahsInFooter.isEmpty) return const SizedBox.shrink();
+
+                final boxes = <Widget>[];
+                for (int i = 0; i < surahsInFooter.length; i++) {
+                  if (i > 0) boxes.add(const SizedBox(width: 4));
+
+                  final parsed = parseSurah(surahsInFooter[i]);
+                  boxes.add(
+                    Flexible(
+                      child: _buildFooterSurahBox(
+                        name: parsed.name,
+                        current: parsed.current > 0 ? parsed.current : null,
+                        total: parsed.total > 0 ? parsed.total : null,
+                        badgeDecoration: badgeDecoration,
+                      ),
+                    ),
+                  );
+                }
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: boxes,
+                );
+              }
+            }(),
+          ),
+        ),
+      ],
+    );
+
+    // CHANGED: Khatm mode stacks a small plain-text pace label above the
+    // existing info row — no box, no full-width stretch, footer height untouched.
+    final Widget content = isKhatm
+        ? Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildKhatmPaceText(),
+              const SizedBox(height: 2),
+              SizedBox(height: 24, child: infoRow),
+            ],
+          )
+        : SizedBox(height: 24, child: infoRow);
+
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height:
+          64, // CHANGED: reverted — footer size no longer changes for Khatm mode
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+      ), // CHANGED: reverted — no vertical padding, matches original
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1FA45B), Color(0xFF4FC3A1)],
@@ -765,125 +940,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
           topRight: Radius.circular(18),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: widget.readingMode == ReadingMode.goal || nextSurah == null
-                  ? const SizedBox.shrink()
-                  : Container(
-                      height: 24,
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: badgeDecoration,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Next',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              nextSurah,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          if (widget.readingMode == ReadingMode.khatm)
-            Center(
-              child: SizedBox(
-                height: 24,
-                child: Center(child: _buildKhatmPaceIndicator(badgeDecoration)),
-              ),
-            ),
-          if (widget.readingMode == ReadingMode.khatm) const SizedBox(width: 6),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: () {
-                if (widget.readingMode == ReadingMode.goal &&
-                    widget.surahGoal != null) {
-                  final liveProgress = getSurahProgressFromPage(
-                    _currentPage,
-                    widget.surahGoal!.surahNumber,
-                  );
-
-                  final String arabicName = quran.getSurahNameArabic(
-                    widget.surahGoal!.surahNumber,
-                  );
-
-                  if (liveProgress != null) {
-                    final current = liveProgress['current'];
-                    final total = liveProgress['total'];
-
-                    return _buildFooterSurahBox(
-                      name: arabicName,
-                      current: current,
-                      total: total,
-                      badgeDecoration: badgeDecoration,
-                    );
-                  } else {
-                    return _buildFooterSurahBox(
-                      name: arabicName,
-                      badgeDecoration: badgeDecoration,
-                    );
-                  }
-                } else {
-                  if (surahsInFooter.isEmpty) return const SizedBox.shrink();
-
-                  final parsed = parseSurah(surahsInFooter[0]);
-                  return _buildFooterSurahBox(
-                    name: parsed.name,
-                    current: parsed.current > 0 ? parsed.current : null,
-                    total: parsed.total > 0 ? parsed.total : null,
-                    badgeDecoration: badgeDecoration,
-                  );
-                }
-              }(),
-            ),
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 
+  // Updated Khatm Pace Indicator matching height & background decoration
   Widget _buildKhatmPaceIndicator(BoxDecoration badgeDecoration) {
-    final diff = _khatmPaceDiff;
-    if (diff == null) return const SizedBox.shrink();
-
-    final bool isAhead = diff > 0;
-    final bool isBehind = diff < 0;
-
-    final Color textColor = isBehind
-        ? Colors.red.shade300
-        : isAhead
-        ? Colors.indigo.shade200
-        : const Color(0xFFA3E635);
-
-    final String label = isAhead
-        ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
-        : isBehind
-        ? '${diff.abs()} ${diff.abs() == 1 ? 'page' : 'pages'} behind'
-        : 'On track';
+    final data = _khatmPaceLabelAndColor();
+    if (data == null) return const SizedBox.shrink();
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
@@ -892,22 +956,83 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         child: ScaleTransition(scale: anim, child: child),
       ),
       child: Container(
-        key: ValueKey('$isAhead-$isBehind-$diff'),
+        key: ValueKey(data.label),
         height: 24,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: badgeDecoration,
         child: Center(
           child: Text(
-            label,
+            data.label,
             style: TextStyle(
               fontSize: 8.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.4,
-              color: textColor,
+              color: data.color,
               decoration: TextDecoration.none,
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  ({String label, Color color})? _khatmPaceLabelAndColor() {
+    final diff = _khatmPaceDiff;
+    if (diff == null) return null;
+
+    final bool isAhead = diff > 0;
+    final bool isBehind = diff < 0;
+
+    // CHANGED: these now color a small icon only, not the label text itself,
+    // so they can stay vivid without needing to double as body-text contrast.
+    final Color color = isBehind
+        ? const Color(0xFFFF8A80) // bright coral — reads clearly on green/teal
+        : isAhead
+        ? const Color(0xFFFFD54F) // gold — reads clearly on green/teal
+        : Colors
+              .white; // CHANGED: was a lime-green that nearly matched the background
+
+    final String label = isAhead
+        ? '$diff ${diff == 1 ? 'page' : 'pages'} ahead'
+        : isBehind
+        ? '${diff.abs()} ${diff.abs() == 1 ? 'page' : 'pages'} behind'
+        : 'On track';
+
+    return (label: label, color: color);
+  }
+
+  Widget _buildKhatmPaceText() {
+    final data = _khatmPaceLabelAndColor();
+    if (data == null) return const SizedBox.shrink();
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, anim) =>
+          FadeTransition(opacity: anim, child: child),
+      child: Row(
+        key: ValueKey(data.label),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(width: 4),
+          Text(
+            data.label,
+            style: const TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3,
+              color: Colors
+                  .white, // CHANGED: always solid white now, not color-coded — guarantees readability against the gradient regardless of status
+              decoration: TextDecoration.none,
+              shadows: [
+                Shadow(
+                  color: Colors.black38,
+                  blurRadius: 3,
+                  offset: Offset(0, 1),
+                ), // ADD: lifts the text off the brightest part of the gradient
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -927,15 +1052,21 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Flexible(
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
+            // CHANGED: was maxLines:1 + overflow:ellipsis, which cut names off.
+            // FittedBox shrinks the whole name to fit instead, so it's always
+            // fully readable — just smaller on tighter badges.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                name,
+                maxLines: 1,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -948,6 +1079,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
+  // Progress bar scaled for 24px container height
   Widget _compactProgressBar({
     required int current,
     required int total,
@@ -988,8 +1120,13 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     );
   }
 
+  // CHANGED: was `getSurahProgressFromPage(int page, String englishName)`,
+  // looking up the Arabic name via the `surahs` list. Now takes the surah
+  // number directly (SurahGoal already stores it) and gets the Arabic name
+  // from the quran package — no local surahs table needed.
   Map<String, int>? getSurahProgressFromPage(int page, int surahNumber) {
     final String arabicGoalName = quran.getSurahNameArabic(surahNumber);
+
     final pageData = footerList[page];
     if (pageData == null) return null;
 
@@ -1031,27 +1168,52 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       int.parse(match.group(3)!),
     );
   }
+
+  Widget surahRowFromString(String raw, {bool dimmed = false}) {
+    final parsed = parseSurah(raw);
+
+    return SizedBox(
+      height: 18,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              parsed.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: dimmed ? Colors.white70 : Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _compactProgressBar(
+            current: parsed.current,
+            total: parsed.total,
+            dimmed: dimmed,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AnimatedActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  final TextStyle? textStyle;
-  final BorderRadius? borderRadius;
 
-  const _AnimatedActionButton({
-    required this.label,
-    required this.onTap,
-    this.textStyle,
-    this.borderRadius,
-  });
+  const _AnimatedActionButton({required this.label, required this.onTap});
 
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
 
   @override
   Widget build(BuildContext context) {
-    final effectiveRadius = borderRadius ?? BorderRadius.circular(8);
+    final effectiveRadius = BorderRadius.circular(8);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -1088,13 +1250,11 @@ class _AnimatedActionButton extends StatelessWidget {
                 heightFactor: 1.0,
                 child: Text(
                   label,
-                  style:
-                      textStyle ??
-                      const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -1111,37 +1271,4 @@ class SurahProgress {
   final int total;
 
   SurahProgress(this.name, this.current, this.total);
-}
-
-class _SpinningLoader extends StatefulWidget {
-  const _SpinningLoader();
-
-  @override
-  State<_SpinningLoader> createState() => _SpinningLoaderState();
-}
-
-class _SpinningLoaderState extends State<_SpinningLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 1),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RotationTransition(
-      turns: _controller,
-      child: const Icon(
-        Icons.autorenew_rounded,
-        size: 48,
-        color: Color(0xFF1FA45B),
-      ),
-    );
-  }
 }

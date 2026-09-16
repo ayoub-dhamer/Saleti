@@ -9,18 +9,6 @@ class MushafTextPage extends StatelessWidget {
   final Color? textColor;
   final Color accentColor;
 
-  static final Map<String, List<InlineSpan>> _lineSpanCache = {};
-  static final Map<double, double> _kashidaWidthCache = {};
-
-  String _getCacheKey({
-    required int pageNum,
-    required int lineNum,
-    required double width,
-    required bool isDark,
-  }) {
-    return '$pageNum-$lineNum-${width.toStringAsFixed(1)}-$isDark-$isLectureMode';
-  }
-
   const MushafTextPage({
     super.key,
     required this.pageNumber,
@@ -38,11 +26,13 @@ class MushafTextPage extends StatelessWidget {
   static const double _frameInsetTop = 0.06;
   static const double _frameInsetBottom = 0.06;
 
-  // mushaf_text_page.dart
+  static const Set<int> _centeredPages = {602, 603, 604, 1, 2};
 
-  // mushaf_text_page.dart
+  static const Set<int> _verticallyCenteredPages = {1, 2};
 
-  // In mushaf_text_page.dart
+  bool get _isCenteredPage => _centeredPages.contains(pageNumber);
+  bool get _isVerticallyCenteredPage =>
+      _verticallyCenteredPages.contains(pageNumber);
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +48,7 @@ class MushafTextPage extends StatelessWidget {
     final Color resolvedTextColor =
         textColor ?? (isDarkMode ? Colors.white : Colors.black);
 
-    final ayahEndColor = isDarkMode ? accentColor : Colors.lightBlue;
+    final ayahEndColor = Colors.lightBlue;
 
     final frameAsset = isDarkMode
         ? 'assets/images/mushaf_frame_dark.png'
@@ -76,7 +66,7 @@ class MushafTextPage extends StatelessWidget {
             Positioned(
               left: isLectureMode ? 0 : width * _frameInsetLeft,
               right: isLectureMode ? 0 : width * _frameInsetRight,
-              top: isLectureMode ? 100 : height * _frameInsetTop,
+              top: isLectureMode ? 55 : height * _frameInsetTop,
               bottom: isLectureMode ? 0 : height * _frameInsetBottom,
               child: _buildContent(page, ayahEndColor, resolvedTextColor),
             ),
@@ -115,74 +105,142 @@ class MushafTextPage extends StatelessWidget {
       builder: (context, constraints) {
         final availableTextWidth =
             constraints.maxWidth - (isLectureMode ? 40 : 16);
-        final fontSize = MushafDataService().computeFixedFontSize(
+
+        // Calculate base font size from service
+        final baseFontSize = MushafDataService().computeFixedFontSize(
           availableTextWidth,
         );
 
-        final lineMap = {for (final l in page.lines) l.lineNumber: l};
-        final slots = <Widget>[];
+        // Increase font size on pages 1 and 2 (e.g., 25% larger)
+        final fontSize = _isVerticallyCenteredPage
+            ? baseFontSize * 1.5
+            : baseFontSize;
 
+        final lineMap = {for (final l in page.lines) l.lineNumber: l};
         final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+        final headerSlots = <({int span, Widget child})>[];
+        final bodySlots = <({int span, Widget child})>[];
+
+        final lastContentLine = lineMap.keys.isEmpty
+            ? 0
+            : lineMap.keys.reduce((a, b) => a > b ? a : b);
+
+        final lastSlot = _isVerticallyCenteredPage
+            ? lastContentLine
+            : _totalSlots;
+
         int i = 1;
-        while (i <= _totalSlots) {
+        while (i <= lastSlot) {
           if (lineMap.containsKey(i)) {
-            slots.add(
-              Expanded(
-                child: Center(
-                  child: _buildTextLine(
-                    lineMap[i]!,
-                    fontSize,
-                    availableTextWidth,
-                    ayahEndColor,
-                    effectiveTextColor,
-                    page.pageNumber,
-                    isDarkMode,
-                  ),
+            final slot = (
+              span: 1,
+              child: Center(
+                child: _buildTextLine(
+                  lineMap[i]!,
+                  fontSize,
+                  availableTextWidth,
+                  ayahEndColor,
+                  effectiveTextColor,
                 ),
               ),
             );
+
+            // Add to body slots
+            bodySlots.add(slot);
             i++;
           } else {
             final gapStart = i;
-            while (i <= _totalSlots && !lineMap.containsKey(i)) {
+            while (i <= lastSlot && !lineMap.containsKey(i)) {
               i++;
             }
             final gapLen = i - gapStart;
 
             int? nextSurah;
-            if (i <= _totalSlots &&
+            if (i <= lastSlot &&
                 lineMap.containsKey(i) &&
                 lineMap[i]!.elements.isNotEmpty) {
               nextSurah = lineMap[i]!.elements.first.surah;
             }
 
-            slots.add(
-              Expanded(
-                flex: gapLen,
-                child: nextSurah != null
-                    ? OverflowBox(
-                        maxHeight: double.infinity,
-                        alignment: Alignment.center,
-                        child: _surahBanner(
-                          nextSurah,
-                          includeBismillah: gapLen >= 2 && nextSurah != 9,
-                          effectiveTextColor: effectiveTextColor,
-                          isDarkMode: isDarkMode,
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
+            final slot = (
+              span: gapLen,
+              child: nextSurah != null
+                  ? OverflowBox(
+                      maxHeight: double.infinity,
+                      alignment: Alignment.center,
+                      child: _surahBanner(
+                        nextSurah,
+                        includeBismillah: gapLen >= 2 && nextSurah != 9,
+                        effectiveTextColor: effectiveTextColor,
+                        isDarkMode: isDarkMode,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             );
+
+            // If on pages 1-2 and no body lines have been processed yet,
+            // treat this banner/basmallah gap as the non-centered header.
+            if (_isVerticallyCenteredPage && bodySlots.isEmpty) {
+              headerSlots.add(slot);
+            } else {
+              bodySlots.add(slot);
+            }
           }
         }
 
+        final double verticalPadding = isLectureMode ? 16 : 4;
+        final padding = EdgeInsets.symmetric(
+          horizontal: isLectureMode ? 20 : 8,
+          vertical: verticalPadding,
+        );
+
+        final gridHeight = constraints.maxHeight - (verticalPadding * 2);
+        final slotHeight = gridHeight / _totalSlots;
+
+        if (_isVerticallyCenteredPage) {
+          // Define a vertical spacing multiplier for body lines on pages 1 & 2
+          const double lineSpacingMultiplier = 1.5;
+
+          return Padding(
+            padding: padding,
+            child: Column(
+              children: [
+                // 1. Top Surah Banner & Basmallah (Stays at top)
+                for (final slot in headerSlots)
+                  SizedBox(height: slotHeight * slot.span, child: slot.child),
+
+                // 2. Vertically Centered Quranic Text
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final slot in bodySlots)
+                          SizedBox(
+                            height:
+                                slotHeight * slot.span * lineSpacingMultiplier,
+                            child: slot.child,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final allSlots = [...headerSlots, ...bodySlots];
         return Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isLectureMode ? 20 : 8,
-            vertical: isLectureMode ? 16 : 4,
+          padding: padding,
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              for (final slot in allSlots)
+                Expanded(flex: slot.span, child: slot.child),
+            ],
           ),
-          child: Column(mainAxisSize: MainAxisSize.max, children: slots),
         );
       },
     );
@@ -219,49 +277,49 @@ class MushafTextPage extends StatelessWidget {
     double availableWidth,
     Color ayahEndColor,
     Color activeTextColor,
-    int pageNum,
-    bool isDarkMode,
   ) {
     final segments = line.elements;
     if (segments.isEmpty) return const SizedBox.shrink();
 
-    final cacheKey = _getCacheKey(
-      pageNum: pageNum,
-      lineNum: line.lineNumber,
-      width: availableWidth,
-      isDark: isDarkMode,
+    final naturalSpans = _buildSpansFromSegments(
+      segments,
+      fontSize,
+      ayahEndColor,
+      activeTextColor,
     );
 
-    // 1. Retrieve cached spans if available
-    List<InlineSpan>? kashidaSpans = _lineSpanCache[cacheKey];
-
-    if (kashidaSpans == null) {
-      // 2. Compute only on cache miss
-      final naturalSpans = _buildSpansFromSegments(
-        segments,
-        fontSize,
-        ayahEndColor,
-        activeTextColor,
+    // ADD: centered pages render at natural width — no kashida, no word-spacing
+    // top-up. Returning early also skips that measurement work entirely.
+    if (_isCenteredPage) {
+      return SizedBox(
+        width: availableWidth,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Text.rich(
+            TextSpan(children: naturalSpans),
+            textDirection: TextDirection.rtl,
+            softWrap: false,
+          ),
+        ),
       );
-      final naturalWidth = _measureSpanWidth(naturalSpans);
-      final targetExtraWidth = (availableWidth - naturalWidth).clamp(
-        0.0,
-        double.infinity,
-      );
-
-      kashidaSpans = targetExtraWidth > 0
-          ? _applyDynamicKashida(
-              segments,
-              fontSize,
-              targetExtraWidth,
-              ayahEndColor,
-              activeTextColor,
-            )
-          : naturalSpans;
-
-      // 3. Save to cache
-      _lineSpanCache[cacheKey] = kashidaSpans;
     }
+
+    final naturalWidth = _measureSpanWidth(naturalSpans);
+    final targetExtraWidth = (availableWidth - naturalWidth).clamp(
+      0.0,
+      double.infinity,
+    );
+
+    final kashidaSpans = targetExtraWidth > 0
+        ? _applyDynamicKashida(
+            segments,
+            fontSize,
+            targetExtraWidth,
+            ayahEndColor,
+            activeTextColor,
+          )
+        : naturalSpans;
 
     final afterKashidaWidth = _measureSpanWidth(kashidaSpans);
     final gapCount = segments.length - 1;
@@ -296,24 +354,6 @@ class MushafTextPage extends StatelessWidget {
     return painter.width;
   }
 
-  double _getKashidaWidth(double fontSize) {
-    return _kashidaWidthCache.putIfAbsent(fontSize, () {
-      final painter = TextPainter(
-        text: TextSpan(
-          text: 'ـ',
-          style: TextStyle(
-            fontFamily: kQuranFontFamily,
-            fontWeight: FontWeight.bold,
-            fontSize: fontSize,
-          ),
-        ),
-        textDirection: TextDirection.rtl,
-        maxLines: 1,
-      )..layout();
-      return painter.width;
-    });
-  }
-
   List<InlineSpan> _applyDynamicKashida(
     List<MushafWordElement> segments,
     double fontSize,
@@ -322,7 +362,18 @@ class MushafTextPage extends StatelessWidget {
     Color activeTextColor,
   ) {
     const kashidaChar = 'ـ';
-    final singleKashidaWidth = _getKashidaWidth(fontSize);
+    final mutatedSegments = segments.map((e) => e.clone()).toList();
+
+    final singleKashidaWidth = _measureSpanWidth([
+      TextSpan(
+        text: kashidaChar,
+        style: TextStyle(
+          fontFamily: kQuranFontFamily,
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+        ),
+      ),
+    ]);
 
     if (singleKashidaWidth <= 0) {
       return _buildSpansFromSegments(
@@ -334,33 +385,27 @@ class MushafTextPage extends StatelessWidget {
     }
 
     int kashidasToInsert = (targetExtraWidth / singleKashidaWidth).floor();
-    if (kashidasToInsert <= 0) {
-      return _buildSpansFromSegments(
-        segments,
-        fontSize,
-        ayahEndColor,
-        activeTextColor,
-      );
-    }
 
-    final mutatedSegments = segments.map((e) => e.clone()).toList();
     final stretchableRegex = RegExp(
       r'([بتثجحخسشصضطظعغفقكلمنهي])((?:[\u064B-\u065F\u0670\u06D6-\u06ED])*)(?=[بتثجحخسشصضطظعغفقكلمنهي])',
     );
 
-    // Distribute kashidas in a single pass instead of a while loop
-    for (final el in mutatedSegments) {
-      if (kashidasToInsert <= 0) break;
-      if (el.type == 'word' && el.text != null) {
-        final matches = stretchableRegex.allMatches(el.text!).toList();
-        if (matches.isNotEmpty) {
-          // Insert available kashidas across eligible spots in this word
-          el.text = el.text!.replaceFirstMapped(stretchableRegex, (match) {
+    while (kashidasToInsert > 0) {
+      bool insertedAny = false;
+
+      for (final el in mutatedSegments) {
+        if (el.type == 'word' && el.text != null && kashidasToInsert > 0) {
+          if (stretchableRegex.hasMatch(el.text!)) {
+            el.text = el.text!.replaceFirstMapped(
+              stretchableRegex,
+              (match) => '${match.group(1)}${match.group(2)}$kashidaChar',
+            );
             kashidasToInsert--;
-            return '${match.group(1)}${match.group(2)}$kashidaChar';
-          });
+            insertedAny = true;
+          }
         }
       }
+      if (!insertedAny) break;
     }
 
     return _buildSpansFromSegments(
