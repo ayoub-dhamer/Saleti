@@ -81,7 +81,7 @@ class AzanService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Time for $prayerName Prayer")
             .setContentText("Salah is a meeting with the One who loves you most")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .addAction(R.mipmap.ic_launcher, "STOP", stopPendingIntent)
             .build()

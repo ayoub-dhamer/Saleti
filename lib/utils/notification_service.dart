@@ -15,7 +15,9 @@ final FlutterLocalNotificationsPlugin _notifications =
 Future<void> alarmCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = AndroidInitializationSettings(
+    '@drawable/ic_notification',
+  ); // CHANGED: was '@mipmap/ic_launcher'
   final notifications = FlutterLocalNotificationsPlugin();
 
   await notifications.initialize(
@@ -236,7 +238,9 @@ class NotificationService {
     // handle the old Friday "Done" action button, which is now a native
     // PendingIntent on FridayReminderService's own notification and never
     // routes back through flutter_local_notifications at all.
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(
+      '@drawable/ic_notification',
+    ); // CHANGED: was '@mipmap/ic_launcher'
     await _notifications.initialize(
       const InitializationSettings(android: androidInit),
     );
@@ -481,7 +485,10 @@ Future<void> fridayReminderEndCallback() async {
 Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = AndroidInitializationSettings(
+    '@drawable/ic_notification',
+  ); // CHANGED: was '@mipmap/ic_launcher'
+
   final notifications = FlutterLocalNotificationsPlugin();
 
   await notifications.initialize(

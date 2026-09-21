@@ -18,7 +18,7 @@ class MushafTextPage extends StatelessWidget {
   });
 
   static const int _totalSlots = 15;
-  static const double _bodyFontSize = 27;
+  static const double _bodyFontSize = 23;
   static const double _lectureFontSize = 27;
 
   static const double _frameInsetLeft = 0.095;
@@ -29,6 +29,51 @@ class MushafTextPage extends StatelessWidget {
   static const Set<int> _centeredPages = {602, 603, 604, 1, 2};
 
   static const Set<int> _verticallyCenteredPages = {1, 2};
+
+  static const Set<int> _extraHeaderSlotPages = {
+    77,
+    208,
+    332,
+    342,
+    350,
+    367,
+    377,
+    415,
+    418,
+    446,
+    453,
+    499,
+    507,
+    526,
+    549,
+    556,
+    558,
+    585,
+    587,
+    591,
+    595,
+  };
+
+  static const Set<int> _shortEndingPages = {
+    76,
+    207,
+    331,
+    341,
+    349,
+    366,
+    376,
+    414,
+    417,
+    445,
+    452,
+    498,
+    506,
+    525,
+    548,
+    555,
+    557,
+    584,
+  };
 
   bool get _isCenteredPage => _centeredPages.contains(pageNumber);
   bool get _isVerticallyCenteredPage =>
@@ -126,7 +171,11 @@ class MushafTextPage extends StatelessWidget {
             ? 0
             : lineMap.keys.reduce((a, b) => a > b ? a : b);
 
-        final lastSlot = _isVerticallyCenteredPage
+        final lastSlot =
+            (_isVerticallyCenteredPage ||
+                _shortEndingPages.contains(
+                  pageNumber,
+                )) // CHANGED: was just `_isVerticallyCenteredPage`
             ? lastContentLine
             : _totalSlots;
 
@@ -164,14 +213,19 @@ class MushafTextPage extends StatelessWidget {
             }
 
             final slot = (
-              span: gapLen,
+              span:
+                  _extraHeaderSlotPages.contains(
+                    pageNumber,
+                  ) // CHANGED: was `span: gapLen`
+                  ? gapLen + 1
+                  : gapLen,
               child: nextSurah != null
                   ? OverflowBox(
                       maxHeight: double.infinity,
                       alignment: Alignment.center,
                       child: _surahBanner(
                         nextSurah,
-                        includeBismillah: gapLen >= 2 && nextSurah != 9,
+                        includeBismillah: nextSurah != 9 && nextSurah != 1,
                         effectiveTextColor: effectiveTextColor,
                         isDarkMode: isDarkMode,
                       ),
