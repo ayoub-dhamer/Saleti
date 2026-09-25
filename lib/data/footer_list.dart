@@ -2416,3 +2416,4 @@ final Map<int, Map<String, dynamic>> footerList = {
     "nextSurah": null,
   },
 };
+
