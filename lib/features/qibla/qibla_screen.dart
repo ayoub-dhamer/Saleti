@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:saleti/utils/location_service.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,16 +71,15 @@ class _QiblaScreenState extends State<QiblaScreen> {
     });
 
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final qibla = calculateQiblaDirection(pos.latitude, pos.longitude);
-
-      await _cache.save(
-        lat: pos.latitude,
-        lng: pos.longitude,
-        locationName: _cache.locationName ?? 'Unknown Location',
-      );
+      // FIXED (bug #4): this used to save the new coordinates but reuse
+      // whatever city name was already cached (or "Unknown Location")
+      // instead of re-geocoding, and never told NotificationService to
+      // reschedule — so refreshing from this tab left prayer alarms
+      // pointed at the old location with no indication anything was
+      // out of sync. LocationService.refresh() geocodes, saves, and
+      // reschedules in one place, shared with PrayerTimesScreen.
+      final result = await LocationService.refresh();
+      final qibla = calculateQiblaDirection(result.latitude, result.longitude);
 
       if (!mounted) return;
       setState(() {
@@ -247,14 +247,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
     }
 
     try {
-      final pos = await Geolocator.getCurrentPosition();
-      final qibla = calculateQiblaDirection(pos.latitude, pos.longitude);
-
-      await _cache.save(
-        lat: pos.latitude,
-        lng: pos.longitude,
-        locationName: _cache.locationName ?? 'Unknown Location',
-      );
+      // FIXED (bug #4): same issue as _refreshLocation above — reused the
+      // old/placeholder city name and never rescheduled notifications.
+      final result = await LocationService.refresh();
+      final qibla = calculateQiblaDirection(result.latitude, result.longitude);
 
       if (mounted) {
         setState(() {

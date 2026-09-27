@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:hive/hive.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
@@ -154,11 +153,21 @@ class _PermissionOnboardingScreenState
 
   Future<bool> _requestBatteryOptimization() async {
     await BatteryOptimizationHelper.requestDisable();
-    return await BatteryOptimizationHelper.isWhitelisted();
+    // FIXED (bug #5): this used to gate progression on isWhitelisted()
+    // actually being true. Android shows this exemption dialog at most
+    // once per app — if the user dismisses or denies it, nothing inside
+    // this flow can make isWhitelisted() become true, and with no skip
+    // button anywhere in onboarding, denying this one (non-essential,
+    // recoverable-later) step could strand a user on it permanently.
+    // The system dialog has now been shown either way, so let the user
+    // move on regardless of what they chose — PrayerTimesScreen's own
+    // readiness check can re-offer this later if alarms actually turn
+    // out to be late.
+    return true;
   }
 
   Future<bool> _requestExactAlarm() async {
-    await ExactAlarmPermission.ensureEnabled(context);
+    await ExactAlarmPermission.ensureEnabled();
     return await ExactAlarmPermission.isGranted();
   }
 
@@ -546,34 +555,21 @@ class _OnboardingStep {
 
   Future<bool> isAlreadyGranted() async {
     if (title.contains('Location')) {
+      // FIXED (bug #5): this used to also take a full high-accuracy GPS
+      // fix and reverse-geocode it over the network, just to answer
+      // "is location permission granted?" — slow, drains battery on
+      // every check (this runs on every onboarding mount, and again for
+      // every later step while skipping ahead), and reported "not
+      // granted" whenever the device was offline or a fix timed out,
+      // even though the permission itself was fine. A permission check
+      // needs nothing more than the two calls below, matching how every
+      // other step here checks itself.
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return false;
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return false;
-      }
-
-      try {
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-
-        try {
-          final placemarks = await placemarkFromCoordinates(
-            pos.latitude,
-            pos.longitude,
-          );
-          if (placemarks.isEmpty) return false;
-        } catch (_) {
-          return false;
-        }
-
-        return true;
-      } catch (_) {
-        return false;
-      }
+      final permission = await Geolocator.checkPermission();
+      return permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always;
     } else if (title.contains('Notification')) {
       return await Permission.notification.isGranted;
     } else if (title.contains('Battery')) {

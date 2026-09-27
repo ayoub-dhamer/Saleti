@@ -39,26 +39,57 @@ class AzanPlatformPlugin : FlutterPlugin, MethodCallHandler {
             "scheduleAzanNative" -> {
                 val args = call.arguments as? Map<*, *>
                 val id = args?.get("id") as? Int ?: 0
-                val timestamp = args?.get("timestamp") as? Long ?: 0L
+                // CHANGED: was `as? Long ?: 0L`. A missing arg, or one that
+                // happened to arrive as a plain Int over the method
+                // channel, silently fell through to epoch (Jan 1 1970)
+                // instead of failing loudly. `as? Number` accepts either
+                // representation; a genuinely missing/malformed timestamp
+                // now falls into the `timestamp == null` branch below
+                // instead of a bogus default.
+                val timestamp = (args?.get("timestamp") as? Number)?.toLong()
                 val prayer = args?.get("prayer") as? String ?: "Prayer"
                 val volume = (args?.get("volume") as? Double ?: 1.0).toFloat()
                 val azanEnabled = args?.get("azanEnabled") as? Boolean ?: true
 
-                val scheduled = if (azanEnabled) {
-                    scheduleAzan(id, prayer, timestamp, volume)
-                } else {
-                    cancelAzan(id)
-                    true
-                }
-
-                if (scheduled) {
-                    result.success(null)
-                } else {
-                    result.error(
-                        "SCHEDULE_FAILED",
-                        "Could not schedule exact alarm — permission may have been revoked",
-                        null
-                    )
+                when {
+                    !azanEnabled -> {
+                        cancelAzan(id)
+                        result.success(null)
+                    }
+                    timestamp == null -> {
+                        result.error(
+                            "INVALID_ARGS",
+                            "scheduleAzanNative called without a valid timestamp",
+                            null
+                        )
+                    }
+                    // CHANGED: refuse to arm an alarm whose trigger time has
+                    // already passed. AlarmManager delivers a past-due exact
+                    // alarm almost immediately, so without this check a bad
+                    // or stale timestamp from the Dart side would play the
+                    // azan right away instead of doing nothing. The Dart
+                    // side now guards this too, but the plugin shouldn't
+                    // rely on that alone.
+                    timestamp <= System.currentTimeMillis() -> {
+                        cancelAzan(id)
+                        result.error(
+                            "PAST_TIMESTAMP",
+                            "Refusing to schedule an azan for a time in the past",
+                            null
+                        )
+                    }
+                    else -> {
+                        val scheduled = scheduleAzan(id, prayer, timestamp, volume)
+                        if (scheduled) {
+                            result.success(null)
+                        } else {
+                            result.error(
+                                "SCHEDULE_FAILED",
+                                "Could not schedule exact alarm — permission may have been revoked",
+                                null
+                            )
+                        }
+                    }
                 }
             }
 

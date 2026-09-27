@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:saleti/utils/special_day_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'daily_rescheduler.dart';
+import 'prayer_cache.dart';
 
 final FlutterLocalNotificationsPlugin _notifications =
     FlutterLocalNotificationsPlugin();
@@ -66,14 +67,65 @@ class NotificationService {
 
   static const int rebootCatchUpAlarmId = 9998;
 
-  static int alarmId(String prayer, String type) {
-    return _prayerAlarmBase[prayer]! + (type == 'azan' ? 1 : 2);
+  // ADDED (bug #6): dedicated id for the "Test azan" button on the
+  // readiness banner, well outside every prayer's 1000-wide id block
+  // (see alarmId below) and the other special ids above.
+  static const int testAzanAlarmId = 6001;
+
+  // FIXED (bug #3 — Doze safety): the daily 00:05 job was the *only* thing
+  // that ever armed a day's native azan alarms, and that job is a Dart
+  // callback scheduled with `exact: true` but no `allowWhileIdle` — a
+  // plain `setExact()`, which Android defers to the next Doze maintenance
+  // window. If that one run happened to land late (or android_alarm_manager_plus's
+  // JobIntentService hop delayed it further — a known issue in Doze),
+  // the whole day's prayers, Fajr included, would silently have nothing
+  // scheduled. Native azan alarms are now pre-armed this many days ahead
+  // whenever `rescheduleAllForToday` runs, so a single missed/late daily
+  // job is just a missed top-up, not a missed prayer.
+  static const int azanLookaheadDays = 7;
+
+  static int alarmId(String prayer, String type, {int dayOffset = 0}) {
+    // dayOffset*10 keeps each day's azan/reminder ids inside this prayer's
+    // own 1000-wide block (bases are 1000 apart) for up to ~99 days of
+    // lookahead — comfortably more than azanLookaheadDays ever needs.
+    return _prayerAlarmBase[prayer]! +
+        (type == 'azan' ? 1 : 2) +
+        dayOffset * 10;
+  }
+
+  static Prayer _prayerEnum(String key) {
+    switch (key) {
+      case 'fajr':
+        return Prayer.fajr;
+      case 'dhuhr':
+        return Prayer.dhuhr;
+      case 'asr':
+        return Prayer.asr;
+      case 'maghrib':
+        return Prayer.maghrib;
+      case 'isha':
+        return Prayer.isha;
+      default:
+        throw ArgumentError('Unknown prayer key: $key');
+    }
   }
 
   static Future<void> cancelPrayerAlarms() async {
-    for (final base in _prayerAlarmBase.values) {
-      await AndroidAlarmManager.cancel(base + 1); // azan
-      await AndroidAlarmManager.cancel(base + 2); // reminder
+    for (final prayer in _prayerAlarmBase.keys) {
+      await AndroidAlarmManager.cancel(alarmId(prayer, 'reminder'));
+      // FIXED: this used to also call AndroidAlarmManager.cancel() for the
+      // azan id, but native azan alarms are armed directly against the
+      // platform AlarmManager by AzanPlatformPlugin/AzanService — a
+      // completely different PendingIntent than the one
+      // android_alarm_manager_plus manages — so that call was cancelling
+      // nothing. It happened to be harmless before because re-scheduling
+      // the same id just replaced the old alarm, but it meant a prayer
+      // whose azan had since been turned *off* could stay armed. cancelAzan()
+      // below goes through the real 'azan_service' channel, and now covers
+      // every pre-armed lookahead day, not just today.
+      for (int dayOffset = 0; dayOffset < azanLookaheadDays; dayOffset++) {
+        await cancelAzan(alarmId(prayer, 'azan', dayOffset: dayOffset));
+      }
     }
   }
 
@@ -82,13 +134,15 @@ class NotificationService {
   /// reboot wipes all AlarmManager entries; only alarms registered *through*
   /// this plugin with rescheduleOnReboot get automatically re-armed after boot.
   /// This periodic alarm rides that mechanism to re-run rescheduleAllForToday
-  /// roughly hourly, so a mid-day reboot recovers within ~1hr instead of
-  /// silently missing the rest of the day's prayers until midnight or the
-  /// user reopening the app.
+  /// so a mid-day reboot recovers. CHANGED: was every hour (24 headless-engine
+  /// boots/day). Now that azan alarms are pre-armed several days ahead, a
+  /// reboot no longer risks the rest of the *day's* prayers even if this
+  /// catch-up itself only runs every few hours, so the interval was widened
+  /// to reduce how often this wakes the device.
   static Future<void> scheduleRebootCatchUp() async {
     try {
       await AndroidAlarmManager.periodic(
-        const Duration(hours: 1),
+        const Duration(hours: 4),
         rebootCatchUpAlarmId,
         dailyRescheduleCallback,
         exact: false,
@@ -106,6 +160,10 @@ class NotificationService {
     Function callback, {
     Map<String, dynamic>? params,
     bool rescheduleOnReboot = false,
+    // FIXED (bug #3): every caller below now passes true. Without it, this
+    // was a plain setExact() under the hood, which Android defers to the
+    // next Doze maintenance window instead of firing on time.
+    bool allowWhileIdle = true,
   }) async {
     try {
       await AndroidAlarmManager.oneShotAt(
@@ -114,6 +172,7 @@ class NotificationService {
         callback,
         exact: true,
         wakeup: true,
+        allowWhileIdle: allowWhileIdle,
         params: params ?? {},
         rescheduleOnReboot: rescheduleOnReboot,
       );
@@ -196,7 +255,6 @@ class NotificationService {
       final setting = prayerSettings[prayer]!;
 
       await AndroidAlarmManager.cancel(alarmId(prayer, 'reminder'));
-      await AndroidAlarmManager.cancel(alarmId(prayer, 'azan'));
 
       if (setting['reminder'] == true) {
         final minutes = setting['minutesBefore'] as int;
@@ -211,15 +269,10 @@ class NotificationService {
         }
       }
 
-      if (setting['azan'] == true && time.isAfter(DateTime.now())) {
-        await scheduleAzanNative(
-          id: alarmId(prayer, 'azan'),
-          time: time,
-          prayer: prayer,
-          volume: (setting['volume'] is double) ? setting['volume'] : 1.0,
-          azanEnabled: true,
-        );
-      }
+      // CHANGED (bug #3): used to schedule (or skip) only today's azan.
+      // This now re-syncs today's azan *and* re-arms/cancels it across
+      // the next `azanLookaheadDays` days too — see _syncAzanLookahead.
+      await _syncAzanLookahead(prayer, time);
     }
 
     await scheduleEidReminderIfApplicable(todaysPrayerTimes: prayerTimes);
@@ -419,6 +472,22 @@ class NotificationService {
     }
   }
 
+  /// ADDED (bug #6): backs the "Test azan" button on the readiness banner.
+  /// Arms the real native azan alarm a few seconds out under its own
+  /// dedicated id, so the user hears exactly what a real prayer would
+  /// sound like — same permissions, same scheduling path, same audio —
+  /// instead of just being told a permission is "granted" and having to
+  /// take that on faith until the next actual prayer.
+  static Future<void> testAzan() async {
+    await scheduleAzanNative(
+      id: testAzanAlarmId,
+      time: DateTime.now().add(const Duration(seconds: 5)),
+      prayer: 'Test',
+      volume: 1.0,
+      azanEnabled: true,
+    );
+  }
+
   static Future<void> cancelAzan(int id) async {
     const platform = MethodChannel('azan_service');
     try {
@@ -426,6 +495,82 @@ class NotificationService {
     } catch (e) {
       debugPrint('Failed to cancel Azan: $e');
     }
+  }
+
+  /// Arms or cancels a single prayer's azan for one specific calendar day
+  /// (`dayOffset` days from today), based on the current `prayerSettings`.
+  /// `time` should already be that day's occurrence of this prayer, or null
+  /// if it couldn't be computed (e.g. no cached location yet) — either a
+  /// null time or a disabled/past-due setting cancels that slot instead.
+  static Future<void> _applyAzanForPrayerOnDay({
+    required String prayer,
+    required int dayOffset,
+    required DateTime? time,
+  }) async {
+    final id = alarmId(prayer, 'azan', dayOffset: dayOffset);
+    final setting = prayerSettings[prayer]!;
+    final enabled = setting['azan'] == true;
+    final volume = (setting['volume'] is double)
+        ? setting['volume'] as double
+        : 1.0;
+
+    if (!enabled || time == null || !time.isAfter(DateTime.now())) {
+      await cancelAzan(id);
+      return;
+    }
+
+    await scheduleAzanNative(
+      id: id,
+      time: time,
+      prayer: prayer,
+      volume: volume,
+      azanEnabled: true,
+    );
+  }
+
+  /// Re-syncs one prayer's azan across today (using the already-computed
+  /// `todaysTime`) and the next `azanLookaheadDays` days (computed fresh
+  /// from the cached location). Used both by `rescheduleAllForToday` for
+  /// every prayer, and directly from the UI when a single prayer's azan
+  /// toggle or volume changes, so that change is reflected on every
+  /// pre-armed day, not just today.
+  static Future<void> _syncAzanLookahead(
+    String prayer,
+    DateTime todaysTime,
+  ) async {
+    await _applyAzanForPrayerOnDay(
+      prayer: prayer,
+      dayOffset: 0,
+      time: todaysTime,
+    );
+
+    final cache = PrayerCache();
+    for (int dayOffset = 1; dayOffset < azanLookaheadDays; dayOffset++) {
+      DateTime? time;
+      if (cache.hasLocation) {
+        final futureDate = DateTime.now().add(Duration(days: dayOffset));
+        time = cache
+            .calculatePrayerTimesFor(futureDate)
+            .timeForPrayer(_prayerEnum(prayer));
+      }
+      await _applyAzanForPrayerOnDay(
+        prayer: prayer,
+        dayOffset: dayOffset,
+        time: time,
+      );
+    }
+  }
+
+  /// Public entry point for the UI: call this after changing one prayer's
+  /// azan on/off or volume so today's alarm *and* the pre-armed lookahead
+  /// days both reflect the change immediately, instead of only today being
+  /// updated and the other ~30 already-armed alarms staying on the old
+  /// setting until the next full reschedule.
+  static Future<void> applyAzanSettingForPrayer(
+    String prayer,
+    DateTime todaysTime,
+  ) async {
+    await _syncAzanLookahead(prayer, todaysTime);
   }
 
   // ----------------------------------------------------------

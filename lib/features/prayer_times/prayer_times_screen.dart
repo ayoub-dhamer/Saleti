@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
+import 'package:saleti/utils/location_service.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/special_day_helper.dart';
 import 'package:saleti/utils/theme_controller.dart';
@@ -31,12 +31,26 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   Timer? _timer;
   DateTime now = DateTime.now();
 
+  // Calendar date that `prayerTimes` was computed for, and the prayer that
+  // was "next" the last time we rebuilt. Used by the ticker to notice when
+  // the day rolls over or a prayer's time passes, without forcing a full
+  // rebuild every second.
+  DateTime? _prayerTimesDate;
+  Prayer? _lastKnownNextPrayer;
+
   bool _loading = true;
   String _locationName = 'Loading...';
   String? _permissionError;
 
-  bool _batterySnackShown = false;
-  bool _alarmSnackShown = false;
+  // FIXED (bug #6): replaces the old _batterySnackShown/_alarmSnackShown
+  // flags, which fed a snackbar that was apparently planned but never
+  // actually built — _checkSystemReadiness computed status and then
+  // showed nothing. These now drive a persistent banner (see
+  // _readinessBanner) instead. Null means "not checked yet" (avoids a
+  // flash of a warning before the first check resolves).
+  bool? _notificationOk;
+  bool? _batteryOk;
+  bool? _alarmOk;
 
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
@@ -48,7 +62,20 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _initializeSystemPermissions();
+    // FIXED (bug #6): this used to call _initializeSystemPermissions(),
+    // which re-requested the battery-optimization exemption and
+    // relaunched the exact-alarm settings screen on *every* cold start
+    // until granted. Unlike a normal runtime permission, Android doesn't
+    // rate-limit either of those after a first refusal, so a user who'd
+    // already said no once got interrupted by the same two system
+    // prompts every single time they opened the app. Notifications are a
+    // normal permission the OS itself only ever prompts for once, so
+    // that request stays automatic; battery optimization and exact alarm
+    // are now only ever actively requested from onboarding, or from a
+    // deliberate tap on the readiness banner below (see _readinessBanner)
+    // — this just checks current status.
+    NotificationPermission.request();
+    _checkSystemReadiness();
     _loadFromCacheOrRequest();
 
     if (widget.isActive) _startTicker();
@@ -67,9 +94,59 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   final ValueNotifier<DateTime> _nowNotifier = ValueNotifier(DateTime.now());
 
   void _startTicker() {
-    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      _nowNotifier.value = DateTime.now(); // no setState — no full rebuild
-    });
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+  }
+
+  // FIXED: previously this just pushed the time into `_nowNotifier` every
+  // second with no setState, so the "Next prayer" card, the highlighted row
+  // in the prayer list, and the countdown never advanced past whichever
+  // prayer was next the last time something else happened to rebuild the
+  // screen (a settings toggle, resuming the app, etc). Once every prayer
+  // for that calendar day had passed, `prayerTimes!.nextPrayer()` kept
+  // returning Prayer.none, the code fell back to that same stale day's
+  // Fajr, and the countdown went negative instead of pointing at tomorrow.
+  //
+  // Now: every tick still just updates `_nowNotifier` (cheap — only the
+  // clock/progress ring/countdown repaint). Only when the calendar day
+  // actually changes, or the "next" prayer changes because its time just
+  // passed, do we recompute and call setState — at most a handful of times
+  // a day — so the rest of the screen is never more than ~1 second stale.
+  void _onTick() {
+    final now = DateTime.now();
+    _nowNotifier.value = now;
+
+    if (prayerTimes == null || !_cache.hasLocation) return;
+
+    if (_prayerTimesDate != null && !_isSameDate(_prayerTimesDate!, now)) {
+      // A new day started. Every static time on the current `prayerTimes`
+      // object belongs to yesterday, so it must be recomputed before
+      // anything (the UI or notification scheduling) reads it again.
+      setState(() => _setPrayerTimes(_cache.calculatePrayerTimes()));
+      _scheduleAllNotifications();
+      return;
+    }
+
+    final currentNext = prayerTimes!.nextPrayer();
+    if (currentNext != _lastKnownNextPrayer) {
+      _lastKnownNextPrayer = currentNext;
+      setState(() {}); // a prayer's time just passed — refresh the UI
+    }
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  /// Single place that sets `prayerTimes` together with the bookkeeping
+  /// `_onTick` needs (the date it covers, and today's current "next"
+  /// prayer). Every call site that used to assign `prayerTimes = ...`
+  /// directly now goes through this instead, so none of them can update
+  /// the times shown on screen without also keeping that bookkeeping in
+  /// sync — which was the root cause of this bug.
+  void _setPrayerTimes(PrayerTimes times) {
+    prayerTimes = times;
+    final now = DateTime.now();
+    _prayerTimesDate = DateTime(now.year, now.month, now.day);
+    _lastKnownNextPrayer = times.nextPrayer();
   }
 
   void _stopTicker() {
@@ -92,7 +169,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       final cachedPrayerTimes = _cache.calculatePrayerTimes();
 
       setState(() {
-        prayerTimes = cachedPrayerTimes;
+        _setPrayerTimes(cachedPrayerTimes);
         _locationName = _cache.locationName!;
         _loading = false;
       });
@@ -103,36 +180,44 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     }
   }
 
-  Future<void> _initializeSystemPermissions() async {
-    await NotificationPermission.request();
-    await BatteryOptimizationHelper.requestDisable();
-    await ExactAlarmPermission.ensureEnabled(context);
-    _checkSystemReadiness();
-  }
-
-  Future<void> _checkSystemReadiness({bool showSnackbars = false}) async {
+  /// FIXED (bug #6): used to compute batteryOk/alarmOk and then do nothing
+  /// visible with them — setState(() {}) forced a rebuild, but nothing in
+  /// build() ever read the result, so a denied permission failed
+  /// completely silently. Now updates the live state that
+  /// _readinessBanner renders, so a real problem is always visible and
+  /// actionable instead of only showing up as "azan didn't play" at the
+  /// next prayer.
+  Future<void> _checkSystemReadiness() async {
+    final notificationOk = await Permission.notification.isGranted;
     final batteryOk = await BatteryOptimizationHelper.isWhitelisted();
     final alarmOk = await ExactAlarmPermission.isGranted();
 
     if (!mounted) return;
 
-    setState(() {});
+    final alarmJustGranted = _alarmOk == false && alarmOk;
 
-    if (showSnackbars) {
-      if (batteryOk && !_batterySnackShown) {
-        _batterySnackShown = true;
-      }
-      if (alarmOk && !_alarmSnackShown) {
-        _alarmSnackShown = true;
-        _scheduleAllNotifications();
-      }
+    setState(() {
+      _notificationOk = notificationOk;
+      _batteryOk = batteryOk;
+      _alarmOk = alarmOk;
+    });
+
+    // Exact-alarm permission just went from missing to granted (e.g. the
+    // user fixed it from the banner or from system settings, then came
+    // back) — alarms that couldn't be armed before can be now.
+    if (alarmJustGranted) {
+      _scheduleAllNotifications();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkSystemReadiness(showSnackbars: true);
+      // The 1s timer can be throttled or paused by the OS while
+      // backgrounded, so don't rely on it alone to catch a day rollover
+      // that happened while the app was away — check immediately on resume.
+      _onTick();
+      _checkSystemReadiness();
     }
   }
 
@@ -196,53 +281,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     }
 
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final params = CalculationMethod.muslim_world_league.getParameters();
-      params.madhab = Madhab.shafi;
-
-      final coordinates = Coordinates(pos.latitude, pos.longitude);
-      final date = DateComponents.from(DateTime.now());
-
-      final prayerTimesCalculated = PrayerTimes(coordinates, date, params);
-
-      String cityName = 'Unknown Location';
-      try {
-        final placemarks = await placemarkFromCoordinates(
-          pos.latitude,
-          pos.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          final place = placemarks.first;
-          cityName =
-              place.locality ??
-              place.subAdministrativeArea ??
-              'Unknown Location';
-        }
-      } catch (_) {
-        cityName = 'Unknown Location';
-      }
+      // FIXED (bug #4): this used to reimplement fetch + geocode + save +
+      // compute inline (a third copy of that logic, alongside QiblaScreen's
+      // two). Now goes through the same LocationService every location
+      // refresh in the app uses, so there's one save and one schedule.
+      final result = await LocationService.refresh();
 
       if (!mounted) return;
 
-      await _cache.save(
-        lat: pos.latitude,
-        lng: pos.longitude,
-        locationName: cityName,
-      );
-
       setState(() {
-        prayerTimes = prayerTimesCalculated;
-        _locationName = cityName;
+        _setPrayerTimes(result.prayerTimes);
+        _locationName = result.locationName;
         _loading = false;
       });
-
-      _scheduleAllNotifications();
-      NotificationService.scheduleEidReminderIfApplicable(
-        todaysPrayerTimes: prayerTimes,
-      );
     } catch (e) {
       setState(() {
         _loading = false;
@@ -261,44 +312,20 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     });
 
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final params = CalculationMethod.muslim_world_league.getParameters();
-      params.madhab = Madhab.shafi;
-
-      final coordinates = Coordinates(pos.latitude, pos.longitude);
-      final date = DateComponents.from(DateTime.now());
-
-      final refreshedPrayerTimes = PrayerTimes(coordinates, date, params);
-
-      String cityName = 'Unknown Location';
-      try {
-        final placemarks = await placemarkFromCoordinates(
-          pos.latitude,
-          pos.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          final place = placemarks.first;
-          cityName =
-              place.locality ??
-              place.subAdministrativeArea ??
-              'Unknown Location';
-        }
-      } catch (_) {
-        cityName = 'Unknown Location';
-      }
+      // FIXED (bug #4): this used to update local UI state and reschedule
+      // notifications but never call PrayerCache.save() — the new location
+      // only ever lived in this screen's own state and reverted on the
+      // next automatic reschedule or app restart. LocationService.refresh()
+      // saves, recomputes, and reschedules in one place.
+      final result = await LocationService.refresh();
 
       if (!mounted) return;
 
       setState(() {
-        prayerTimes = refreshedPrayerTimes;
-        _locationName = cityName;
+        _setPrayerTimes(result.prayerTimes);
+        _locationName = result.locationName;
         _loading = false;
       });
-
-      _scheduleAllNotifications();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -342,7 +369,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       final cachedPrayerTimes = _cache.calculatePrayerTimes();
 
       setState(() {
-        prayerTimes = cachedPrayerTimes;
+        _setPrayerTimes(cachedPrayerTimes);
         _locationName = _cache.locationName!;
         _loading = false;
         _permissionError = null;
@@ -363,6 +390,22 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     await NotificationService.rescheduleAllForToday(prayerTimes!);
   }
 
+  /// Shown when the user turns azan back on for a prayer whose time already
+  /// passed today, so the toggle flipping with no audible/scheduled effect
+  /// doesn't look broken.
+  void _notifyAppliesFromTomorrow(String prayerKey) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "${_prettyName(prayerKey)}'s azan already passed for today — "
+          'this will start from its next occurrence.',
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<void> _useCachedLocation() async {
     await _cache.load();
 
@@ -371,7 +414,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     final cachedPrayerTimes = _cache.calculatePrayerTimes();
 
     setState(() {
-      prayerTimes = cachedPrayerTimes;
+      _setPrayerTimes(cachedPrayerTimes);
       _locationName = _cache.locationName!;
       _permissionError = null;
       _loading = false;
@@ -567,6 +610,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           children: [
             _header(hijri, theme),
             if (eidName != null) _eidBanner(eidName),
+            _readinessBanner(theme),
             const SizedBox(height: 16),
             _clockCard(), // UNCHANGED — left exactly as-is per request
             const SizedBox(height: 16),
@@ -800,7 +844,14 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final progress = totalWindow > 0
                 ? (elapsed / totalWindow).clamp(0.0, 1.0)
                 : 0.0;
-            final remaining = time.difference(now);
+            // Safety net: `_onTick` now keeps `time` from going stale, but
+            // clamp anyway so a boundary tick can never show a negative
+            // countdown like "-1:23:45" for the split second before the
+            // next rebuild picks up the new prayer.
+            final rawRemaining = time.difference(now);
+            final remaining = rawRemaining.isNegative
+                ? Duration.zero
+                : rawRemaining;
 
             return Row(
               children: [
@@ -944,7 +995,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
             final setting = NotificationService.prayerSettings[prayerKey]!;
 
             final isNext = next.name.toLowerCase() == prayerKey;
-            final alarmId = NotificationService.alarmId(prayerKey, 'azan');
+            // NOTE: the per-row alarm id is no longer needed here directly —
+            // NotificationService.applyAzanSettingForPrayer (bug #3) now
+            // owns id assignment across today + the lookahead days.
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
@@ -1039,15 +1092,24 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                                 },
                                 onChangeEnd: (v) async {
                                   await NotificationService.saveSettings();
-                                  if (setting['azan'] == true) {
-                                    await NotificationService.scheduleAzanNative(
-                                      id: alarmId,
-                                      time: prayerTime,
-                                      prayer: prayerKey,
-                                      volume: v,
-                                      azanEnabled: true,
-                                    );
-                                  }
+                                  // FIXED (bug #2): previously scheduled
+                                  // unconditionally, and AlarmManager fires
+                                  // an exact alarm set for a past time
+                                  // almost immediately — nudging the volume
+                                  // for a prayer that already happened
+                                  // today used to play the azan right now.
+                                  //
+                                  // FIXED (bug #3): now goes through
+                                  // applyAzanSettingForPrayer, which reads
+                                  // the volume we just saved and re-applies
+                                  // it across today *and* the pre-armed
+                                  // lookahead days — not just today — while
+                                  // still skipping any day whose time has
+                                  // already passed.
+                                  await NotificationService.applyAzanSettingForPrayer(
+                                    prayerKey,
+                                    prayerTime,
+                                  );
                                 },
                               ),
                             ),
@@ -1104,16 +1166,25 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                           setState(() => setting['azan'] = !setting['azan']);
                           await NotificationService.saveSettings();
 
-                          if (setting['azan'] == true) {
-                            await NotificationService.scheduleAzanNative(
-                              id: alarmId,
-                              time: prayerTime,
-                              prayer: prayerKey,
-                              volume: _getVolume(setting),
-                              azanEnabled: true,
-                            );
-                          } else {
-                            await NotificationService.cancelAzan(alarmId);
+                          // FIXED (bug #2 + bug #3): applyAzanSettingForPrayer
+                          // handles both directions correctly now. Turning
+                          // azan off cancels it across *every* pre-armed
+                          // lookahead day, not just today (previously only
+                          // today's alarm was cancelled, so a prayer turned
+                          // off could still ring on a day already armed in
+                          // advance). Turning it on re-arms today (skipped
+                          // if today's time already passed, avoiding the
+                          // instant-fire bug) plus every lookahead day —
+                          // so it no longer depends on the midnight job to
+                          // pick tomorrow back up.
+                          await NotificationService.applyAzanSettingForPrayer(
+                            prayerKey,
+                            prayerTime,
+                          );
+
+                          if (setting['azan'] == true &&
+                              !prayerTime.isAfter(DateTime.now())) {
+                            _notifyAppliesFromTomorrow(prayerKey);
                           }
                         },
                       ),
@@ -1197,6 +1268,131 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           const Text(
             'This is an estimate, not official — confirm with your local mosque.',
             style: TextStyle(color: Colors.white, fontSize: 11, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// FIXED (bug #6): _checkSystemReadiness used to compute permission
+  /// status and then show nothing — the old _batterySnackShown/
+  /// _alarmSnackShown flags were the entire remnant of a snackbar that
+  /// never got built. This renders a persistent card instead, driven by
+  /// that same live state, with a "Fix" action per missing permission
+  /// (a deliberate tap — never an automatic re-prompt, see initState)
+  /// and a "Test azan" button so the user can actually confirm sound
+  /// works after fixing something instead of finding out at the next
+  /// prayer. This also covers the restored-device case: if a backup
+  /// restored `onboarding completed` but Android reset the underlying
+  /// permissions (as it always does for exact alarms on Android 14+),
+  /// onboarding gets skipped, but this banner still catches it here.
+  Widget _readinessBanner(ThemeData theme) {
+    final issues = <_ReadinessIssue>[
+      if (_notificationOk == false)
+        _ReadinessIssue(
+          "Notifications are off — prayer reminders won't show.",
+          () async => Permission.notification.request(),
+        ),
+      if (_batteryOk == false)
+        _ReadinessIssue(
+          'Battery optimization may delay or block the Azan.',
+          BatteryOptimizationHelper.requestDisable,
+        ),
+      if (_alarmOk == false)
+        _ReadinessIssue(
+          'Exact alarms are off — the Azan may not play on time.',
+          ExactAlarmPermission.ensureEnabled,
+        ),
+    ];
+
+    if (issues.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(
+          theme.brightness == Brightness.dark ? 0.18 : 0.08,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Azan may not sound',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final issue in issues)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      issue.message,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.75,
+                        ),
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await issue.fix();
+                      await _checkSystemReadiness();
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Fix',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => NotificationService.testAzan(),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Test azan',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ],
       ),
@@ -1466,6 +1662,14 @@ class NotificationPermission {
       await Permission.notification.request();
     }
   }
+}
+
+/// One missing permission shown in the readiness banner (bug #6): a short
+/// user-facing message and the action a tap on "Fix" runs.
+class _ReadinessIssue {
+  final String message;
+  final Future<void> Function() fix;
+  const _ReadinessIssue(this.message, this.fix);
 }
 
 /// Single icon button that cycles Light -> Dark -> Auto on each tap,

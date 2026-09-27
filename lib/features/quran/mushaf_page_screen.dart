@@ -35,7 +35,8 @@ class MushafPageScreen extends StatefulWidget {
   State<MushafPageScreen> createState() => _MushafPageScreenState();
 }
 
-class _MushafPageScreenState extends State<MushafPageScreen> {
+class _MushafPageScreenState extends State<MushafPageScreen>
+    with WidgetsBindingObserver {
   PageController? _pageController;
   int _currentPage = 1;
   Set<int> _bookmarkedPages = {};
@@ -72,9 +73,20 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   int _sessionStartPage = 1;
   int _sessionEndPage = 1;
 
+  // FIXED (bug #7): tracks how far Khatm progress has actually been
+  // persisted into KhatmService so far *this session*, separately from
+  // _sessionStartPage (which must stay fixed — it anchors _firstPage and
+  // the PageView's index mapping for the whole life of this screen).
+  // Advances every time _checkpointKhatmProgress succeeds, so a periodic
+  // checkpoint, a pause, and the final pop-time flush never re-count the
+  // same pages twice.
+  int _lastCheckpointedPage = 1;
+  bool _isCheckpointing = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable();
     _initPage();
     _loadBookmarks();
@@ -86,6 +98,24 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       if (mounted) setState(() {});
     });
     MushafDataService().addListener(_onMushafDataChanged); // ADD
+  }
+
+  // FIXED (bug #7): previously, Khatm progress for the whole session was
+  // only ever written to KhatmService from the back-button's PopScope
+  // handler — a process kill, a swipe-away from recents, or a crash while
+  // reading discarded the entire session's progress even though
+  // _saveLastPage had already correctly remembered which page to resume
+  // from. AppLifecycleState.paused fires reliably before Android is free
+  // to kill the process (unlike a plain dispose(), which isn't guaranteed
+  // to run at all), so flushing here — in addition to the periodic
+  // checkpoint in onPageChanged below — shrinks the at-risk window from
+  // "the whole session" to "at most a few pages".
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _checkpointKhatmProgress();
+    }
   }
 
   void _onMushafDataChanged() {
@@ -111,8 +141,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       0,
       604 * year.targetCompletions,
     );
+    // FIXED (bug #7): was _calculatePagesRead(_sessionStartPage, _currentPage).
+    // Now that progress checkpoints periodically into year.pagesReadTotal
+    // (read live below, since KhatmService mutates the same cached Hive
+    // object this screen already holds), counting from _sessionStartPage
+    // again here would double-count whatever's already been checkpointed.
+    // _lastCheckpointedPage tracks exactly what's left to add on top.
     final pagesReadThisSession = _calculatePagesRead(
-      _sessionStartPage,
+      _lastCheckpointedPage,
       _currentPage,
     );
     final liveActualPages =
@@ -137,6 +173,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _currentPage = initialPage;
       _sessionStartPage = initialPage;
       _sessionEndPage = initialPage;
+      _lastCheckpointedPage = initialPage;
 
       final initialIndex = initialPage - _firstPage;
 
@@ -174,6 +211,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     MushafDataService().removeListener(_onMushafDataChanged); // ADD
 
     WakelockPlus.disable();
@@ -189,6 +227,7 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final initialPage = await _loadLastPage();
     _sessionStartPage = initialPage;
     _sessionEndPage = initialPage;
+    _lastCheckpointedPage = initialPage;
     setState(() {});
   }
 
@@ -263,17 +302,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
   Future<void> _goToFirstPage() async {
     if (widget.readingMode != ReadingMode.khatm) return;
 
-    final pagesRead = _calculatePagesRead(
-      _sessionStartPage,
-      _sessionEndPage + 1,
-    );
-
-    if (pagesRead > 0) {
-      await KhatmService().logPagesRead(pagesRead);
-    }
+    // FIXED (bug #7): was _calculatePagesRead(_sessionStartPage,
+    // _sessionEndPage + 1) — logging the whole session from its start
+    // again here, ignoring anything periodic/pause checkpoints had
+    // already flushed via _lastCheckpointedPage, would double-count them.
+    await _checkpointKhatmProgress(upToPage: _sessionEndPage + 1);
 
     _sessionStartPage = 1;
     _sessionEndPage = 1;
+    _lastCheckpointedPage = 1;
 
     await _saveLastPage(1);
     _pageController?.jumpToPage(0);
@@ -282,6 +319,31 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
       _currentPage = 1;
       _isLastPage = false;
     });
+  }
+
+  /// FIXED (bug #7): single place that persists Khatm progress, used by
+  /// the periodic per-page checkpoint, the app-pause checkpoint, the
+  /// pop-time flush, and _goToFirstPage — instead of each of those
+  /// re-deriving "pages read" from _sessionStartPage independently (which
+  /// is what let a process kill discard everything, since only the pop
+  /// handler ever actually saved it). Guarded against re-entrancy and
+  /// against no-op (already caught up) calls.
+  Future<void> _checkpointKhatmProgress({int? upToPage}) async {
+    if (widget.readingMode != ReadingMode.khatm || _isCheckpointing) return;
+
+    final target = upToPage ?? _currentPage;
+    final pagesRead = _calculatePagesRead(_lastCheckpointedPage, target);
+    if (pagesRead <= 0) return;
+
+    _isCheckpointing = true;
+    try {
+      await KhatmService().logPagesRead(pagesRead);
+      _lastCheckpointedPage = target;
+    } catch (e) {
+      debugPrint('Failed to save khatm progress: $e');
+    } finally {
+      _isCheckpointing = false;
+    }
   }
 
   int _calculatePagesRead(int start, int end) {
@@ -301,7 +363,14 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     final totalPagesTarget = 604 * active.targetCompletions;
     final actualPages = (active.completedCycles * 604) + active.pagesReadTotal;
 
-    return (actualPages + (604 - _sessionStartPage + 1)) >= totalPagesTarget;
+    // FIXED (bug #7): was `604 - _sessionStartPage + 1`. active.pagesReadTotal
+    // above is read live off the same Hive object KhatmService mutates, so
+    // it already reflects anything this session's periodic/pause
+    // checkpoints have flushed. Counting the full span from
+    // _sessionStartPage again would double-count that portion —
+    // _lastCheckpointedPage is the actual not-yet-recorded remainder.
+    return (actualPages + (604 - _lastCheckpointedPage + 1)) >=
+        totalPagesTarget;
   }
 
   bool get _isLastSurahPage {
@@ -478,19 +547,26 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
     }
 
     return PopScope(
-      canPop: false,
+      // FIXED (bug #7): was unconditionally `false`, which also disables
+      // Android 13+'s predictive-back preview in every reading mode, even
+      // the ones (free/pointer/goal) that have no async work to do before
+      // popping. Only Khatm mode still needs to intercept the pop to
+      // flush progress first.
+      canPop: widget.readingMode != ReadingMode.khatm,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (widget.readingMode == ReadingMode.khatm) {
-          final pagesRead = _calculatePagesRead(
-            _sessionStartPage,
-            _sessionEndPage,
-          );
-          if (pagesRead > 0) {
-            await KhatmService().logPagesRead(pagesRead);
-          }
+        // FIXED (bug #7): wrapped in try/finally so a failure in the
+        // checkpoint (e.g. a Hive write error) can never leave this
+        // screen stuck refusing to pop — the whole point of canPop:false
+        // here is to delay the pop briefly, not to block it. Most of a
+        // session's progress is normally already saved by the periodic
+        // and pause checkpoints above by the time this runs, so this is
+        // now a small top-up flush rather than the only save point.
+        try {
+          await _checkpointKhatmProgress();
+        } finally {
+          if (context.mounted) Navigator.pop(context, true);
         }
-        if (context.mounted) Navigator.pop(context, true);
       },
       child: Stack(
         children: [
@@ -670,6 +746,15 @@ class _MushafPageScreenState extends State<MushafPageScreen> {
             });
 
             _saveLastPage(page);
+
+            // FIXED (bug #7): periodic checkpoint every ~5 pages, so a
+            // process kill mid-session loses at most a handful of pages
+            // instead of the whole session. Fire-and-forget, same as
+            // _saveLastPage above — this callback isn't async.
+            if (widget.readingMode == ReadingMode.khatm &&
+                _calculatePagesRead(_lastCheckpointedPage, page) >= 5) {
+              _checkpointKhatmProgress();
+            }
           },
           itemBuilder: (context, index) {
             final pageNumber = _firstPage + index;

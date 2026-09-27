@@ -54,19 +54,20 @@ class PrayerCache {
 
   /// ---------------- PRAYER CALC ----------------
 
-  PrayerTimes calculatePrayerTimes() {
+  PrayerTimes calculatePrayerTimes() => calculatePrayerTimesFor(DateTime.now());
+
+  /// ADDED (bug #3): lets callers compute prayer times for a day other than
+  /// today — used to pre-arm native azan alarms several days ahead instead
+  /// of relying solely on the (Doze-affected) midnight rescheduler to
+  /// create each new day's alarms. Kept as one shared method with the same
+  /// calculation method/madhab as `calculatePrayerTimes()` so the two never
+  /// drift out of sync with each other.
+  PrayerTimes calculatePrayerTimesFor(DateTime date) {
     final coordinates = Coordinates(lat!, lng!);
 
-    // CHANGED: now matches PrayerTimesScreen exactly
     final params = CalculationMethod.muslim_world_league.getParameters()
       ..madhab = Madhab.shafi;
 
-    return PrayerTimes(
-      coordinates,
-
-      DateComponents.from(DateTime.now()),
-
-      params,
-    );
+    return PrayerTimes(coordinates, DateComponents.from(date), params);
   }
 }

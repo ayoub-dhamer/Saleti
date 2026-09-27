@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:android_intent_plus/android_intent.dart';
 
 class ExactAlarmPermission {
   static Future<bool> isGranted() async {
@@ -10,24 +8,23 @@ class ExactAlarmPermission {
     return await Permission.scheduleExactAlarm.isGranted;
   }
 
-  static Future<void> ensureEnabled(BuildContext context) async {
+  // FIXED (bug #5): this used to open Android's exact-alarm settings
+  // screen via a manually-built intent with the data URI
+  // 'package:com.example.saleti.app' hardcoded — but this app's real
+  // applicationId is 'com.saleti.app' (see build.gradle.kts). That
+  // settings screen was for a package that doesn't exist on the device,
+  // so the toggle the user saw and enabled there could never actually
+  // grant *this* app anything: isGranted() would keep reporting false no
+  // matter what the user did, and — since onboarding has no skip button —
+  // that stranded the user on this step permanently.
+  //
+  // Permission.scheduleExactAlarm.request() asks the OS for this app's
+  // own exact-alarm settings screen directly, so there's no package
+  // string to get wrong, and it no longer needs a BuildContext.
+  static Future<void> ensureEnabled() async {
     if (!Platform.isAndroid) return;
-
     if (!(await isGranted())) {
-      const intent = AndroidIntent(
-        action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
-        data:
-            'package:com.example.saleti.app', // CHANGED (was 'package:your.package.name')
-      );
-
-      try {
-        await intent.launch();
-      } catch (e) {
-        const fallbackIntent = AndroidIntent(
-          action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
-        );
-        await fallbackIntent.launch();
-      }
+      await Permission.scheduleExactAlarm.request();
     }
   }
 }
