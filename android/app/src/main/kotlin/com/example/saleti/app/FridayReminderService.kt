@@ -37,6 +37,21 @@ class FridayReminderService : Service() {
         return START_STICKY
     }
 
+    // FIXED (bug #10): AzanPlatformPlugin's stopFridayReminder now calls
+    // stopService() instead of re-starting this service with a STOP
+    // action — stopService() goes straight to onDestroy() without ever
+    // passing through onStartCommand above, so the stopForeground() call
+    // there no longer runs for that path. Without this override, stopping
+    // the service that way could leave the notification behind even
+    // though the service process itself is gone. The notification's own
+    // "Done" button still goes through onStartCommand's ACTION_STOP branch
+    // above (that's the only entry point a service PendingIntent can
+    // target), so this is purely additive, not a replacement.
+    override fun onDestroy() {
+        stopForeground(true)
+        super.onDestroy()
+    }
+
     private fun buildNotification(): Notification {
         val stopIntent = Intent(this, FridayReminderService::class.java).apply {
             action = ACTION_STOP

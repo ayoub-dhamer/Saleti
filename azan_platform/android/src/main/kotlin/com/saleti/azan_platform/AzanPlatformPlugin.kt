@@ -106,7 +106,18 @@ class AzanPlatformPlugin : FlutterPlugin, MethodCallHandler {
             }
 
             "stopFridayReminder" -> {
-                appContext.startService(fridayIntent(ACTION_FRIDAY_STOP))
+                // FIXED (bug #10): was appContext.startService(fridayIntent(
+                // ACTION_FRIDAY_STOP)) — sending a *new* start command to a
+                // service that may no longer actually be running (e.g. it
+                // was never successfully started, or the OS already killed
+                // it) is exactly the kind of "start a background service
+                // from the background" call Android 8+ can refuse. Stopping
+                // is not subject to that restriction — stopService() always
+                // works, whether or not the service is currently running.
+                // FridayReminderService.onDestroy() now handles the
+                // notification cleanup this path used to rely on
+                // onStartCommand's ACTION_STOP branch for.
+                appContext.stopService(fridayIntent(ACTION_FRIDAY_STOP))
                 result.success(null)
             }
 

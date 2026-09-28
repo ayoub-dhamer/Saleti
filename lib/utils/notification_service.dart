@@ -400,7 +400,11 @@ class NotificationService {
     await AndroidAlarmManager.cancel(fridayReminderEndAlarmId);
 
     const platform = MethodChannel('azan_service');
-    await platform.invokeMethod('stopFridayReminder');
+    try {
+      await platform.invokeMethod('stopFridayReminder');
+    } catch (e) {
+      debugPrint('Failed to stop Friday reminder: $e');
+    }
   }
 
   static Future<void> loadEidOffset() async {
@@ -604,11 +608,25 @@ class NotificationService {
 Future<void> fridayReminderCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const platform = MethodChannel('azan_service');
-  await platform.invokeMethod('startFridayReminder');
-
+  // FIXED (bug #10): starting the foreground service used to run *before*
+  // rescheduling next Friday. Starting a foreground service from this
+  // background callback can throw (Android 12+'s background-start
+  // restrictions among other reasons) — when it did, the two
+  // scheduleFridayReminder*/End calls below never ran, so no future
+  // Friday ever got scheduled again: one failed run permanently ended
+  // the weekly reminder. Rescheduling first means next Friday is always
+  // armed regardless of whether *this* Friday's notification managed to
+  // show, and the start is now wrapped so a failure here can't take the
+  // schedule down with it.
   await NotificationService.scheduleFridayReminder();
   await NotificationService.scheduleFridayReminderEnd();
+
+  const platform = MethodChannel('azan_service');
+  try {
+    await platform.invokeMethod('startFridayReminder');
+  } catch (e) {
+    debugPrint('Failed to start Friday reminder: $e');
+  }
 }
 
 @pragma('vm:entry-point')
@@ -616,7 +634,11 @@ Future<void> fridayReminderEndCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   const platform = MethodChannel('azan_service');
-  await platform.invokeMethod('stopFridayReminder');
+  try {
+    await platform.invokeMethod('stopFridayReminder');
+  } catch (e) {
+    debugPrint('Failed to stop Friday reminder: $e');
+  }
 }
 
 // REMOVED: _handleFridayNotificationResponse and notificationTapBackground.

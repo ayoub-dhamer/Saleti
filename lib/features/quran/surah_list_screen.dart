@@ -212,10 +212,13 @@ class _SurahListScreenState extends State<SurahListScreen> {
         final surah = surahs[index];
 
         final startPage = surahStartPages[surah] ?? 1;
-        final endPage = surah == 114
-            ? 604
-            : (surahStartPages[surah + 1] ?? 604) - 1;
-        final pagesCount = endPage - startPage + 1;
+        // FIXED (bug #9): this used to be `nextSurahStart - 1`, which is
+        // wrong whenever a surah ends on the same page the next one starts
+        // on (16 short surahs near the end of the mushaf, e.g. 82, 86, 91,
+        // 93, 95, 97 ...): the end came out *before* the start, so the card
+        // read "0 Pages". surahEndPages already holds the real last page.
+        final endPage = surahEndPages[surah] ?? startPage;
+        final pagesCount = (endPage - startPage + 1).clamp(1, 604);
         final ayahCount = getVerseCount(surah);
 
         return TweenAnimationBuilder<double>(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,9 +16,46 @@ class DuaNotesScreen extends StatefulWidget {
   State<DuaNotesScreen> createState() => _DuaNotesScreenState();
 }
 
+/// FIXED (bug #8): a du'a and its font size used to live in two parallel
+/// structures — the text in a List<String>, the size in a Map<int, double>
+/// keyed by *list index*. Inserting a new du'a at index 0 only set
+/// _duaFontSizes[0] and never shifted the existing entries down, and
+/// deleting one never shifted anything up, so every size after the change
+/// belonged to the wrong du'a (and that misalignment was then persisted).
+/// Each note now carries its own size, so there's nothing to keep in sync.
+class _Dua {
+  final String id;
+  String text;
+  double fontSize;
+
+  _Dua({required this.id, required this.text, this.fontSize = 24});
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'text': text,
+    'fontSize': fontSize,
+  };
+
+  static _Dua? tryFromJson(String raw) {
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return _Dua(
+        id: map['id'] as String,
+        text: map['text'] as String,
+        fontSize: (map['fontSize'] as num?)?.toDouble() ?? 24,
+      );
+    } catch (_) {
+      return null; // skip a corrupt entry rather than losing the whole list
+    }
+  }
+}
+
+String _newDuaId([int salt = 0]) =>
+    '${DateTime.now().microsecondsSinceEpoch}_$salt';
+
 class _DuaNotesScreenState extends State<DuaNotesScreen> {
   final TextEditingController _addController = TextEditingController();
-  List<String> _duaList = [];
+  List<_Dua> _duaList = [];
   bool _isGalleryMode = false;
 
   static const Color primaryGreen = Color(0xFF1FA45B);
@@ -26,7 +65,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   PageController? _pageController;
   int _galleryIndex = 0;
 
-  Map<int, double> _duaFontSizes = {};
+  static const String _storageKeyV2 = 'dua_notes_v2';
   static const double _minFontSize = 14;
   static const double _maxFontSize = 34;
   static const double _fontStep = 2;
@@ -48,46 +87,67 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   Future<void> _loadDuaNotes() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _duaList = prefs.getStringList('dua_notes') ?? [];
+    final v2 = prefs.getStringList(_storageKeyV2);
 
-      final stored = prefs.getStringList('dua_font_sizes') ?? [];
-      _duaFontSizes = {
-        for (var i = 0; i < stored.length; i++)
-          i: double.tryParse(stored[i]) ?? 24,
-      };
-    });
+    List<_Dua> loaded;
+    if (v2 != null) {
+      loaded = v2.map(_Dua.tryFromJson).whereType<_Dua>().toList();
+    } else {
+      // One-time migration from the old parallel 'dua_notes' /
+      // 'dua_font_sizes' lists. Sizes are paired by index, which is the
+      // best information available — any pairing that had already drifted
+      // out of sync under the old bug can't be recovered. The old keys are
+      // left untouched as a backup.
+      final oldNotes = prefs.getStringList('dua_notes') ?? [];
+      final oldSizes = prefs.getStringList('dua_font_sizes') ?? [];
+      loaded = [
+        for (var i = 0; i < oldNotes.length; i++)
+          _Dua(
+            id: _newDuaId(i),
+            text: oldNotes[i],
+            fontSize: i < oldSizes.length
+                ? (double.tryParse(oldSizes[i]) ?? 24)
+                : 24,
+          ),
+      ];
+      if (loaded.isNotEmpty) {
+        await prefs.setStringList(
+          _storageKeyV2,
+          loaded.map((d) => jsonEncode(d.toJson())).toList(),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _duaList = loaded);
   }
 
-  Future<void> _saveFontSizes() async {
+  Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    final list = List.generate(
-      _duaList.length,
-      (i) => (_duaFontSizes[i] ?? 24).toString(),
+    await prefs.setStringList(
+      _storageKeyV2,
+      _duaList.map((d) => jsonEncode(d.toJson())).toList(),
     );
-    await prefs.setStringList('dua_font_sizes', list);
   }
 
   void _increaseFont(int index) {
     HapticFeedback.selectionClick();
     setState(() {
-      _duaFontSizes[index] = ((_duaFontSizes[index] ?? 24) + _fontStep).clamp(
-        _minFontSize,
-        _maxFontSize,
-      );
+      _duaList[index].fontSize = (_duaList[index].fontSize + _fontStep)
+          .clamp(_minFontSize, _maxFontSize)
+          .toDouble();
     });
-    _saveFontSizes();
+    _persist();
   }
 
   void _decreaseFont(int index) {
     HapticFeedback.selectionClick();
     setState(() {
-      _duaFontSizes[index] = ((_duaFontSizes[index] ?? 24) - _fontStep).clamp(
-        _minFontSize,
-        _maxFontSize,
-      );
+      _duaList[index].fontSize = (_duaList[index].fontSize - _fontStep)
+          .clamp(_minFontSize, _maxFontSize)
+          .toDouble();
     });
-    _saveFontSizes();
+    _persist();
   }
 
   // ───────────── Dialogs ─────────────
@@ -119,6 +179,10 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   void _showEditDialog(int index) {
+    // Capture the id now: the dialog is async, and an index could point at a
+    // different du'a by the time the user taps save.
+    final id = _duaList[index].id;
+    final initialText = _duaList[index].text;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -134,8 +198,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             opacity: anim.value.clamp(0.0, 1.0),
             child: _DuaEditorDialog(
               title: "Edit Du'a",
-              initialText: _duaList[index],
-              onSave: (text) => _updateDua(index, text),
+              initialText: initialText,
+              onSave: (text) => _updateDua(id, text),
             ),
           ),
         );
@@ -147,25 +211,24 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   Future<void> _saveDua(String dua) async {
     if (dua.trim().isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
 
     setState(() {
-      _duaList.insert(0, dua.trim());
-      _duaFontSizes[0] = 24;
+      _duaList.insert(0, _Dua(id: _newDuaId(), text: dua.trim()));
     });
 
-    await prefs.setStringList('dua_notes', _duaList);
-    await _saveFontSizes();
+    await _persist();
   }
 
-  Future<void> _updateDua(int index, String dua) async {
+  Future<void> _updateDua(String id, String dua) async {
     if (dua.trim().isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _duaList[index] = dua.trim());
-    await prefs.setStringList('dua_notes', _duaList);
+    final index = _duaList.indexWhere((d) => d.id == id);
+    if (index < 0) return; // deleted while the editor was open
+    setState(() => _duaList[index].text = dua.trim());
+    await _persist();
   }
 
   Future<void> _deleteDua(int index) async {
+    final id = _duaList[index].id;
     final theme = Theme.of(context);
 
     final confirm = await showDialog<bool>(
@@ -221,9 +284,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
 
     if (confirm == true) {
-      final prefs = await SharedPreferences.getInstance();
-      setState(() => _duaList.removeAt(index));
-      await prefs.setStringList('dua_notes', _duaList);
+      if (!mounted) return;
+      setState(() => _duaList.removeWhere((d) => d.id == id));
+      await _persist();
     }
   }
 
@@ -412,7 +475,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   Widget _duaCard(int index, ThemeData theme, bool isDark) {
     return TweenAnimationBuilder<double>(
-      key: ValueKey('dua_$index-${_duaList[index].hashCode}'),
+      key: ValueKey('dua_${_duaList[index].id}'),
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 300 + (index.clamp(0, 6) * 40)),
       curve: Curves.easeOutCubic,
@@ -505,7 +568,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _duaList[index],
+                    _duaList[index].text,
                     textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                     maxLines: 3,
@@ -596,7 +659,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           itemCount: _duaList.length,
           onPageChanged: (i) => setState(() => _galleryIndex = i),
           itemBuilder: (_, i) {
-            final fontSize = _duaFontSizes[i] ?? 24;
+            final fontSize = _duaList[i].fontSize;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 30),
               child: Stack(
@@ -628,7 +691,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                             ),
                             child: Center(
                               child: AutoSizeText(
-                                _duaList[i],
+                                _duaList[i].text,
                                 textAlign: TextAlign.center,
                                 textDirection: TextDirection.rtl,
                                 maxLines: null,
