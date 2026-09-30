@@ -887,8 +887,13 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
   }
 
   void _submit() {
+    // FIXED (bug #12): _canSubmit already guards the button, but _submit
+    // can still be reached other ways (e.g. a text field's submit
+    // action), so this re-validates rather than trusting the caller.
+    final target = _parsedTarget;
     if (_selectedSurah == null ||
-        _targetController.text.isEmpty ||
+        target == null ||
+        target <= 0 ||
         _labelController.text.trim().isEmpty) {
       return;
     }
@@ -897,7 +902,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     Navigator.pop(context, {
       "surahNumber": surah["number"],
       "surahName": surah["name"],
-      "targetCount": int.parse(_targetController.text),
+      "targetCount": target,
       "deadline": _deadline,
       "label": _labelController.text.trim(),
     });
@@ -917,8 +922,18 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     }
   }
 
-  bool get _canSubmit =>
-      _selectedSurah != null && _targetController.text.trim().isNotEmpty;
+  int? get _parsedTarget => int.tryParse(_targetController.text.trim());
+
+  // FIXED (bug #12): was `_targetController.text.trim().isNotEmpty` — any
+  // non-numeric paste made _submit()'s int.parse throw, and "0" (or a
+  // negative number, if a hardware keyboard or paste got one past the
+  // digits-only formatter added below) passed this check straight through.
+  // isCompleted is `completedCount >= targetCount`, so a target of 0
+  // marked the goal complete the instant it was created.
+  bool get _canSubmit {
+    final target = _parsedTarget;
+    return _selectedSurah != null && target != null && target > 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1061,6 +1076,16 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                   TextField(
                     controller: _targetController,
                     keyboardType: TextInputType.number,
+                    // FIXED (bug #12): keyboardType only hints which soft
+                    // keyboard to show — it doesn't block a paste or a
+                    // hardware keyboard from inserting non-digit text.
+                    // digitsOnly is the actual guard; the length limit
+                    // keeps someone from typing an unreasonable number of
+                    // repetitions (999 is already far beyond realistic use).
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(3),
+                    ],
                     onChanged: (_) => setState(() {}),
                     style: TextStyle(
                       color: theme.textTheme.bodyLarge?.color,
@@ -1068,6 +1093,13 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                     decoration: InputDecoration(
                       labelText: "Target count",
                       hintText: "e.g. 3",
+                      // FIXED (bug #12): surfaces *why* the button is
+                      // disabled instead of a target of 0 just silently
+                      // not submitting with no explanation.
+                      errorText:
+                          _targetController.text.isNotEmpty && !_canSubmit
+                          ? 'Enter a number of 1 or more'
+                          : null,
                       filled: true,
                       fillColor: isDark
                           ? Colors.white.withOpacity(0.06)

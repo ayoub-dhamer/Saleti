@@ -52,12 +52,20 @@ class NotificationService {
     'isha': 5000,
   };
 
-  // CHANGED: fridayReminderNotificationId removed — the Friday reminder is
-  // now a native foreground-service notification (see FridayReminderService.kt),
-  // no longer posted or cancelled via flutter_local_notifications, so this
-  // ID has no remaining use.
+  // FIXED (bug #10, part 3): fridayReminderNotificationId is back — the
+  // Friday reminder went from a plain notification, to a native
+  // foreground-service notification (see the old FridayReminderService.kt),
+  // and now back to a plain flutter_local_notifications notification.
+  // Android 14+ made most foreground-service notifications swipeable too,
+  // removing the entire reason the service existed, and a specialUse
+  // foreground service for something this minor was a Play Store review
+  // risk besides. Reuses fridayReminderAlarmId's value — alarm ids
+  // (android_alarm_manager_plus) and notification ids
+  // (flutter_local_notifications) are separate id spaces, so sharing the
+  // number is just a mnemonic, not a collision.
   static const int fridayReminderAlarmId = 8001;
   static const int fridayReminderEndAlarmId = 8002;
+  static const int fridayReminderNotificationId = fridayReminderAlarmId;
 
   static const String _eidOffsetKey = 'eid_offset_minutes';
   static int eidOffsetMinutes = 20;
@@ -257,7 +265,13 @@ class NotificationService {
       await AndroidAlarmManager.cancel(alarmId(prayer, 'reminder'));
 
       if (setting['reminder'] == true) {
-        final minutes = setting['minutesBefore'] as int;
+        // FIXED (bug #11): was `setting['minutesBefore'] as int`, which
+        // threw if this value was ever stored as a double. A throw here
+        // aborted scheduling for every remaining prayer in this loop, not
+        // just this one — (num?)?.toInt() accepts either numeric type and
+        // falls back to the 10-minute default if it's missing or the
+        // wrong type entirely.
+        final minutes = (setting['minutesBefore'] as num?)?.toInt() ?? 10;
         final reminderTime = time.subtract(Duration(minutes: minutes));
         if (reminderTime.isAfter(DateTime.now())) {
           await scheduleReminder(
@@ -286,11 +300,12 @@ class NotificationService {
   static Future<void> init() async {
     await AndroidAlarmManager.initialize();
 
-    // CHANGED: dropped onDidReceiveNotificationResponse /
-    // onDidReceiveBackgroundNotificationResponse — those only existed to
-    // handle the old Friday "Done" action button, which is now a native
-    // PendingIntent on FridayReminderService's own notification and never
-    // routes back through flutter_local_notifications at all.
+    // No onDidReceiveNotificationResponse handler needed: the Friday
+    // reminder's "Done" action (see fridayReminderCallback below) uses
+    // AndroidNotificationAction's cancelNotification: true, so tapping it
+    // dismisses the notification without any app code running at all —
+    // simpler than the old service-based version, which needed a
+    // handler purely to stop the foreground service.
     const androidInit = AndroidInitializationSettings(
       '@drawable/ic_notification',
     ); // CHANGED: was '@mipmap/ic_launcher'
@@ -312,11 +327,10 @@ class NotificationService {
       ),
     );
 
-    // KEPT: still needed here, even though the Friday reminder notification
-    // itself moved to FridayReminderService.kt — eidReminderCallback below
-    // posts to this same channel ID via flutter_local_notifications, and
-    // that channel must exist before the first Eid ever fires, not just
-    // after the first Friday reminder happens to run.
+    // The Friday reminder (fridayReminderCallback below) and Eid reminder
+    // (eidReminderCallback) both post to this channel via
+    // flutter_local_notifications, so it must exist before either can ever
+    // fire — not created lazily by whichever one happens to run first.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         'friday_reminder_channel',
@@ -398,13 +412,9 @@ class NotificationService {
   static Future<void> cancelFridayReminder() async {
     await AndroidAlarmManager.cancel(fridayReminderAlarmId);
     await AndroidAlarmManager.cancel(fridayReminderEndAlarmId);
-
-    const platform = MethodChannel('azan_service');
-    try {
-      await platform.invokeMethod('stopFridayReminder');
-    } catch (e) {
-      debugPrint('Failed to stop Friday reminder: $e');
-    }
+    // FIXED (bug #10, part 3): no more MethodChannel call to a native
+    // service — just cancel the plain notification directly.
+    await _notifications.cancel(fridayReminderNotificationId);
   }
 
   static Future<void> loadEidOffset() async {
@@ -608,24 +618,58 @@ class NotificationService {
 Future<void> fridayReminderCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FIXED (bug #10): starting the foreground service used to run *before*
-  // rescheduling next Friday. Starting a foreground service from this
-  // background callback can throw (Android 12+'s background-start
-  // restrictions among other reasons) — when it did, the two
-  // scheduleFridayReminder*/End calls below never ran, so no future
-  // Friday ever got scheduled again: one failed run permanently ended
-  // the weekly reminder. Rescheduling first means next Friday is always
-  // armed regardless of whether *this* Friday's notification managed to
-  // show, and the start is now wrapped so a failure here can't take the
-  // schedule down with it.
+  // FIXED (bug #10): reschedule next Friday *before* attempting to show
+  // anything — a failure below (or anywhere in the old foreground-service
+  // start, before this migration) must never take the weekly schedule
+  // down with it.
   await NotificationService.scheduleFridayReminder();
   await NotificationService.scheduleFridayReminderEnd();
 
-  const platform = MethodChannel('azan_service');
+  // FIXED (bug #10, part 3): this used to start FridayReminderService, a
+  // specialUse foreground service, purely so its notification would be
+  // harder to swipe away. Android 14+ made most foreground-service
+  // notifications swipeable too, so that no longer held up as a reason —
+  // this is now a plain notification, like eidReminderCallback below.
+  const androidInit = AndroidInitializationSettings(
+    '@drawable/ic_notification',
+  );
+  final notifications = FlutterLocalNotificationsPlugin();
+
   try {
-    await platform.invokeMethod('startFridayReminder');
+    await notifications.initialize(
+      const InitializationSettings(android: androidInit),
+    );
+
+    await notifications.show(
+      NotificationService.fridayReminderNotificationId,
+      "It's Jumu'ah Day",
+      "Today is Friday — shower and read Surah Al-Kahf to get ready for Salat al-Jumu'ah.",
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'friday_reminder_channel',
+          'Friday Reminder',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          // Best-effort only, not enforced the way a foreground service's
+          // notification could be — the user (or the OS) can still swipe
+          // this away, same as any other Android 14+ ongoing notification.
+          ongoing: true,
+          autoCancel: false,
+          actions: [
+            AndroidNotificationAction(
+              'friday_done',
+              'Done',
+              // Default true: dismisses the notification on tap with no
+              // app code needing to run at all.
+              cancelNotification: true,
+            ),
+          ],
+        ),
+      ),
+    );
   } catch (e) {
-    debugPrint('Failed to start Friday reminder: $e');
+    debugPrint('Failed to show Friday reminder: $e');
   }
 }
 
@@ -633,20 +677,31 @@ Future<void> fridayReminderCallback() async {
 Future<void> fridayReminderEndCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const platform = MethodChannel('azan_service');
+  // FIXED (bug #10, part 3): no more native service to stop — just cancel
+  // the notification directly, same pattern as alarmCallback/
+  // eidReminderCallback (a fresh plugin instance, since this runs in its
+  // own background isolate).
+  const androidInit = AndroidInitializationSettings(
+    '@drawable/ic_notification',
+  );
+  final notifications = FlutterLocalNotificationsPlugin();
+
   try {
-    await platform.invokeMethod('stopFridayReminder');
+    await notifications.initialize(
+      const InitializationSettings(android: androidInit),
+    );
+    await notifications.cancel(
+      NotificationService.fridayReminderNotificationId,
+    );
   } catch (e) {
-    debugPrint('Failed to stop Friday reminder: $e');
+    debugPrint('Failed to clear Friday reminder: $e');
   }
 }
 
-// REMOVED: _handleFridayNotificationResponse and notificationTapBackground.
-// Both only existed to react to a tap on the old flutter_local_notifications
-// "Done" action, which no longer exists — the Done button is now a native
-// PendingIntent wired directly to FridayReminderService's ACTION_STOP, so
-// nothing on the Dart side ever needs to observe a notification response
-// for this anymore.
+// No _handleFridayNotificationResponse / notificationTapBackground here:
+// the "Done" action above uses AndroidNotificationAction's
+// cancelNotification: true, so dismissing it needs no Dart-side response
+// handler — see the comment in NotificationService.init() above.
 
 @pragma('vm:entry-point')
 Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {

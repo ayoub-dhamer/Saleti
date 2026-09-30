@@ -1160,9 +1160,19 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
     super.dispose();
   }
 
-  bool get _canSubmit =>
-      int.tryParse(_controller.text.trim()) != null &&
-      int.parse(_controller.text.trim()) > 0;
+  // FIXED (bug #12): was missing an upper bound entirely — nothing stopped
+  // an absurd value like "999999" completions/year, which flows straight
+  // into pagesPerDay = ceil(604 * targetCompletions / remainingDays) in
+  // KhatmService.startYear. 99 (roughly a full Qur'an every 3-4 days) is
+  // already far beyond realistic use.
+  static const int _maxCyclesPerYear = 99;
+
+  int? get _parsedCycles => int.tryParse(_controller.text.trim());
+
+  bool get _canSubmit {
+    final cycles = _parsedCycles;
+    return cycles != null && cycles > 0 && cycles <= _maxCyclesPerYear;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1247,6 +1257,15 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                   TextField(
                     controller: _controller,
                     keyboardType: TextInputType.number,
+                    // FIXED (bug #12): keyboardType only hints which soft
+                    // keyboard to show — a paste or hardware keyboard could
+                    // still insert non-digit text, which the old
+                    // int.tryParse-only check would reject silently with
+                    // no explanation. digitsOnly stops it at the source.
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ],
                     onChanged: (_) => setState(() {}),
                     style: TextStyle(
                       color: theme.textTheme.bodyLarge?.color,
@@ -1254,6 +1273,12 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                     decoration: InputDecoration(
                       labelText: 'Completions per year',
                       hintText: 'e.g. 1, 2, 3...',
+                      // FIXED (bug #12): surfaces why the button is
+                      // disabled instead of 0 (or something above the
+                      // cap) just silently failing to submit.
+                      errorText: _controller.text.isNotEmpty && !_canSubmit
+                          ? 'Enter 1-$_maxCyclesPerYear'
+                          : null,
                       filled: true,
                       fillColor: isDark
                           ? Colors.white.withOpacity(0.06)
@@ -1323,7 +1348,7 @@ class _KhatmPlanDialogState extends State<_KhatmPlanDialog> {
                       child: ElevatedButton(
                         onPressed: _canSubmit
                             ? () => Navigator.pop(context, {
-                                "cycles": int.parse(_controller.text.trim()),
+                                "cycles": _parsedCycles!,
                                 "startFromYearStart": _startFromYearStart,
                               })
                             : null,

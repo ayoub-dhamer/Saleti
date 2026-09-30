@@ -100,26 +100,13 @@ class AzanPlatformPlugin : FlutterPlugin, MethodCallHandler {
                 result.success(null)
             }
 
-            "startFridayReminder" -> {
-                ContextCompat.startForegroundService(appContext, fridayIntent(ACTION_FRIDAY_START))
-                result.success(null)
-            }
-
-            "stopFridayReminder" -> {
-                // FIXED (bug #10): was appContext.startService(fridayIntent(
-                // ACTION_FRIDAY_STOP)) — sending a *new* start command to a
-                // service that may no longer actually be running (e.g. it
-                // was never successfully started, or the OS already killed
-                // it) is exactly the kind of "start a background service
-                // from the background" call Android 8+ can refuse. Stopping
-                // is not subject to that restriction — stopService() always
-                // works, whether or not the service is currently running.
-                // FridayReminderService.onDestroy() now handles the
-                // notification cleanup this path used to rely on
-                // onStartCommand's ACTION_STOP branch for.
-                appContext.stopService(fridayIntent(ACTION_FRIDAY_STOP))
-                result.success(null)
-            }
+            // FIXED (bug #10, part 3): startFridayReminder/stopFridayReminder
+            // removed. The weekly reminder no longer runs through a native
+            // foreground service (see AndroidManifest.xml and the old
+            // FridayReminderService.kt, both removed alongside this) — it's
+            // a plain flutter_local_notifications notification now, posted
+            // directly from Dart in fridayReminderCallback. Nothing on the
+            // native side needs to know about it anymore.
 
             else -> result.notImplemented()
         }
@@ -129,16 +116,11 @@ class AzanPlatformPlugin : FlutterPlugin, MethodCallHandler {
     // Component targeting by string, not compile-time class refs — keeps
     // this plugin free of any dependency on the host app's Kotlin classes.
     // The action-string constants below must stay in sync with whatever
-    // AzanService.kt / FridayReminderService.kt actually check for.
+    // AzanService.kt actually checks for.
     // -----------------------------
 
     private fun azanServiceIntent(): Intent =
         Intent().setClassName(appContext.packageName, "${appContext.packageName}.AzanService")
-
-    private fun fridayIntent(action: String): Intent =
-        Intent()
-            .setClassName(appContext.packageName, "${appContext.packageName}.FridayReminderService")
-            .setAction(action)
 
     private fun getAzanPendingIntent(id: Int, prayer: String, volume: Float): PendingIntent {
         val intent = azanServiceIntent().apply {
@@ -200,7 +182,5 @@ class AzanPlatformPlugin : FlutterPlugin, MethodCallHandler {
 
     companion object {
         private const val ACTION_PLAY_AZAN = "com.saleti.app.action.PLAY_AZAN"
-        private const val ACTION_FRIDAY_START = "com.saleti.app.action.START_FRIDAY_REMINDER"
-        private const val ACTION_FRIDAY_STOP = "com.saleti.app.action.STOP_FRIDAY_REMINDER"
     }
 }
