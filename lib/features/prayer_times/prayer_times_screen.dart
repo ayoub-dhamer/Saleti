@@ -212,12 +212,25 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // The 1s timer can be throttled or paused by the OS while
-      // backgrounded, so don't rely on it alone to catch a day rollover
-      // that happened while the app was away — check immediately on resume.
-      _onTick();
-      _checkSystemReadiness();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // The 1s timer can be throttled or paused by the OS while
+        // backgrounded, so don't rely on it alone to catch a day rollover
+        // that happened while the app was away — check immediately on resume.
+        _onTick();
+        _checkSystemReadiness();
+        if (widget.isActive) _startTicker();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // FIXED (Battery/CPU #2): the 1s ticker used to keep running for
+        // the entire time the app sat backgrounded, for no visible
+        // benefit — nothing driven by it is on screen. Same pattern as
+        // Qibla's compass subscription: safe to stop unconditionally,
+        // since the resumed case above already treats the timer as
+        // unreliable while backgrounded and re-syncs from scratch anyway.
+        _stopTicker();
     }
   }
 
@@ -861,19 +874,23 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: progress),
-                        duration: const Duration(milliseconds: 600),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, _) =>
-                            CircularProgressIndicator(
-                              value: value,
-                              strokeWidth: 3,
-                              backgroundColor: Colors.white.withOpacity(0.25),
-                              valueColor: const AlwaysStoppedAnimation(
-                                Colors.white,
-                              ),
-                            ),
+                      // FIXED (Battery/CPU #2): was a TweenAnimationBuilder
+                      // re-animating from the old progress value to the new
+                      // one over 600ms on every single tick from
+                      // _nowNotifier (once a second, forever, whenever this
+                      // card is visible). progress only moves by a tiny
+                      // amount each tick, so the animation bought no real
+                      // smoothness while keeping its own animation
+                      // controller — and the repaints that come with it —
+                      // active roughly 60% of every second. progress is
+                      // already a continuously-advancing fraction of
+                      // elapsed real time, so binding it directly looks
+                      // just as smooth without the repeated restarts.
+                      CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 3,
+                        backgroundColor: Colors.white.withOpacity(0.25),
+                        valueColor: const AlwaysStoppedAnimation(Colors.white),
                       ),
                       const Icon(
                         Icons.timer_outlined,
@@ -1137,8 +1154,12 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                         },
                         onLongPress: () async {
                           HapticFeedback.heavyImpact();
+                          // FIXED (bug #11): same unsafe cast as
+                          // NotificationService.rescheduleAllForToday —
+                          // this would throw and drop the long-press
+                          // entirely if minutesBefore was ever a double.
                           final minutes = await _showDurationPickerDialog(
-                            setting['minutesBefore'] as int,
+                            (setting['minutesBefore'] as num?)?.toInt() ?? 10,
                           );
                           if (minutes != null) {
                             setState(() {

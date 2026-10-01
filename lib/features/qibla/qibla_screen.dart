@@ -18,12 +18,31 @@ class QiblaScreen extends StatefulWidget {
   State<QiblaScreen> createState() => _QiblaScreenState();
 }
 
-class _QiblaScreenState extends State<QiblaScreen> {
+class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
   double? _qiblaDirection;
-  double _heading = 0;
+
+  // FIXED (Battery/CPU #1, item 1): heading no longer lives in a State
+  // field updated via setState — that rebuilt the *entire* screen
+  // (AppBar, header, calibration banner, everything) on every single
+  // compass reading. It's pushed through this ValueNotifier instead, so
+  // only the small subtree in _compass() that actually depends on it
+  // rebuilds.
+  final ValueNotifier<double> _headingNotifier = ValueNotifier<double>(0);
+
+  // FIXED (Battery/CPU #1, item 3): tracks the *unwrapped* needle
+  // rotation in turns, so AnimatedRotation never has to jump a full turn
+  // when the raw heading crosses the 0°/360° boundary — see the unwrap
+  // math in _compass() below.
+  double _needleTurns = 0;
 
   bool _loading = true;
   String? _errorMessage;
+
+  // FIXED (Battery/CPU #1, item 4): previously there was no way to tell
+  // "device has no compass sensor" from "compass just hasn't reported
+  // yet" — the needle would sit frozen at heading 0 forever with no
+  // explanation either way.
+  bool _noCompassAvailable = false;
 
   bool _wasAligned = false;
   bool _showCalibrationHint = false;
@@ -40,6 +59,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCalibrationHintState();
     _loadFromCacheOrRequest();
     if (widget.isActive) _startCompass();
@@ -120,10 +140,58 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   void _startCompass() {
-    _compassSub ??= FlutterCompass.events?.listen((event) {
+    if (_compassSub != null) return;
+
+    final events = FlutterCompass.events;
+    if (events == null) {
+      // FIXED (Battery/CPU #1, item 4): FlutterCompass.events itself being
+      // null (as opposed to individual events reporting a null heading,
+      // handled below) means this platform has no compass backend at all.
+      if (mounted) setState(() => _noCompassAvailable = true);
+      return;
+    }
+
+    _compassSub = events.listen((event) {
       if (!mounted) return;
-      setState(() => _heading = event.heading ?? 0);
+      final heading = event.heading;
+      if (heading == null) {
+        // FIXED (Battery/CPU #1, item 4): flutter_compass reports a null
+        // heading specifically when the device has no compass sensor —
+        // previously masked by `?? 0`, which made a sensorless device
+        // look identical to one that just happened to face north.
+        if (mounted && !_noCompassAvailable) {
+          setState(() => _noCompassAvailable = true);
+        }
+        return;
+      }
+
+      if (_qiblaDirection != null) {
+        // FIXED (Battery/CPU #1, item 3): unwrap against the *previous*
+        // turns value so AnimatedRotation always takes the shortest path,
+        // instead of spinning almost a full turn whenever the raw heading
+        // crosses the 0°/360° boundary.
+        final targetTurns = (_qiblaDirection! - heading) / 360.0;
+        _needleTurns = _unwrapTurns(_needleTurns, targetTurns);
+      }
+
+      // FIXED (Battery/CPU #1, item 1): was setState(() => _heading = ...),
+      // which rebuilt this entire screen — AppBar, header, calibration
+      // banner, everything — on every single compass reading (devices
+      // commonly emit these several times a second). Pushing through a
+      // ValueNotifier instead means only the small subtree that actually
+      // reads it (built in the ValueListenableBuilder in build() below)
+      // rebuilds.
+      _headingNotifier.value = heading;
     });
+  }
+
+  /// See item 3's comment above _startCompass: keeps needle rotation
+  /// continuous (never wrapping) by nudging `previous` toward `target`
+  /// (both in turns) along whichever direction is shorter.
+  double _unwrapTurns(double previous, double target) {
+    var delta = (target - previous) % 1.0; // Dart's % is always in [0, 1)
+    if (delta > 0.5) delta -= 1.0; // now in [-0.5, 0.5]
+    return previous + delta;
   }
 
   void _stopCompass() {
@@ -131,9 +199,31 @@ class _QiblaScreenState extends State<QiblaScreen> {
     _compassSub = null;
   }
 
+  // FIXED (Battery/CPU #1, item 2): the compass subscription used to only
+  // ever start/stop based on this tab's own visibility (didUpdateWidget
+  // above), so it kept streaming sensor data — and this whole subtree
+  // rebuilding for it — the entire time the app sat backgrounded, as long
+  // as the Qibla tab happened to be selected when the user left. Now it
+  // also stops on pause/detach and resumes on resume (only if this tab is
+  // still the active one).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        _stopCompass();
+      case AppLifecycleState.resumed:
+        if (widget.isActive) _startCompass();
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopCompass();
+    _headingNotifier.dispose();
     super.dispose();
   }
 
@@ -312,7 +402,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
     required IconData icon,
     required String title,
     required String message,
-    required VoidCallback onRetry,
+    // FIXED (Battery/CPU #1, item 4): nullable so a permanent condition
+    // (no compass hardware) can reuse this view without a "Try Again"
+    // button that would have nothing useful to retry.
+    VoidCallback? onRetry,
     String retryText = 'Try Again',
   }) {
     final theme = Theme.of(context);
@@ -379,23 +472,24 @@ class _QiblaScreenState extends State<QiblaScreen> {
                     ), // CHANGED
                   ),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: onRetry,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryGreen,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  if (onRetry != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: onRetry,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          retryText,
+                          style: const TextStyle(color: Colors.white),
                         ),
                       ),
-                      child: Text(
-                        retryText,
-                        style: const TextStyle(color: Colors.white),
-                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -428,14 +522,20 @@ class _QiblaScreenState extends State<QiblaScreen> {
       );
     }
 
-    final angle = ((_qiblaDirection! - _heading) * pi / 180);
-    final difference = ((_qiblaDirection! - _heading + 360) % 360).round();
-    final isAligned = difference < 5 || difference > 355;
-
-    if (isAligned && !_wasAligned) {
-      HapticFeedback.mediumImpact();
+    // FIXED (Battery/CPU #1, item 4): shown once flutter_compass has told
+    // us (via a null events stream, or a null heading on a delivered
+    // event — see _startCompass) that this device has no compass sensor,
+    // instead of leaving the needle silently frozen with no explanation.
+    if (_noCompassAvailable) {
+      return _errorView(
+        icon: Icons.explore_off_rounded,
+        title: "No compass sensor found",
+        message:
+            "This device doesn't have a compass, so the Qibla direction "
+            "can't be shown as a live needle.",
+        onRetry: null,
+      );
     }
-    _wasAligned = isAligned;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
@@ -463,12 +563,39 @@ class _QiblaScreenState extends State<QiblaScreen> {
           if (_showCalibrationHint) _calibrationHint(isDark),
           Expanded(
             child: Center(
-              child: Semantics(
-                liveRegion: true, // announces changes without needing re-focus
-                label: isAligned
-                    ? 'Facing the Qibla'
-                    : '$difference degrees off — turn ${difference > 180 ? "left" : "right"} to align',
-                child: _compass(angle, difference, isAligned, theme, isDark),
+              // FIXED (Battery/CPU #1, item 1): angle/difference/isAligned
+              // used to be computed once per *whole-screen* build (i.e.
+              // once per setState in the old compass listener). Scoping
+              // them to a ValueListenableBuilder here means only this
+              // subtree — not the AppBar, header, or calibration banner
+              // above — rebuilds on every compass reading.
+              child: ValueListenableBuilder<double>(
+                valueListenable: _headingNotifier,
+                builder: (context, heading, _) {
+                  final difference = ((_qiblaDirection! - heading + 360) % 360)
+                      .round();
+                  final isAligned = difference < 5 || difference > 355;
+
+                  if (isAligned && !_wasAligned) {
+                    HapticFeedback.mediumImpact();
+                  }
+                  _wasAligned = isAligned;
+
+                  return Semantics(
+                    liveRegion:
+                        true, // announces changes without needing re-focus
+                    label: isAligned
+                        ? 'Facing the Qibla'
+                        : '$difference degrees off — turn ${difference > 180 ? "left" : "right"} to align',
+                    child: _compass(
+                      _needleTurns,
+                      difference,
+                      isAligned,
+                      theme,
+                      isDark,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -580,7 +707,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
   /// 🧭 Compass Widget
   Widget _compass(
-    double angle,
+    double needleTurns,
     int difference,
     bool aligned,
     ThemeData theme,
@@ -706,52 +833,64 @@ class _QiblaScreenState extends State<QiblaScreen> {
             ),
 
             /// 5. Rotating needle layer
-            AnimatedRotation(
-              turns: angle / (2 * pi),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              child: SizedBox(
-                width: 240,
-                height: 240,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      top: 0,
-                      child: Column(
-                        children: [
-                          AnimatedScale(
-                            duration: const Duration(milliseconds: 300),
-                            scale: aligned ? 1.15 : 1.0,
-                            child: Icon(
-                              Icons.mosque,
-                              size: 34,
-                              color: aligned
-                                  ? Colors.green
-                                  : theme.textTheme.bodyLarge?.color, // CHANGED
-                            ),
-                          ),
-                          Container(
-                            width: 4,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  aligned
-                                      ? Colors.green
-                                      : (theme.textTheme.bodyLarge?.color ??
-                                            Colors.black87), // CHANGED
-                                  Colors.transparent,
-                                ],
+            // FIXED (Battery/CPU #1, item 1 + 3): RepaintBoundary isolates
+            // this continuously-rotating layer into its own compositing
+            // layer, so its frequent repaints don't force the static plate
+            // and tick marks above to repaint alongside it. `needleTurns`
+            // is the pre-unwrapped value from _unwrapTurns (see
+            // _startCompass), so this never spins the long way around when
+            // the raw heading crosses 0°/360°.
+            RepaintBoundary(
+              child: AnimatedRotation(
+                turns: needleTurns,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                child: SizedBox(
+                  width: 240,
+                  height: 240,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(
+                        top: 0,
+                        child: Column(
+                          children: [
+                            AnimatedScale(
+                              duration: const Duration(milliseconds: 300),
+                              scale: aligned ? 1.15 : 1.0,
+                              child: Icon(
+                                Icons.mosque,
+                                size: 34,
+                                color: aligned
+                                    ? Colors.green
+                                    : theme
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color, // CHANGED
                               ),
                             ),
-                          ),
-                        ],
+                            Container(
+                              width: 4,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    aligned
+                                        ? Colors.green
+                                        : (theme.textTheme.bodyLarge?.color ??
+                                              Colors.black87), // CHANGED
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
