@@ -130,19 +130,45 @@ class MushafDataService extends ChangeNotifier {
   // forces a fresh scan on their next launch.
   static const String _maxWidthCacheKey = 'mushaf_max_line_width_v1';
 
-  Future<void> load() async {
-    if (_loaded) return;
+  // FIXED (Battery/CPU #4): memoizes the in-flight load so two screens
+  // calling load() before the first call's await chain finishes (e.g.
+  // navigating quickly between two Mushaf-related screens around startup)
+  // share one read-and-parse instead of each independently reading and
+  // parsing the whole multi-MB JSON file. Cleared on failure so a later
+  // call can actually retry rather than being stuck replaying one failed
+  // attempt forever.
+  Future<void>? _loadFuture;
 
-    final raw = await rootBundle.loadString('assets/data/mushaf_complete.json');
+  Future<void> load() {
+    if (_loaded) return Future.value();
+    return _loadFuture ??= _loadAndParse();
+  }
 
-    // CHANGED: decoding the JSON and building every page/line/word object
-    // now happens on a background isolate via compute(), so this first
-    // load() of the session — however large mushaf_complete.json is —
-    // never blocks the UI thread while it parses.
-    final parsedPages = await compute(_parseMushafPages, raw);
-    _pages.addAll(parsedPages);
+  Future<void> _loadAndParse() async {
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/data/mushaf_complete.json',
+        // FIXED (Battery/CPU #4): loadString caches the decoded STRING
+        // indefinitely by default. The only thing that needs to live for
+        // the app's lifetime is the already-parsed `_pages` below — this
+        // raw (multi-MB) JSON text is never read again after the one
+        // parse just below, so there's no reason to also keep it resident
+        // in rootBundle's string cache for the rest of the session.
+        cache: false,
+      );
 
-    _loaded = true;
+      // CHANGED: decoding the JSON and building every page/line/word object
+      // now happens on a background isolate via compute(), so this first
+      // load() of the session — however large mushaf_complete.json is —
+      // never blocks the UI thread while it parses.
+      final parsedPages = await compute(_parseMushafPages, raw);
+      _pages.addAll(parsedPages);
+
+      _loaded = true;
+    } catch (e) {
+      _loadFuture = null;
+      rethrow;
+    }
 
     // fire-and-forget — starts warming up (or reading the cached) max
     // width right away, in the background, typically well before the

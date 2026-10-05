@@ -18,17 +18,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int selected = 0;
 
+  // FIXED (Battery/CPU #6): all four tabs' screens used to be built
+  // immediately at startup, since IndexedStack needs every child present
+  // to keep its state alive once visited. That meant Qibla's own location
+  // fetch and compass subscription — and Prayer's own location
+  // load/permission checks — all started the moment the app opened, even
+  // for a tab the user might never visit this session. Tab 0 starts
+  // "visited" since it's shown immediately regardless; the other three
+  // are only actually built the first time their tab is tapped. Flutter's
+  // widget reconciliation treats a position's widget type changing
+  // (SizedBox -> the real screen) as a fresh element, so that first
+  // build runs initState() as normal — but once visited, a tab's widget
+  // type at that position never changes again, so every later switch
+  // back to it is reconciled onto the same existing State and still
+  // preserves it exactly as before.
+  final Set<int> _visitedTabs = {0};
+
   List<Widget> get pages => [
-    PrayerTimesScreen(isActive: selected == 0),
-    const HijriCalendarScreen(),
-    QiblaScreen(isActive: selected == 2),
-    const QuranScreen(),
+    _visitedTabs.contains(0)
+        ? PrayerTimesScreen(isActive: selected == 0)
+        : const SizedBox.shrink(),
+    _visitedTabs.contains(1)
+        ? const HijriCalendarScreen()
+        : const SizedBox.shrink(),
+    _visitedTabs.contains(2)
+        ? QiblaScreen(isActive: selected == 2)
+        : const SizedBox.shrink(),
+    _visitedTabs.contains(3) ? const QuranScreen() : const SizedBox.shrink(),
   ];
 
   void _onTabTapped(int index) {
     if (index == selected) return;
     HapticFeedback.selectionClick();
-    setState(() => selected = index);
+    setState(() {
+      selected = index;
+      _visitedTabs.add(index);
+    });
   }
 
   @override

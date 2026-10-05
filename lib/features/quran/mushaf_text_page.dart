@@ -3,6 +3,24 @@ import 'package:quran/quran.dart' as quran;
 import 'package:saleti/data/juz_data.dart';
 import 'package:saleti/utils/mushaf_data_service.dart';
 
+// FIXED (Battery/CPU #3): see MushafTextPage._lineLayoutCache for why this
+// exists. A record gives value-equality for free, so it works as a Map key
+// with no custom hashCode/== to maintain.
+typedef _LineLayoutKey = (
+  int pageNumber,
+  int lineNumber,
+  double width,
+  int fontSizeTenths,
+  Color ayahEndColor,
+  Color textColor,
+);
+
+class _JustifiedLine {
+  final List<InlineSpan> spans;
+  final double wordSpacing;
+  const _JustifiedLine(this.spans, this.wordSpacing);
+}
+
 class MushafTextPage extends StatelessWidget {
   final int pageNumber;
   final bool isLectureMode;
@@ -79,12 +97,36 @@ class MushafTextPage extends StatelessWidget {
   bool get _isVerticallyCenteredPage =>
       _verticallyCenteredPages.contains(pageNumber);
 
+  // FIXED (Battery/CPU #3): MushafTextPage is a StatelessWidget rebuilt
+  // fresh by its parent's PageView on every parent setState — including
+  // the two _isPageSettled toggles per swipe (see MushafPageScreen) — so
+  // without this cache, _justifyLine's ~3 TextPainter layouts plus a
+  // regex-based kashida-insertion loop reran on the UI thread for every
+  // one of a page's up to 15 lines, on every single one of those
+  // rebuilds, even though the result is 100% determined by this record.
+  // A static Map persists across those rebuilt instances for the app's
+  // lifetime. Bounded domain (604 pages × 15 lines × however many
+  // distinct width/fontSize/color combinations one session actually
+  // sees), so this never grows unreasonably large.
+  static final Map<_LineLayoutKey, _JustifiedLine> _lineLayoutCache = {};
+
   @override
   Widget build(BuildContext context) {
     final page = MushafDataService().getPage(pageNumber);
 
     if (page == null) {
-      return const Center(child: Text('Page not available'));
+      // FIXED (Battery/CPU #4): this showed the same "Page not available"
+      // message regardless of *why* page was null — including the
+      // entirely normal case where MushafDataService().load() (parsing a
+      // multi-megabyte JSON file) simply hasn't finished yet, which a fast
+      // cold start can easily reach this screen before. That's now told
+      // apart from a genuinely missing page: loading finished and this
+      // page still isn't in the data, which is an actual data problem.
+      return Center(
+        child: MushafDataService().isLoaded
+            ? const Text('Page not available')
+            : const CircularProgressIndicator(),
+      );
     }
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -335,6 +377,72 @@ class MushafTextPage extends StatelessWidget {
     final segments = line.elements;
     if (segments.isEmpty) return const SizedBox.shrink();
 
+    // FIXED (Battery/CPU #3): was computed fresh on every build — see the
+    // cache field above for why that was expensive and how often it ran.
+    // Rounding width/fontSize to whole units avoids sub-pixel
+    // floating-point jitter between rebuilds splitting what's really the
+    // same layout into separate cache entries.
+    final key = (
+      pageNumber,
+      line.lineNumber,
+      availableWidth.roundToDouble(),
+      (fontSize * 10).round(),
+      ayahEndColor,
+      activeTextColor,
+    );
+
+    final justified = _lineLayoutCache.putIfAbsent(
+      key,
+      () => _justifyLine(
+        segments,
+        fontSize,
+        availableWidth,
+        ayahEndColor,
+        activeTextColor,
+      ),
+    );
+
+    return SizedBox(
+      width: availableWidth,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(wordSpacing: justified.wordSpacing),
+            children: justified.spans,
+          ),
+          textDirection: TextDirection.rtl,
+          softWrap: false,
+          // FIXED (Battery/CPU #4): without this, the rendered line
+          // follows the system's accessibility text-scale setting, but
+          // the measurements below that decide how many kashida
+          // characters and how much word-spacing to add do NOT (Flutter's
+          // TextPainter defaults to no scaling) — so on a device with
+          // text scaling turned up, the actually-rendered line would be
+          // wider than what was measured against availableWidth,
+          // defeating the justification this method exists to do, and
+          // FittedBox would then shrink each line by a different amount
+          // to compensate, breaking consistent font size across the page.
+          // This view already has its own dedicated font-size control
+          // (MushafDataService.computeFixedFontSize), so pinning it here
+          // is intentional, not a missed accessibility feature.
+          textScaler: TextScaler.noScaling,
+        ),
+      ),
+    );
+  }
+
+  /// The expensive computation _buildTextLine's cache exists to avoid
+  /// redoing: unchanged logic from before, just extracted so it only
+  /// actually runs on a cache miss.
+  _JustifiedLine _justifyLine(
+    List<MushafWordElement> segments,
+    double fontSize,
+    double availableWidth,
+    Color ayahEndColor,
+    Color activeTextColor,
+  ) {
     final naturalSpans = _buildSpansFromSegments(
       segments,
       fontSize,
@@ -345,18 +453,7 @@ class MushafTextPage extends StatelessWidget {
     // ADD: centered pages render at natural width — no kashida, no word-spacing
     // top-up. Returning early also skips that measurement work entirely.
     if (_isCenteredPage) {
-      return SizedBox(
-        width: availableWidth,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.center,
-          child: Text.rich(
-            TextSpan(children: naturalSpans),
-            textDirection: TextDirection.rtl,
-            softWrap: false,
-          ),
-        ),
-      );
+      return _JustifiedLine(naturalSpans, 0.0);
     }
 
     final naturalWidth = _measureSpanWidth(naturalSpans);
@@ -382,21 +479,7 @@ class MushafTextPage extends StatelessWidget {
         ? leftover / gapCount
         : 0.0;
 
-    return SizedBox(
-      width: availableWidth,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        child: Text.rich(
-          TextSpan(
-            style: TextStyle(wordSpacing: topUpSpacing),
-            children: kashidaSpans,
-          ),
-          textDirection: TextDirection.rtl,
-          softWrap: false,
-        ),
-      ),
-    );
+    return _JustifiedLine(kashidaSpans, topUpSpacing);
   }
 
   double _measureSpanWidth(List<InlineSpan> spans) {
@@ -404,6 +487,11 @@ class MushafTextPage extends StatelessWidget {
       text: TextSpan(children: spans),
       textDirection: TextDirection.rtl,
       maxLines: 1,
+      // FIXED (Battery/CPU #4): explicit, even though this is already
+      // TextPainter's default — see the matching textScaler on the
+      // rendered Text.rich above for why measurement and render must
+      // always agree here.
+      textScaler: TextScaler.noScaling,
     )..layout();
     return painter.width;
   }

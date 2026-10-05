@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:adhan/adhan.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -49,12 +51,41 @@ class LocationService {
   static final PrayerCache _cache = PrayerCache();
 
   /// Throws whatever [Geolocator.getCurrentPosition] throws (permission
-  /// issues, disabled location services, timeouts) — callers should keep
-  /// wrapping this in their own try/catch exactly as before.
+  /// issues, disabled location services, a timeout with nothing cached to
+  /// fall back to) — callers should keep wrapping this in their own
+  /// try/catch exactly as before.
   static Future<LocationRefreshResult> refresh({
-    LocationAccuracy accuracy = LocationAccuracy.high,
+    // FIXED (Battery/CPU #5): was LocationAccuracy.high. Prayer times and
+    // Qibla direction only need city-level precision, not GPS-grade
+    // meter-level precision — medium resolves faster and cheaper on the
+    // radio for no visible difference in either feature.
+    LocationAccuracy accuracy = LocationAccuracy.medium,
   }) async {
-    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: accuracy);
+    Position pos;
+    try {
+      pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: accuracy,
+        // FIXED (Battery/CPU #5): without a timeLimit, a weak or absent
+        // GPS signal left this hanging indefinitely — the "Loading..."
+        // state (and the refresh spinner) in both PrayerTimesScreen and
+        // QiblaScreen would simply never resolve. geolocator's own issue
+        // tracker has real reports of getCurrentPosition taking 30+
+        // seconds or timing out outright on some Android 12+ devices, so
+        // this is a real-world case, not a theoretical one.
+        timeLimit: const Duration(seconds: 10),
+      );
+    } on TimeoutException {
+      // FIXED (Battery/CPU #5): fall back to the last cached fix instead
+      // of just failing outright — good enough for city-level prayer
+      // times/qibla direction, and far better than leaving the caller
+      // stuck with nothing. If there's truly nothing cached either (e.g.
+      // this device has never gotten a location fix before), let the
+      // original timeout propagate so the caller's existing error
+      // handling shows its usual "couldn't get location" message.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last == null) rethrow;
+      pos = last;
+    }
 
     String cityName = 'Unknown Location';
     try {
