@@ -52,6 +52,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
     parsed.sort((a, b) => a.page.compareTo(b.page));
 
+    // FIXED (Battery/CPU #7): this screen can be popped while the
+    // SharedPreferences read above is in flight (e.g. rapid back
+    // navigation right after opening Bookmarks) — setState after that
+    // throws on an unmounted State.
+    if (!mounted) return;
     setState(() => _bookmarks = parsed);
   }
 

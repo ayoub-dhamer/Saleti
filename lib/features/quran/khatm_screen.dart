@@ -115,6 +115,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
     await _service.rolloverIfNeeded();
     final active = await _service.getActiveYear();
     final history = await _service.getHistory();
+    // FIXED (Battery/CPU #7): this screen can be popped (e.g. the user
+    // navigates back) while these three Hive lookups are in flight —
+    // setState after that throws on an unmounted State.
+    if (!mounted) return;
     setState(() {
       _activeYear = active;
       _history = history;
@@ -295,292 +299,317 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final daysRemaining = endDate.difference(now).inDays.clamp(1, 9999);
     final catchUpPagesPerDay = (remainingPages / daysRemaining).ceil();
 
-    return FutureBuilder<int>(
-      future: _service.pagesAheadOrBehind(),
-      builder: (context, snapshot) {
-        int diff = snapshot.data ?? 0;
-        KhatmStatus status;
-        if (diff == 0) {
-          status = KhatmStatus.onTrack;
-        } else if (diff > 0) {
-          status = KhatmStatus.ahead;
-        } else {
-          status = KhatmStatus.behind;
-        }
+    // FIXED (Battery/CPU #7): was wrapped in FutureBuilder<int>(future:
+    // _service.pagesAheadOrBehind(), ...) — since _activeYearCard is
+    // called fresh from build() every rebuild, that constructed a brand
+    // new Future every time, and FutureBuilder restarts whenever the
+    // future *instance* changes — so this re-read Hive via
+    // getActiveYear() on every single rebuild of this screen, however
+    // caused. pagesAheadOrBehind's entire calculation is just arithmetic
+    // on a KhatmYear's own fields, and _activeYear above is already a
+    // live reference to that same Hive object (KhatmService shares the
+    // same in-memory object for a given box entry — see the matching
+    // reasoning in bug #7's fix), so it can be computed synchronously
+    // with no Hive access and no FutureBuilder at all.
+    final diff = _pagesAheadOrBehind;
+    KhatmStatus status;
+    if (diff == 0) {
+      status = KhatmStatus.onTrack;
+    } else if (diff > 0) {
+      status = KhatmStatus.ahead;
+    } else {
+      status = KhatmStatus.behind;
+    }
 
-        Color statusColor;
-        String statusLabel;
-        switch (status) {
-          case KhatmStatus.ahead:
-            statusColor = primaryGreen;
-            statusLabel = 'Ahead by $diff pages';
-            break;
-          case KhatmStatus.behind:
-            statusColor = Colors.red.shade600;
-            statusLabel = 'Behind by ${diff.abs()} pages';
-            break;
-          case KhatmStatus.onTrack:
-            statusColor = Colors.indigo.shade600;
-            statusLabel = 'On track';
-        }
+    Color statusColor;
+    String statusLabel;
+    switch (status) {
+      case KhatmStatus.ahead:
+        statusColor = primaryGreen;
+        statusLabel = 'Ahead by $diff pages';
+        break;
+      case KhatmStatus.behind:
+        statusColor = Colors.red.shade600;
+        statusLabel = 'Behind by ${diff.abs()} pages';
+        break;
+      case KhatmStatus.onTrack:
+        statusColor = Colors.indigo.shade600;
+        statusLabel = 'On track';
+    }
 
-        final currentCycleProgress = (pagesInCurrentCycle / cyclePages).clamp(
-          0.0,
-          1.0,
-        );
-        final yearProgress = (pagesReadInYear / totalTargetPages).clamp(
-          0.0,
-          1.0,
-        );
-        final isFinished = pagesReadInYear >= totalTargetPages;
+    final currentCycleProgress = (pagesInCurrentCycle / cyclePages).clamp(
+      0.0,
+      1.0,
+    );
+    final yearProgress = (pagesReadInYear / totalTargetPages).clamp(0.0, 1.0);
+    final isFinished = pagesReadInYear >= totalTargetPages;
 
-        return _card(
-          theme: theme,
-          isDark: isDark,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return _card(
+      theme: theme,
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [primaryGreen, secondaryGreen],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.menu_book_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [primaryGreen, secondaryGreen],
                       ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${_activeYear!.year}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: theme.textTheme.bodyLarge?.color,
-                            ), // CHANGED
-                          ),
-                          Text(
-                            '${_activeYear!.targetCompletions}× target · ${_activeYear!.pagesPerDay} pages/day',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.5),
-                            ), // CHANGED
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  IconAction(
-                    label: 'Delete khatm record for ${_activeYear!.year}',
-                    onTap: () => _confirmDeleteYear(_activeYear!.year),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.red,
-                        size: 18,
-                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.menu_book_rounded,
+                      color: Colors.white,
+                      size: 20,
                     ),
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: ScaleTransition(scale: anim, child: child),
-                ),
-                child: Container(
-                  key: ValueKey(statusLabel),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: statusColor.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        statusLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        '${_activeYear!.year}',
+                        style: TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          fontSize: 12.5,
-                        ),
+                          color: theme.textTheme.bodyLarge?.color,
+                        ), // CHANGED
+                      ),
+                      Text(
+                        '${_activeYear!.targetCompletions}× target · ${_activeYear!.pagesPerDay} pages/day',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                            0.5,
+                          ),
+                        ), // CHANGED
                       ),
                     ],
                   ),
+                ],
+              ),
+              IconAction(
+                label: 'Delete khatm record for ${_activeYear!.year}',
+                onTap: () => _confirmDeleteYear(_activeYear!.year),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.red,
+                    size: 18,
+                  ),
                 ),
-              ),
-
-              if (status == KhatmStatus.behind) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Catch-up pace: $catchUpPagesPerDay pages/day',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
-                    fontWeight: FontWeight.w600,
-                  ), // CHANGED
-                ),
-              ],
-
-              const SizedBox(height: 18),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _statChip(
-                      'Cycles',
-                      '${_activeYear!.completedCycles}/${_activeYear!.targetCompletions}',
-                      isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _statChip(
-                      'Started',
-                      DateFormat('MMM d').format(_activeYear!.startDate),
-                      isDark,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Current Cycle',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.5),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ), // CHANGED
-                        const SizedBox(height: 6),
-                        _buildProgressBar(
-                          currentCycleProgress,
-                          statusColor,
-                          pagesInCurrentCycle.toInt(),
-                          cyclePages,
-                          isDark,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Year Progress',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.5),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ), // CHANGED
-                        const SizedBox(height: 6),
-                        _buildProgressBar(
-                          yearProgress,
-                          statusColor,
-                          pagesReadInYear,
-                          totalTargetPages,
-                          isDark,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: Icon(
-                        isFinished ? Icons.check_circle : Icons.menu_book,
-                        size: 18,
-                      ),
-                      label: Text(
-                        isFinished ? 'Year Complete' : 'Continue Reading',
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryGreen,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: isDark
-                            ? Colors.white12
-                            : Colors.grey.shade200, // CHANGED
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: isFinished ? null : _startReading,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconAction(
-                    label: 'Log a completed reading cycle',
-                    onTap: _confirmAddCycle,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: primaryGreen.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(Icons.add, color: primaryGreen),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
-        );
-      },
+
+          const SizedBox(height: 16),
+
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(scale: anim, child: child),
+            ),
+            child: Container(
+              key: ValueKey(statusLabel),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: statusColor,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColor.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    statusLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (status == KhatmStatus.behind) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Catch-up pace: $catchUpPagesPerDay pages/day',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                fontWeight: FontWeight.w600,
+              ), // CHANGED
+            ),
+          ],
+
+          const SizedBox(height: 18),
+
+          Row(
+            children: [
+              Expanded(
+                child: _statChip(
+                  'Cycles',
+                  '${_activeYear!.completedCycles}/${_activeYear!.targetCompletions}',
+                  isDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statChip(
+                  'Started',
+                  DateFormat('MMM d').format(_activeYear!.startDate),
+                  isDark,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Cycle',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.5,
+                        ),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ), // CHANGED
+                    const SizedBox(height: 6),
+                    _buildProgressBar(
+                      currentCycleProgress,
+                      statusColor,
+                      pagesInCurrentCycle.toInt(),
+                      cyclePages,
+                      isDark,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Year Progress',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.5,
+                        ),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ), // CHANGED
+                    const SizedBox(height: 6),
+                    _buildProgressBar(
+                      yearProgress,
+                      statusColor,
+                      pagesReadInYear,
+                      totalTargetPages,
+                      isDark,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: Icon(
+                    isFinished ? Icons.check_circle : Icons.menu_book,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isFinished ? 'Year Complete' : 'Continue Reading',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDark
+                        ? Colors.white12
+                        : Colors.grey.shade200, // CHANGED
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: isFinished ? null : _startReading,
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconAction(
+                label: 'Log a completed reading cycle',
+                onTap: _confirmAddCycle,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: primaryGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.add, color: primaryGreen),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
+  }
+
+  // FIXED (Battery/CPU #7): the synchronous replacement for
+  // KhatmService.pagesAheadOrBehind() used above — same calculation,
+  // just reading _activeYear's fields directly instead of going through
+  // an async Hive lookup for data this screen already has in hand.
+  int get _pagesAheadOrBehind {
+    final active = _activeYear;
+    if (active == null) return 0;
+
+    final today = DateTime.now();
+    final daysElapsed = today.isBefore(active.startDate)
+        ? 0
+        : today.difference(active.startDate).inDays + 1;
+
+    final expectedPages = daysElapsed * active.pagesPerDay;
+    final actualPages =
+        (active.completedCycles * cyclePages) + active.pagesReadTotal;
+
+    return actualPages -
+        expectedPages.clamp(0, cyclePages * active.targetCompletions);
   }
 
   Widget _statChip(String label, String value, bool isDark) {
