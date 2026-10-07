@@ -605,15 +605,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
 
     final hijri = HijriCalendar.now();
     final eidName = SpecialDayHelper.eidNameFor(DateTime.now());
-    final nextPrayer = prayerTimes!.nextPrayer() == Prayer.none
-        ? Prayer.fajr
-        : prayerTimes!.nextPrayer();
-
-    DateTime nextTime = prayerTimes!.timeForPrayer(nextPrayer)!;
-    if (nextTime.isBefore(DateTime.now())) {
-      nextTime = nextTime.add(const Duration(days: 1));
-    }
-
+    final (nextPrayer, nextTime) = _resolveNextPrayer();
     final previousTime = _getPreviousPrayerTime(nextPrayer, nextTime);
 
     return Scaffold(
@@ -650,6 +642,44 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return 1.0;
   }
 
+  /// Resolves "next prayer" + its time from `prayerTimes`, mapping adhan's
+  /// non-prayer markers to whichever of the 5 prayers this app actually
+  /// lists comes next, and rolling over to tomorrow's Fajr (recomputed
+  /// fresh from the cached location, not approximated by adding a day)
+  /// when every one of today's prayers has passed.
+  ///
+  /// FIXED (polish #1): previously duplicated independently in build()
+  /// and _prayerList(), and *neither* copy handled Prayer.sunrise — only
+  /// Prayer.none (after Isha). adhan's nextPrayer() returns Prayer.sunrise
+  /// during the Fajr-to-sunrise window; since 'sunrise' isn't one of this
+  /// app's 5 listed prayers, _getPreviousPrayerTime's order.indexOf
+  /// returned -1 and silently fell back to measuring progress from the
+  /// *previous day's Isha* instead of today's Fajr — the progress ring
+  /// looked stuck near empty — and no prayer-list row matched to
+  /// highlight at all, since nothing in the list is named 'sunrise'.
+  (Prayer, DateTime) _resolveNextPrayer() {
+    final now = DateTime.now();
+    final raw = prayerTimes!.nextPrayer();
+
+    Prayer next = switch (raw) {
+      Prayer.none => Prayer.fajr,
+      Prayer.sunrise => Prayer.dhuhr,
+      _ => raw,
+    };
+
+    DateTime time = prayerTimes!.timeForPrayer(next)!;
+    if (time.isBefore(now)) {
+      // Only reachable when `next` ended up Prayer.fajr — today's Fajr
+      // can't simultaneously be "next" and already in the past otherwise.
+      next = Prayer.fajr;
+      time = _cache
+          .calculatePrayerTimesFor(now.add(const Duration(days: 1)))
+          .fajr;
+    }
+
+    return (next, time);
+  }
+
   DateTime _getPreviousPrayerTime(Prayer next, DateTime nextTime) {
     const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
     final nextName = next.name.toLowerCase();
@@ -666,14 +696,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           ).subtract(const Duration(days: 1))
         : DateTime(nextTime.year, nextTime.month, nextTime.day);
 
-    final params = CalculationMethod.muslim_world_league.getParameters();
-    params.madhab = Madhab.shafi;
-    final coordinates = Coordinates(_cache.lat!, _cache.lng!);
-    final pt = PrayerTimes(
-      coordinates,
-      DateComponents.from(targetDate),
-      params,
-    );
+    // FIXED (polish #1, cleanup): was its own inline
+    // CalculationMethod/Coordinates/PrayerTimes construction — now shares
+    // PrayerCache's single implementation (see bug #4) instead of being
+    // yet another copy of the same MWL+Shafi configuration to keep in sync.
+    final pt = _cache.calculatePrayerTimesFor(targetDate);
 
     switch (prevName) {
       case 'fajr':
@@ -943,8 +970,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   // ---------------- PRAYER LIST ----------------
 
   Widget _prayerList(ThemeData theme, bool isDark) {
-    final now = DateTime.now();
-
     final prayers = {
       'fajr': prayerTimes!.fajr,
       'dhuhr': prayerTimes!.dhuhr,
@@ -953,35 +978,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       'isha': prayerTimes!.isha,
     };
 
-    Prayer next = prayerTimes!.nextPrayer();
-    DateTime nextTime;
-
-    if (next == Prayer.none) {
-      next = Prayer.fajr;
-      final tomorrow = now.add(const Duration(days: 1));
-      final params = CalculationMethod.muslim_world_league.getParameters();
-      params.madhab = Madhab.shafi;
-      final tomorrowPrayerTimes = PrayerTimes(
-        Coordinates(_cache.lat!, _cache.lng!),
-        DateComponents.from(tomorrow),
-        params,
-      );
-      nextTime = tomorrowPrayerTimes.fajr;
-    } else {
-      nextTime = prayerTimes!.timeForPrayer(next)!;
-      if (nextTime.isBefore(now)) {
-        final tomorrow = now.add(const Duration(days: 1));
-        final params = CalculationMethod.muslim_world_league.getParameters();
-        params.madhab = Madhab.shafi;
-        final tomorrowPrayerTimes = PrayerTimes(
-          Coordinates(_cache.lat!, _cache.lng!),
-          DateComponents.from(tomorrow),
-          params,
-        );
-        nextTime = tomorrowPrayerTimes.fajr;
-        next = Prayer.fajr;
-      }
-    }
+    // FIXED (polish #1): this used to be its own independent copy of the
+    // next-prayer resolution, with the same missing Prayer.sunrise
+    // handling as build()'s copy — see _resolveNextPrayer for the full
+    // explanation. Both now share one implementation.
+    final (next, nextTime) = _resolveNextPrayer();
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
