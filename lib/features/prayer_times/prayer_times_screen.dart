@@ -8,7 +8,9 @@ import 'package:hijri/hijri_calendar.dart';
 import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/location_service.dart';
+import 'package:saleti/features/settings/settings_screen.dart';
 import 'package:saleti/utils/prayer_cache.dart';
+import 'package:saleti/utils/religious_settings.dart';
 import 'package:saleti/utils/special_day_helper.dart';
 import 'package:saleti/utils/theme_controller.dart';
 import 'package:saleti/widgets/icon_action.dart';
@@ -603,7 +605,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       );
     }
 
-    final hijri = HijriCalendar.now();
+    // FIXED (polish #2): was HijriCalendar.now() directly — respects the
+    // user's configured hijriDayOffset now, same as the Hijri calendar
+    // screen and Eid detection.
+    final hijri = ReligiousSettings.hijriForDate(DateTime.now());
     final eidName = SpecialDayHelper.eidNameFor(DateTime.now());
     final (nextPrayer, nextTime) = _resolveNextPrayer();
     final previousTime = _getPreviousPrayerTime(nextPrayer, nextTime);
@@ -771,6 +776,34 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // ADDED (polish #2): entry point for calculation method/madhab/
+          // high-latitude-rule/per-prayer adjustments and the Hijri day
+          // offset — see SettingsScreen.
+          IconAction(
+            label: 'Settings',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.brightness == Brightness.dark
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.settings_rounded,
+                size: 18,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
               ),
             ),
           ),

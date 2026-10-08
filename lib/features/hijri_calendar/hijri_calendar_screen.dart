@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'package:saleti/utils/religious_settings.dart';
 
 class HijriCalendarScreen extends StatefulWidget {
   const HijriCalendarScreen({super.key});
@@ -14,13 +15,21 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  // FIXED (polish #3): was a hard-coded DateTime(2020)/DateTime(2030) —
+  // DateTime(2030) defaults month/day to 1/1, so lastDay was literally
+  // January 1st, 2030: the calendar already couldn't navigate into the
+  // rest of that year, let alone "break starting 2031" as originally
+  // flagged. A window anchored to today's year never goes stale.
+  final DateTime _firstDay = DateTime(DateTime.now().year - 10);
+  final DateTime _lastDay = DateTime(DateTime.now().year + 10, 12, 31);
+
   static const Color primaryGreen = Color(0xFF1FA45B);
   static const Color secondaryGreen = Color(0xFF4FC3A1);
 
   @override
   void initState() {
     super.initState();
-    _selectedHijri = HijriCalendar.fromDate(_focusedDay);
+    _selectedHijri = ReligiousSettings.hijriForDate(_focusedDay);
   }
 
   final List<Map<String, dynamic>> islamicHolidays = [
@@ -36,14 +45,14 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   ];
 
   bool _isHoliday(DateTime day) {
-    final hijri = HijriCalendar.fromDate(day);
+    final hijri = ReligiousSettings.hijriForDate(day);
     return islamicHolidays.any(
       (event) => event["day"] == hijri.hDay && event["month"] == hijri.hMonth,
     );
   }
 
   String? _holidayName(DateTime day) {
-    final hijri = HijriCalendar.fromDate(day);
+    final hijri = ReligiousSettings.hijriForDate(day);
     final match = islamicHolidays.firstWhere(
       (event) => event["day"] == hijri.hDay && event["month"] == hijri.hMonth,
       orElse: () => {},
@@ -61,7 +70,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     setState(() {
       _focusedDay = today;
       _selectedDay = today;
-      _selectedHijri = HijriCalendar.fromDate(today);
+      _selectedHijri = ReligiousSettings.hijriForDate(today);
     });
   }
 
@@ -251,8 +260,8 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             ],
           ),
           child: TableCalendar(
-            firstDay: DateTime(2020),
-            lastDay: DateTime(2030),
+            firstDay: _firstDay,
+            lastDay: _lastDay,
             focusedDay: _focusedDay,
             calendarFormat: CalendarFormat.month,
             startingDayOfWeek: StartingDayOfWeek.saturday,
@@ -262,7 +271,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               setState(() {
                 _selectedDay = selectedDay;
                 _focusedDay = focusedDay;
-                _selectedHijri = HijriCalendar.fromDate(selectedDay);
+                _selectedHijri = ReligiousSettings.hijriForDate(selectedDay);
               });
             },
 
@@ -445,7 +454,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     bool isDark,
     Color bodyTextColor,
   ) {
-    final hijri = HijriCalendar.fromDate(day);
+    final hijri = ReligiousSettings.hijriForDate(day);
     final holiday = _isHoliday(day);
 
     return AnimatedContainer(
@@ -470,7 +479,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   Widget _todayTile(context, day, _) {
-    final hijri = HijriCalendar.fromDate(day);
+    final hijri = ReligiousSettings.hijriForDate(day);
 
     return Container(
       margin: const EdgeInsets.all(4),
@@ -492,7 +501,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   Widget _selectedTile(context, day, _) {
-    final hijri = HijriCalendar.fromDate(day);
+    final hijri = ReligiousSettings.hijriForDate(day);
 
     return Container(
       margin: const EdgeInsets.all(4),

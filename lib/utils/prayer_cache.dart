@@ -1,5 +1,6 @@
 import 'package:adhan/adhan.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'religious_settings.dart';
 
 class PrayerCache {
   static final PrayerCache _instance = PrayerCache._internal();
@@ -59,14 +60,17 @@ class PrayerCache {
   /// ADDED (bug #3): lets callers compute prayer times for a day other than
   /// today — used to pre-arm native azan alarms several days ahead instead
   /// of relying solely on the (Doze-affected) midnight rescheduler to
-  /// create each new day's alarms. Kept as one shared method with the same
-  /// calculation method/madhab as `calculatePrayerTimes()` so the two never
-  /// drift out of sync with each other.
+  /// create each new day's alarms. Kept as one shared method so every
+  /// caller in the app always agrees on how times are calculated.
   PrayerTimes calculatePrayerTimesFor(DateTime date) {
     final coordinates = Coordinates(lat!, lng!);
 
-    final params = CalculationMethod.muslim_world_league.getParameters()
-      ..madhab = Madhab.shafi;
+    // FIXED (polish #2): was a hard-coded
+    // CalculationMethod.muslim_world_league + Madhab.shafi — this is now
+    // the one place in the app that builds CalculationParameters, and it
+    // reads the user's configured method/madhab/high-latitude-rule/
+    // per-prayer adjustments (see ReligiousSettings) instead.
+    final params = ReligiousSettings.buildParameters();
 
     return PrayerTimes(coordinates, DateComponents.from(date), params);
   }

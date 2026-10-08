@@ -13,6 +13,7 @@ import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
+import 'utils/religious_settings.dart';
 import 'package:saleti/utils/theme_controller.dart';
 import 'package:saleti/utils/app_theme.dart';
 
@@ -63,6 +64,12 @@ Future<void> _bootstrap() async {
     await _openBoxSafely<DailyKhatmLog>('khatm_logs');
     await _openBoxSafely<SurahGoal>('surah_goals');
 
+    // ADDED (polish #2): must load before anything below computes prayer
+    // times (Eid reminder scheduling further down, and every screen once
+    // the app is up) — otherwise the first calculation of the session
+    // would silently use ReligiousSettings' hard-coded defaults instead
+    // of whatever the user had configured.
+    await _tryStep('load religious settings', ReligiousSettings.load);
     await _tryStep('load PrayerCache', PrayerCache().load);
     await _tryStep(
       'load notification settings',
