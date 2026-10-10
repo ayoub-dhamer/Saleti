@@ -93,6 +93,23 @@ class KhatmService {
 
     KhatmYear? existing = box.values.firstWhereOrNull((y) => y.year == year);
 
+    // FIXED (polish #4): this deactivation used to run only in the
+    // brand-new-year path below — the reuse branch just under it
+    // (restarting a year that already has a record, e.g. a previous
+    // attempt at this same calendar year) activated that record without
+    // first deactivating whatever else was currently active, leaving two
+    // KhatmYear records simultaneously isActive at once. Moved above the
+    // branch so both paths share it. Skipped when the active year is the
+    // very record being reused — nothing else to deactivate there, and
+    // deactivating-then-immediately-reactivating the same record would
+    // just leave a narrow inconsistent window between the two saves.
+    final active = await getActiveYear();
+    if (active != null && active.year != year) {
+      active.isActive = false;
+      active.endDate = DateTime.now();
+      await active.save();
+    }
+
     if (existing != null) {
       existing
         ..targetCompletions = targetCompletions
@@ -100,17 +117,16 @@ class KhatmService {
         ..startDate = startDate
         ..startFromYearStart = startFromYearStart
         ..isActive = true
-        ..endDate = null;
+        ..endDate = null
+        // FIXED (polish #4): was left untouched, so restarting a year
+        // kept whatever pagesReadTotal/completedCycles were recorded
+        // under its previous (now-superseded) plan, instead of the same
+        // fresh start a brand-new KhatmYear() gets below.
+        ..pagesReadTotal = 0
+        ..completedCycles = 0;
       await existing.save();
       _activeYearCached = existing;
       return;
-    }
-
-    final active = await getActiveYear();
-    if (active != null) {
-      active.isActive = false;
-      active.endDate = DateTime.now();
-      await active.save();
     }
 
     final newYear = KhatmYear(

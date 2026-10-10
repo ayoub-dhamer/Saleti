@@ -23,13 +23,21 @@ class SurahGoal extends HiveObject {
   @HiveField(2)
   int targetCount;
 
-  @HiveField(3)
+  // FIXED (polish #4): defaultValue added to the two fields below that
+  // can plausibly be missing from an older record — completedCount
+  // already defaulted to 0 in this class's own constructor; label is
+  // `required` here (every goal created through the app always has one)
+  // but still needs a safe fallback for Hive specifically, in case it
+  // was added after this class's initial release — without one,
+  // hive_generator's bare `fields[N] as T` throws reading any record
+  // written before that field existed.
+  @HiveField(3, defaultValue: 0)
   int completedCount;
 
   @HiveField(4)
   DateTime? deadline;
 
-  @HiveField(5)
+  @HiveField(5, defaultValue: '')
   String label;
 
   SurahGoal({
@@ -82,6 +90,11 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
 
   Future<void> _loadGoals() async {
     final goals = await _service.getGoals();
+    // FIXED (Battery/CPU #7): called from initState, _confirmDelete, and
+    // _addGoal — in every case the screen can be gone (navigated away
+    // from) by the time this Hive read resolves. One check here covers
+    // all three call sites.
+    if (!mounted) return;
     setState(() {
       _goals = goals;
     });
@@ -860,6 +873,19 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
     (i) => {"number": i + 1, "name": quran.getSurahName(i + 1)},
   );
 
+  // FIXED (Battery/CPU #7): neither controller was ever disposed — every
+  // time this dialog opened and closed, two TextEditingControllers (and
+  // their underlying platform text-input bindings) leaked. The dialog
+  // itself is short-lived, so this never crashed anything outright, but
+  // it's a real, fully avoidable leak that adds up over a reading
+  // session with many added goals.
+  @override
+  void dispose() {
+    _targetController.dispose();
+    _labelController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickDeadline() async {
     final picked = await showDatePicker(
       context: context,
@@ -867,6 +893,12 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
       lastDate: DateTime(2100),
       initialDate: DateTime.now().add(const Duration(days: 7)),
     );
+
+    // FIXED (Battery/CPU #7): showDatePicker's await can outlive this
+    // dialog — e.g. the user backgrounds the app, or otherwise closes
+    // this dialog, while the picker is still up. Calling setState after
+    // that throws on an unmounted State.
+    if (!mounted) return;
 
     if (picked != null) {
       setState(() {
@@ -913,6 +945,11 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
       context: context,
       builder: (_) => _SurahSearchDialog(surahs: _surahs),
     );
+
+    // FIXED (Battery/CPU #7): same reasoning as _pickDeadline above —
+    // this dialog can be gone by the time the nested search dialog's
+    // await resolves.
+    if (!mounted) return;
 
     if (result != null) {
       setState(() {

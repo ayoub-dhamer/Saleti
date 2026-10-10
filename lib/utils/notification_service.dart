@@ -327,15 +327,31 @@ class NotificationService {
       ),
     );
 
-    // The Friday reminder (fridayReminderCallback below) and Eid reminder
-    // (eidReminderCallback) both post to this channel via
-    // flutter_local_notifications, so it must exist before either can ever
-    // fire — not created lazily by whichever one happens to run first.
+    // The Friday reminder (fridayReminderCallback below) posts to this
+    // channel via flutter_local_notifications, so it must exist before it
+    // can ever fire — not created lazily when it happens to run.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         'friday_reminder_channel',
         'Friday Reminder',
         description: "Weekly reminder to prepare for Salat al-Jumu'ah",
+        importance: Importance.max,
+        playSound: true,
+      ),
+    );
+
+    // FIXED (polish #6): Eid reminders (eidReminderCallback below) used to
+    // post to the channel above too — sharing it meant Eid al-Fitr and
+    // Eid al-Adha notifications showed up labeled "Friday Reminder" in
+    // the system notification settings, and a user who muted the Friday
+    // reminder there would silence Eid too without realizing it. Eid now
+    // gets its own channel, same as it already has its own notification
+    // id (eidNotificationId) and alarm id (eidAlarmId).
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'eid_channel',
+        'Eid Reminder',
+        description: 'Reminder for Eid al-Fitr and Eid al-Adha prayer',
         importance: Importance.max,
         playSound: true,
       ),
@@ -719,14 +735,17 @@ Future<void> eidReminderCallback(int id, Map<String, dynamic> params) async {
 
   final eidName = params['eidName'] as String? ?? 'Eid';
 
+  // FIXED (polish #6): was posted to 'friday_reminder_channel' — showed up
+  // labeled "Friday Reminder" in system notification settings, and muting
+  // that channel there silently muted Eid too.
   await notifications.show(
     NotificationService.eidNotificationId,
     '$eidName Mubarak!',
     "It's time for Eid prayer — estimated based on today's sunrise. Confirm the exact time with your local mosque.",
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'friday_reminder_channel',
-        'Friday Reminder',
+        'eid_channel',
+        'Eid Reminder',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,

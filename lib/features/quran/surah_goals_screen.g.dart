@@ -16,13 +16,19 @@ class SurahGoalAdapter extends TypeAdapter<SurahGoal> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
+    // FIXED (polish #4): was a bare `fields[N] as T` for 3/5 — matches the
+    // defaultValue now declared on each @HiveField in
+    // surah_goals_screen.dart. Hand-applied here since build_runner can't
+    // run in this environment; running `flutter pub run build_runner
+    // build --delete-conflicting-outputs` will regenerate this file from
+    // the updated annotations directly.
     return SurahGoal(
       surahNumber: fields[0] as int,
       surahName: fields[1] as String,
       targetCount: fields[2] as int,
-      completedCount: fields[3] as int,
+      completedCount: (fields[3] as int?) ?? 0,
       deadline: fields[4] as DateTime?,
-      label: fields[5] as String,
+      label: (fields[5] as String?) ?? '',
     );
   }
 

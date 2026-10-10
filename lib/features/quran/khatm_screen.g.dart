@@ -16,16 +16,23 @@ class KhatmYearAdapter extends TypeAdapter<KhatmYear> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
+    // FIXED (polish #4): was a bare `fields[N] as T` for 3/4/5/8 — any of
+    // these throws reading a record written before that field existed
+    // (fields[N] decodes as null, and null isn't a bool/int). Matches the
+    // defaultValue now declared on each @HiveField in khatm_screen.dart —
+    // hand-applied here since build_runner can't run in this environment;
+    // running `flutter pub run build_runner build --delete-conflicting-outputs`
+    // will regenerate this file from the updated annotations directly.
     return KhatmYear(
       year: fields[0] as int,
       targetCompletions: fields[1] as int,
       pagesPerDay: fields[2] as int,
       startDate: fields[6] as DateTime,
-      pagesReadTotal: fields[3] as int,
-      completedCycles: fields[4] as int,
-      isActive: fields[5] as bool,
+      pagesReadTotal: (fields[3] as int?) ?? 0,
+      completedCycles: (fields[4] as int?) ?? 0,
+      isActive: (fields[5] as bool?) ?? true,
       endDate: fields[7] as DateTime?,
-      startFromYearStart: fields[8] as bool,
+      startFromYearStart: (fields[8] as bool?) ?? false,
     );
   }
 

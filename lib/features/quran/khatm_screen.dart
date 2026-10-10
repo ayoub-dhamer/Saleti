@@ -23,13 +23,22 @@ class KhatmYear extends HiveObject {
   @HiveField(2)
   int pagesPerDay;
 
-  @HiveField(3)
+  // FIXED (polish #4): defaultValue added to every field below that was
+  // optional in this class's own constructor (same default in both
+  // places) — without it, hive_generator emits a bare `fields[N] as T`,
+  // which throws reading any record written by a version of the app from
+  // before that field existed (numOfFields on disk is smaller than the
+  // adapter now expects, so fields[N] decodes as null). startFromYearStart
+  // (field 8) is the one originally flagged — it was added after this
+  // class's initial release — but the same risk applies to any field
+  // added later, so the others below get the same treatment defensively.
+  @HiveField(3, defaultValue: 0)
   int pagesReadTotal;
 
-  @HiveField(4)
+  @HiveField(4, defaultValue: 0)
   int completedCycles;
 
-  @HiveField(5)
+  @HiveField(5, defaultValue: true)
   bool isActive;
 
   @HiveField(6)
@@ -38,7 +47,7 @@ class KhatmYear extends HiveObject {
   @HiveField(7)
   DateTime? endDate;
 
-  @HiveField(8)
+  @HiveField(8, defaultValue: false)
   bool startFromYearStart;
 
   KhatmYear({
