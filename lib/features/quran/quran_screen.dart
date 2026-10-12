@@ -215,8 +215,8 @@ class _AnimatedMainCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      primaryGreen.withOpacity(0.15),
-                      secondaryGreen.withOpacity(0.15),
+                      primaryGreen.withValues(alpha: 0.15),
+                      secondaryGreen.withValues(alpha: 0.15),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
@@ -240,8 +240,8 @@ class _AnimatedMainCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.6,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.6,
                         ),
                         fontSize: 13,
                       ),
@@ -252,7 +252,9 @@ class _AnimatedMainCard extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: 26,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.3),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.3,
+                ),
               ),
             ],
           ),

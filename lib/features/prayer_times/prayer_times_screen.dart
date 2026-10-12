@@ -9,6 +9,7 @@ import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/location_service.dart';
 import 'package:saleti/features/settings/settings_screen.dart';
+import 'package:saleti/utils/date_helpers.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/religious_settings.dart';
 import 'package:saleti/utils/special_day_helper.dart';
@@ -463,7 +464,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: primaryGreen.withOpacity(0.25),
+                      color: primaryGreen.withValues(alpha: 0.25),
                       blurRadius: 20,
                       spreadRadius: 4,
                     ),
@@ -477,7 +478,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               Text(
                 'Finding prayer times…',
                 style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.5,
+                  ),
                   fontSize: 13,
                 ),
               ),
@@ -511,7 +514,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.05,
+                      ),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
@@ -523,7 +528,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -546,8 +551,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       _permissionError!,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.7,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.7,
                         ),
                         height: 1.4,
                       ),
@@ -677,9 +682,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       // Only reachable when `next` ended up Prayer.fajr — today's Fajr
       // can't simultaneously be "next" and already in the past otherwise.
       next = Prayer.fajr;
-      time = _cache
-          .calculatePrayerTimesFor(now.add(const Duration(days: 1)))
-          .fajr;
+      // FIXED (polish #7): calculatePrayerTimesFor only reads the calendar
+      // date, but a DST-shifted result crossing midnight would still
+      // silently roll over to the wrong day's Fajr.
+      time = _cache.calculatePrayerTimesFor(addDays(now, 1)).fajr;
     }
 
     return (next, time);
@@ -693,12 +699,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     final prevName = order[(safeIdx - 1 + order.length) % order.length];
 
     final isWrap = nextName == 'fajr';
+    // FIXED (polish #7): same DST-crossing-midnight risk as above, for
+    // "yesterday" instead of "tomorrow".
     final targetDate = isWrap
-        ? DateTime(
-            nextTime.year,
-            nextTime.month,
-            nextTime.day,
-          ).subtract(const Duration(days: 1))
+        ? addDays(DateTime(nextTime.year, nextTime.month, nextTime.day), -1)
         : DateTime(nextTime.year, nextTime.month, nextTime.day);
 
     // FIXED (polish #1, cleanup): was its own inline
@@ -740,7 +744,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: primaryGreen.withOpacity(0.1),
+                      color: primaryGreen.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -769,7 +773,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                           style: TextStyle(
                             fontSize: 10,
                             color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.4),
+                                ?.withValues(alpha: 0.4),
                           ),
                         ),
                       ],
@@ -796,14 +800,16 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: theme.brightness == Brightness.dark
-                    ? Colors.white.withOpacity(0.08)
+                    ? Colors.white.withValues(alpha: 0.08)
                     : Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.settings_rounded,
                 size: 18,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.7,
+                ),
               ),
             ),
           ),
@@ -823,7 +829,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               Text(
                 DateFormat('EEEE d MMM y').format(DateTime.now()),
                 style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.7,
+                  ),
                 ),
               ),
             ],
@@ -904,7 +912,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.green.withOpacity(0.3),
+              color: Colors.green.withValues(alpha: 0.3),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -949,7 +957,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       CircularProgressIndicator(
                         value: progress,
                         strokeWidth: 3,
-                        backgroundColor: Colors.white.withOpacity(0.25),
+                        backgroundColor: Colors.white.withValues(alpha: 0.25),
                         valueColor: const AlwaysStoppedAnimation(Colors.white),
                       ),
                       const Icon(
@@ -976,7 +984,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       Text(
                         'At ${DateFormat('hh:mm a').format(time)}',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 13,
                         ),
                       ),
@@ -1037,7 +1045,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
           separatorBuilder: (context, index) => Divider(
             height: 1,
             color: isDark
-                ? Colors.white.withOpacity(0.06)
+                ? Colors.white.withValues(alpha: 0.06)
                 : const Color(0xFFF0F0F0),
           ),
           itemBuilder: (context, index) {
@@ -1055,7 +1063,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               padding: const EdgeInsets.symmetric(vertical: 4),
               decoration: BoxDecoration(
                 color: isNext
-                    ? primaryGreen.withOpacity(isDark ? 0.1 : 0.045)
+                    ? primaryGreen.withValues(alpha: isDark ? 0.1 : 0.045)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -1100,7 +1108,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                               DateFormat('hh:mm a').format(prayerTime),
                               style: TextStyle(
                                 color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.5),
+                                    ?.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w500,
                                 fontSize: 14,
                               ),
@@ -1119,11 +1127,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                                 activeTrackColor: const Color(0xFF6EC6FF),
                                 inactiveTrackColor: const Color(
                                   0xFF6EC6FF,
-                                ).withOpacity(0.3),
+                                ).withValues(alpha: 0.3),
                                 thumbColor: const Color(0xFF6EC6FF),
                                 overlayColor: const Color(
                                   0xFF6EC6FF,
-                                ).withOpacity(0.2),
+                                ).withValues(alpha: 0.2),
                                 thumbShape: const RoundSliderThumbShape(
                                   enabledThumbRadius: 6,
                                 ),
@@ -1270,7 +1278,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE9A319).withOpacity(0.3),
+            color: const Color(0xFFE9A319).withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1366,11 +1374,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(
-          theme.brightness == Brightness.dark ? 0.18 : 0.08,
+        color: Colors.red.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.18 : 0.08,
         ),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.red.withOpacity(0.3)),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1406,8 +1414,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                       issue.message,
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.75,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.75,
                         ),
                         height: 1.3,
                       ),
@@ -1473,7 +1481,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                   fontSize: 13,
                   color: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  ).textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1529,8 +1537,10 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isActive
-              ? activeColor.withOpacity(0.12)
-              : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50),
+              ? activeColor.withValues(alpha: 0.12)
+              : (isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.grey.shade50),
           borderRadius: BorderRadius.circular(14),
         ),
         child: AnimatedSwitcher(
@@ -1787,7 +1797,7 @@ class _ThemeCycleButtonState extends State<ThemeCycleButton> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1FA45B).withOpacity(0.1),
+          color: const Color(0xFF1FA45B).withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
         child: AnimatedSwitcher(

@@ -179,7 +179,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF6B4EE6).withOpacity(0.35),
+                  color: const Color(0xFF6B4EE6).withValues(alpha: 0.35),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 ),
@@ -205,9 +205,11 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
+                      color: Colors.amber.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                      border: Border.all(
+                        color: Colors.amber.withValues(alpha: 0.4),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -253,7 +255,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                 blurRadius: 14,
                 offset: const Offset(0, 6),
               ), // CHANGED
@@ -285,7 +287,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               defaultTextStyle: TextStyle(color: bodyTextColor),
               weekendTextStyle: TextStyle(color: bodyTextColor),
               outsideTextStyle: TextStyle(
-                color: bodyTextColor.withOpacity(0.3),
+                color: bodyTextColor.withValues(alpha: 0.3),
               ),
             ),
 
@@ -293,7 +295,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               weekdayStyle: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-                color: bodyTextColor.withOpacity(0.8),
+                color: bodyTextColor.withValues(alpha: 0.8),
               ), // CHANGED
               weekendStyle: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -312,17 +314,17 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
               ), // CHANGED
               leftChevronIcon: Icon(
                 Icons.chevron_left_rounded,
-                color: bodyTextColor.withOpacity(0.7),
+                color: bodyTextColor.withValues(alpha: 0.7),
               ), // CHANGED
               rightChevronIcon: Icon(
                 Icons.chevron_right_rounded,
-                color: bodyTextColor.withOpacity(0.7),
+                color: bodyTextColor.withValues(alpha: 0.7),
               ), // CHANGED
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
                     color: isDark
-                        ? Colors.white.withOpacity(0.08)
+                        ? Colors.white.withValues(alpha: 0.08)
                         : Colors.grey.shade100,
                     width: 1,
                   ), // CHANGED
@@ -366,7 +368,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: primaryGreen.withOpacity(0.35),
+                    color: primaryGreen.withValues(alpha: 0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 5),
                   ),
@@ -414,8 +416,8 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(
-          isDark ? 0.2 : 0.12,
+        color: color.withValues(
+          alpha: isDark ? 0.2 : 0.12,
         ), // CHANGED: slightly stronger tint for visibility on dark backgrounds
         borderRadius: BorderRadius.circular(20),
       ),
@@ -462,7 +464,9 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: holiday
-            ? Colors.lightGreen.withOpacity(isDark ? 0.22 : 0.15) // CHANGED
+            ? Colors.lightGreen.withValues(
+                alpha: isDark ? 0.22 : 0.15,
+              ) // CHANGED
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         border: holiday
@@ -490,7 +494,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.deepPurpleAccent.withOpacity(0.3),
+            color: Colors.deepPurpleAccent.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -512,7 +516,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.lightBlue.withOpacity(0.3),
+            color: Colors.lightBlue.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -544,7 +548,10 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
           ),
           Text(
             "${hijri.hDay}",
-            style: TextStyle(fontSize: 10, color: textColor.withOpacity(0.75)),
+            style: TextStyle(
+              fontSize: 10,
+              color: textColor.withValues(alpha: 0.75),
+            ),
           ),
           if (showHolidayDot)
             Container(

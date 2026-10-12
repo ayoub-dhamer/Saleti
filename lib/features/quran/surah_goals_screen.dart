@@ -4,6 +4,7 @@ import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:quran/quran.dart' as quran;
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/utils/date_helpers.dart';
 import 'package:saleti/utils/surah_goal_service.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
 import 'package:saleti/data/surah_pages.dart';
@@ -120,7 +121,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
               Text(
                 "Are you sure you want to delete the goal for ${goal.surahName}?",
                 style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.7,
+                  ),
                 ), // CHANGED
               ),
               const SizedBox(height: 8),
@@ -245,7 +248,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Row(
@@ -274,7 +277,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.08),
+                      color: Colors.red.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -319,8 +322,8 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey.withOpacity(
-                    isDark ? 0.18 : 0.08,
+                  color: Colors.blueGrey.withValues(
+                    alpha: isDark ? 0.18 : 0.08,
                   ), // CHANGED
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -368,7 +371,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: isDark
-                            ? Colors.white.withOpacity(0.08)
+                            ? Colors.white.withValues(alpha: 0.08)
                             : Colors.grey.shade200, // CHANGED
                       ),
                     ),
@@ -472,7 +475,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                                 'Did you finish reciting this surah?',
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.7),
+                                      ?.withValues(alpha: 0.7),
                                 ),
                               ),
                               actions: [
@@ -505,9 +508,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                     decoration: BoxDecoration(
                       color: (goal.isCompleted || goal.isExpired)
                           ? (isDark
-                                ? Colors.white.withOpacity(0.06)
+                                ? Colors.white.withValues(alpha: 0.06)
                                 : Colors.grey.shade100)
-                          : primaryGreen.withOpacity(0.1),
+                          : primaryGreen.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -531,7 +534,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.06)
+            ? Colors.white.withValues(alpha: 0.06)
             : const Color(0xFFF4F6F8), // CHANGED
         borderRadius: BorderRadius.circular(10),
       ),
@@ -608,13 +611,13 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(0.08),
+                color: primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 config.$1,
                 size: 48,
-                color: primaryGreen.withOpacity(0.5),
+                color: primaryGreen.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 18),
@@ -631,7 +634,9 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
               config.$3,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.5,
+                ),
                 fontSize: 12.5,
               ), // CHANGED
             ),
@@ -715,7 +720,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ), // CHANGED
@@ -782,7 +787,7 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ), // CHANGED
@@ -842,7 +847,7 @@ class _Header extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white30),
               ),
@@ -891,7 +896,10 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
-      initialDate: DateTime.now().add(const Duration(days: 7)),
+      // FIXED (polish #7): only the date matters here (showDatePicker
+      // ignores time-of-day), but addDays is used everywhere else this
+      // pattern appeared, for consistency.
+      initialDate: addDays(DateTime.now(), 7),
     );
 
     // FIXED (Battery/CPU #7): showDatePicker's await can outlive this
@@ -987,7 +995,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
             ), // CHANGED
@@ -1009,7 +1017,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.18),
+                      color: Colors.white.withValues(alpha: 0.18),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -1034,7 +1042,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -1062,12 +1070,12 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.06)
+                            ? Colors.white.withValues(alpha: 0.06)
                             : const Color(0xFFF4F6F8), // CHANGED
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: _selectedSurah != null
-                              ? primaryGreen.withOpacity(0.3)
+                              ? primaryGreen.withValues(alpha: 0.3)
                               : Colors.transparent,
                         ),
                       ),
@@ -1139,7 +1147,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                           : null,
                       filled: true,
                       fillColor: isDark
-                          ? Colors.white.withOpacity(0.06)
+                          ? Colors.white.withValues(alpha: 0.06)
                           : const Color(0xFFF4F6F8), // CHANGED
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -1156,7 +1164,7 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.06)
+                            ? Colors.white.withValues(alpha: 0.06)
                             : const Color(0xFFF4F6F8), // CHANGED
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -1208,8 +1216,8 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                         _labelController.text,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                            0.5,
+                          color: theme.textTheme.bodyMedium?.color?.withValues(
+                            alpha: 0.5,
                           ),
                           fontStyle: FontStyle.italic,
                         ), // CHANGED
@@ -1238,8 +1246,8 @@ class _AddSurahGoalDialogState extends State<_AddSurahGoalDialog> {
                       child: Text(
                         "Cancel",
                         style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                            0.7,
+                          color: theme.textTheme.bodyMedium?.color?.withValues(
+                            alpha: 0.7,
                           ),
                           fontWeight: FontWeight.w600,
                         ),
@@ -1316,7 +1324,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
             ), // CHANGED
@@ -1345,15 +1353,15 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.08)
+                            ? Colors.white.withValues(alpha: 0.08)
                             : Colors.grey.shade100,
                         shape: BoxShape.circle,
                       ), // CHANGED
                       child: Icon(
                         Icons.close,
                         size: 18,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.6,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.6,
                         ),
                       ), // CHANGED
                     ),
@@ -1366,7 +1374,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.06)
+                      ? Colors.white.withValues(alpha: 0.06)
                       : const Color(0xFFF4F6F8), // CHANGED
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -1378,14 +1386,14 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                   decoration: InputDecoration(
                     hintText: "Search Surah...",
                     hintStyle: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.4,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.4,
                       ),
                     ), // ADD
                     prefixIcon: Icon(
                       Icons.search,
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.4,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.4,
                       ),
                     ), // CHANGED
                     border: InputBorder.none,
@@ -1403,8 +1411,8 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                       child: Text(
                         "No results found",
                         style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                            0.5,
+                          color: theme.textTheme.bodyMedium?.color?.withValues(
+                            alpha: 0.5,
                           ),
                         ),
                       ), // CHANGED
@@ -1418,7 +1426,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                       separatorBuilder: (_, _) => Divider(
                         height: 1,
                         color: isDark
-                            ? Colors.white.withOpacity(0.08)
+                            ? Colors.white.withValues(alpha: 0.08)
                             : Colors.grey.shade100,
                       ), // CHANGED
                       itemBuilder: (context, index) {
@@ -1432,7 +1440,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                             height: 36,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: primaryGreen.withOpacity(0.1),
+                              color: primaryGreen.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(

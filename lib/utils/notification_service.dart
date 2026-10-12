@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:saleti/utils/special_day_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'daily_rescheduler.dart';
+import 'date_helpers.dart';
 import 'prayer_cache.dart';
 
 final FlutterLocalNotificationsPlugin _notifications =
@@ -389,16 +390,18 @@ class NotificationService {
     final now = DateTime.now();
     int daysUntilFriday = (DateTime.friday - now.weekday + 7) % 7;
 
-    DateTime nextFriday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    ).add(Duration(days: daysUntilFriday));
+    // FIXED (polish #7): was `DateTime(y, m, d, hour, minute).add(Duration(
+    // days: daysUntilFriday))` — a DST transition between now and the
+    // target Friday could shift the result off the configured hour:minute
+    // by an hour. addDays targets that exact wall-clock time on the target
+    // calendar day directly instead of adding elapsed duration.
+    DateTime nextFriday = addDays(
+      DateTime(now.year, now.month, now.day, hour, minute),
+      daysUntilFriday,
+    );
 
     if (daysUntilFriday == 0 && nextFriday.isBefore(now)) {
-      nextFriday = nextFriday.add(const Duration(days: 7));
+      nextFriday = addDays(nextFriday, 7);
     }
 
     await _safeOneShot(
@@ -411,11 +414,11 @@ class NotificationService {
 
   static Future<void> scheduleFridayReminderEnd() async {
     final now = DateTime.now();
-    final endOfDay = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).add(const Duration(days: 1));
+    // FIXED (polish #7): was `DateTime(y, m, d).add(Duration(days: 1))` —
+    // intent is "midnight at the start of tomorrow"; if DST changes
+    // tonight, adding 24 hours of elapsed time lands an hour off actual
+    // midnight instead.
+    final endOfDay = addDays(DateTime(now.year, now.month, now.day), 1);
 
     await _safeOneShot(
       endOfDay,
@@ -578,7 +581,11 @@ class NotificationService {
     for (int dayOffset = 1; dayOffset < azanLookaheadDays; dayOffset++) {
       DateTime? time;
       if (cache.hasLocation) {
-        final futureDate = DateTime.now().add(Duration(days: dayOffset));
+        // FIXED (polish #7): calculatePrayerTimesFor only reads the
+        // calendar date (DateComponents.from ignores time-of-day), but a
+        // DST-shifted result landing on the wrong side of midnight would
+        // still silently compute the wrong day's prayer times.
+        final futureDate = addDays(DateTime.now(), dayOffset);
         time = cache
             .calculatePrayerTimesFor(futureDate)
             .timeForPrayer(_prayerEnum(prayer));
@@ -609,13 +616,11 @@ class NotificationService {
 
   static Future<void> scheduleDailyRescheduler() async {
     final now = DateTime.now();
-    final midnight = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      0,
-      5,
-    ).add(const Duration(days: 1));
+    // FIXED (polish #7): was `DateTime(y, m, d, 0, 5).add(Duration(days:
+    // 1))` — the single job that creates every new day's alarms (see bug
+    // #3) landing an hour off its intended 00:05 on a DST-transition night
+    // is exactly the kind of timing edge case that compounds with Doze.
+    final midnight = addDays(DateTime(now.year, now.month, now.day, 0, 5), 1);
 
     await _safeOneShot(
       midnight,

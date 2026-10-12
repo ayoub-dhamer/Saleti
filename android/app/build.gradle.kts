@@ -20,12 +20,17 @@ android {
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        // FIXED (polish #10): was JavaVersion.VERSION_1_8 — Java 8 reached
+        // its own end of public updates years ago, and AGP/Kotlin tooling
+        // has been nudging projects toward 17 (the JDK Android Studio
+        // itself bundles) for a while now. kotlinOptions.jvmTarget below
+        // must stay in lockstep with these two.
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
     defaultConfig {

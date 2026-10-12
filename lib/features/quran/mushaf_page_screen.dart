@@ -447,7 +447,7 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(color: Colors.white24),
                   ),
@@ -483,7 +483,7 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                     decoration: BoxDecoration(
                       color: isBookmarked
                           ? Colors.amber.shade400
-                          : Colors.white.withOpacity(0.2),
+                          : Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -630,8 +630,8 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                     _buildKhatmPaceIndicator(
                       BoxDecoration(
                         color: isDarkMode
-                            ? Colors.white.withOpacity(0.18)
-                            : Colors.black.withOpacity(0.08),
+                            ? Colors.white.withValues(alpha: 0.18)
+                            : Colors.black.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: isDarkMode ? Colors.white24 : Colors.black12,
@@ -690,7 +690,7 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                           'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
                           style: TextStyle(
                             color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
+                                ?.withValues(alpha: 0.7),
                           ), // CHANGED
                         ),
                         actions: [
@@ -813,7 +813,7 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                                 'Do you want to count this recitation toward your goal?',
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.7),
+                                      ?.withValues(alpha: 0.7),
                                 ),
                               ),
                               actions: [
@@ -881,9 +881,9 @@ class _MushafPageScreenState extends State<MushafPageScreen>
     final bool isKhatm = widget.readingMode == ReadingMode.khatm;
 
     final badgeDecoration = BoxDecoration(
-      color: Colors.white.withOpacity(0.18),
+      color: Colors.white.withValues(alpha: 0.18),
       borderRadius: BorderRadius.circular(5),
-      border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
     );
 
     final Widget infoRow = Row(
@@ -1316,7 +1316,7 @@ class _AnimatedActionButton extends StatelessWidget {
           borderRadius: effectiveRadius,
           boxShadow: [
             BoxShadow(
-              color: primaryGreen.withOpacity(0.35),
+              color: primaryGreen.withValues(alpha: 0.35),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),

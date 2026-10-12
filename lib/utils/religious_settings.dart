@@ -1,6 +1,7 @@
 import 'package:adhan/adhan.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'date_helpers.dart';
 
 /// FIXED (polish #2): calculation method + madhab used to be hard-coded
 /// (Muslim World League + Shafi) in four separate places. Earlier fixes
@@ -125,7 +126,11 @@ class ReligiousSettings {
   /// package's own HijriCalendar.adjustments/setAdjustments, which is a
   /// month-keyed map meant for fixed historical corrections to specific
   /// months, not a simple global ± day the user can nudge.
+  ///
+  /// FIXED (polish #7): uses addDays rather than .add(Duration(days: ...))
+  /// — a DST-shifted result crossing midnight would otherwise land this on
+  /// the wrong Hijri day.
   static HijriCalendar hijriForDate(DateTime date) {
-    return HijriCalendar.fromDate(date.add(Duration(days: hijriDayOffset)));
+    return HijriCalendar.fromDate(addDays(date, hijriDayOffset));
   }
 }

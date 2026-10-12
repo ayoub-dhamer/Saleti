@@ -64,7 +64,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       textTheme: const TextTheme().apply(
-        bodyColor: Colors.white.withOpacity(0.92),
+        bodyColor: Colors.white.withValues(alpha: 0.92),
         displayColor: Colors.white,
       ),
     );

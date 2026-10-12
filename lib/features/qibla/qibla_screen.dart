@@ -274,7 +274,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
           content: Text(
             'We need your location to calculate the Qibla direction accurately.',
             style: TextStyle(
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
             ),
           ),
           actions: [
@@ -374,7 +374,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: primaryGreen.withOpacity(0.25),
+                    color: primaryGreen.withValues(alpha: 0.25),
                     blurRadius: 20,
                     spreadRadius: 4,
                   ),
@@ -388,7 +388,9 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
             Text(
               'Finding the Qibla…',
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.5,
+                ),
                 fontSize: 13,
               ), // CHANGED
             ),
@@ -434,7 +436,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ), // CHANGED
@@ -446,7 +448,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.08),
+                      color: Colors.orange.withValues(alpha: 0.08),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(icon, size: 48, color: Colors.orange),
@@ -465,8 +467,8 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                     message,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.7,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.7,
                       ),
                       height: 1.4,
                     ), // CHANGED
@@ -642,7 +644,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white30),
               ),
@@ -668,9 +670,11 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
         margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.amber.withOpacity(isDark ? 0.18 : 0.12), // CHANGED
+          color: Colors.amber.withValues(
+            alpha: isDark ? 0.18 : 0.12,
+          ), // CHANGED
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -682,7 +686,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark
-                      ? Colors.white.withOpacity(0.85)
+                      ? Colors.white.withValues(alpha: 0.85)
                       : Colors.black87,
                 ), // CHANGED
               ),
@@ -729,9 +733,9 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 boxShadow: [
                   BoxShadow(
                     color: aligned
-                        ? Colors.green.withOpacity(0.25)
-                        : Colors.black.withOpacity(
-                            isDark ? 0.15 : 0.05,
+                        ? Colors.green.withValues(alpha: 0.25)
+                        : Colors.black.withValues(
+                            alpha: isDark ? 0.15 : 0.05,
                           ), // CHANGED
                     blurRadius: aligned ? 40 : 30,
                     spreadRadius: aligned ? 8 : 5,
@@ -758,7 +762,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ), // CHANGED
@@ -913,7 +917,7 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
+                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ), // CHANGED
@@ -947,8 +951,8 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
         Text(
           'Ensure phone is on a flat surface',
           style: TextStyle(
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(
-              0.6,
+            color: theme.textTheme.bodyMedium?.color?.withValues(
+              alpha: 0.6,
             ), // CHANGED
             fontSize: 12,
             letterSpacing: 0.5,
@@ -976,8 +980,10 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
         boxShadow: [
           BoxShadow(
             color: aligned
-                ? Colors.green.withOpacity(0.35)
-                : Colors.black.withOpacity(isDark ? 0.3 : 0.05), // CHANGED
+                ? Colors.green.withValues(alpha: 0.35)
+                : Colors.black.withValues(
+                    alpha: isDark ? 0.3 : 0.05,
+                  ), // CHANGED
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),

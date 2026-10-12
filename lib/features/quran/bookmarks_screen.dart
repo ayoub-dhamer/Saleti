@@ -92,7 +92,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               Text(
                 'Remove page ${b.page} from your bookmarks?',
                 style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.7,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -199,13 +201,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(0.08),
+                color: primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.bookmark_outline_rounded,
                 size: 64,
-                color: primaryGreen.withOpacity(0.5),
+                color: primaryGreen.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 24),
@@ -222,7 +224,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               'Start reading and save pages for quick access later.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.5,
+                ),
                 fontSize: 13,
               ),
             ),
@@ -280,8 +284,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          primaryGreen.withOpacity(0.15),
-                          secondaryGreen.withOpacity(0.15),
+                          primaryGreen.withValues(alpha: 0.15),
+                          secondaryGreen.withValues(alpha: 0.15),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(14),
@@ -314,8 +318,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: primaryGreen.withOpacity(
-                                  isDark ? 0.18 : 0.1,
+                                color: primaryGreen.withValues(
+                                  alpha: isDark ? 0.18 : 0.1,
                                 ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -338,7 +342,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.6),
+                                      ?.withValues(alpha: 0.6),
                                   fontSize: 12,
                                 ),
                               ),
@@ -354,7 +358,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(

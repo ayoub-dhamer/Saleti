@@ -115,7 +115,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
         children: [
           Icon(
             Icons.search,
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -126,7 +126,9 @@ class _SurahListScreenState extends State<SurahListScreen> {
               decoration: InputDecoration(
                 hintText: 'Search Surah...',
                 hintStyle: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.4),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.4,
+                  ),
                 ),
                 border: InputBorder.none,
                 isDense: true,
@@ -146,14 +148,16 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.08)
+                      ? Colors.white.withValues(alpha: 0.08)
                       : Colors.grey.shade100,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.close,
                   size: 16,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.6,
+                  ),
                 ),
               ),
             ),
@@ -172,13 +176,13 @@ class _SurahListScreenState extends State<SurahListScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(0.08),
+                color: primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.search_off_rounded,
                 size: 44,
-                color: primaryGreen.withOpacity(0.5),
+                color: primaryGreen.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 16),
@@ -194,7 +198,9 @@ class _SurahListScreenState extends State<SurahListScreen> {
             Text(
               'Try a different name or spelling.',
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.5,
+                ),
                 fontSize: 12.5,
               ),
             ),
@@ -298,8 +304,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
                   Text(
                     getSurahName(surah),
                     style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.55,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.55,
                       ),
                       fontWeight: FontWeight.w600,
                     ),
@@ -325,7 +331,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: primaryGreen.withOpacity(0.1),
+                    color: primaryGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -356,7 +362,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.06)
+            ? Colors.white.withValues(alpha: 0.06)
             : const Color(0xFFF4F6F8),
         borderRadius: BorderRadius.circular(6),
       ),

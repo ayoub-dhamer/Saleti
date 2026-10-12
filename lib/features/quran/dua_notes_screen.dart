@@ -158,7 +158,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Add Dua',
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim, secondaryAnim, child) {
@@ -187,7 +187,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Edit Dua',
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim, secondaryAnim, child) {
@@ -253,7 +253,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 "Remove this prayer from your journal?",
                 style: TextStyle(
                   fontFamily: arabicFont,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.7,
+                  ),
                 ), // CHANGED
               ),
               const SizedBox(height: 8),
@@ -428,7 +430,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.15),
+                    color: Colors.white.withValues(alpha: .15),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white30),
                   ),
@@ -450,7 +452,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.15),
+                    color: Colors.white.withValues(alpha: .15),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white30),
                   ),
@@ -495,12 +497,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: primaryGreen.withOpacity(isDark ? 0.15 : 0.1),
+                color: primaryGreen.withValues(alpha: isDark ? 0.15 : 0.1),
                 blurRadius: 18,
                 spreadRadius: 1,
               ), // CHANGED
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ), // CHANGED
@@ -521,8 +523,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                         "Tap to view",
                         style: TextStyle(
                           fontSize: 11,
-                          color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                            0.6,
+                          color: theme.textTheme.bodyMedium?.color?.withValues(
+                            alpha: 0.6,
                           ),
                           fontStyle: FontStyle.italic,
                         ),
@@ -531,8 +533,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       Icon(
                         Icons.auto_stories_rounded,
                         size: 14,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.4,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.4,
                         ),
                       ),
 
@@ -545,7 +547,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                         height: 26,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: primaryGreen.withOpacity(0.1),
+                          color: primaryGreen.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         // ADD: same text-scale lock — this is a fixed 26x26 circle
@@ -583,7 +585,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   ),
                   Divider(
                     height: 20,
-                    color: isDark ? Colors.white.withOpacity(0.08) : null,
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : null,
                   ), // CHANGED
                   _cardActions(index, isDark),
                 ],
@@ -627,7 +629,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -671,11 +673,15 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       color: theme.cardColor, // CHANGED
                       borderRadius: BorderRadius.circular(32),
                       border: Border.all(
-                        color: primaryGreen.withOpacity(isDark ? 0.15 : 0.08),
+                        color: primaryGreen.withValues(
+                          alpha: isDark ? 0.15 : 0.08,
+                        ),
                       ), // CHANGED
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.35 : 0.06,
+                          ),
                           blurRadius: 30,
                           offset: const Offset(0, 12),
                         ), // CHANGED
@@ -721,8 +727,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     child: Icon(
                       Icons.wb_sunny_outlined,
                       size: 100,
-                      color: Colors.green.withOpacity(
-                        isDark ? 0.08 : 0.05,
+                      color: Colors.green.withValues(
+                        alpha: isDark ? 0.08 : 0.05,
                       ), // CHANGED
                     ),
                   ),
@@ -733,12 +739,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: (isDark ? theme.cardColor : Colors.white)
-                            .withOpacity(0.92), // CHANGED
+                            .withValues(alpha: 0.92), // CHANGED
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(
-                              isDark ? 0.3 : 0.08,
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.3 : 0.08,
                             ),
                             blurRadius: 12,
                           ), // CHANGED
@@ -758,8 +764,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(
-                                    0.6,
+                                  ?.withValues(
+                                    alpha: 0.6,
                                   ), // also bumped per contrast fix
                               fontWeight: FontWeight.w600,
                             ),
@@ -790,7 +796,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
+                color: Colors.black.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -819,13 +825,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(0.08),
+                color: primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.menu_book_outlined,
                 size: 64,
-                color: primaryGreen.withOpacity(.5),
+                color: primaryGreen.withValues(alpha: .5),
               ),
             ),
             const SizedBox(height: 24),
@@ -845,7 +851,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: arabicFont,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.5,
+                ),
                 fontSize: 13,
               ), // CHANGED
             ),
@@ -929,7 +937,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.15),
                 blurRadius: 30,
                 offset: const Offset(0, 12),
               ), // CHANGED
@@ -951,7 +959,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -979,7 +987,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -997,12 +1005,12 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.white.withOpacity(0.06)
+                        ? Colors.white.withValues(alpha: 0.06)
                         : const Color(0xFFF4F7F5), // CHANGED
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: _focusNode.hasFocus
-                          ? primaryGreen.withOpacity(0.4)
+                          ? primaryGreen.withValues(alpha: 0.4)
                           : Colors.transparent,
                       width: 1.5,
                     ),
@@ -1024,8 +1032,8 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                     decoration: InputDecoration(
                       hintText: "اكتب دعاءك هنا...",
                       hintStyle: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.35,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.35,
                         ),
                         fontFamily: arabicFont,
                       ), // CHANGED
@@ -1045,8 +1053,8 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                     textDirection: TextDirection.ltr,
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.6,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.6,
                       ),
                     ), // CHANGED
                   ),
@@ -1108,7 +1116,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                           style: TextStyle(
                             fontFamily: arabicFont,
                             color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
+                                ?.withValues(alpha: 0.7),
                             fontWeight: FontWeight.w600,
                           ), // CHANGED
                         ),

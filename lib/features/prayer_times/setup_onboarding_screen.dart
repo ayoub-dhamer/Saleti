@@ -267,8 +267,8 @@ class _PermissionOnboardingScreenState
                   Text(
                     '${_currentStep + 1}/${_steps.length}',
                     style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                        0.5,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.5,
                       ),
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
@@ -383,7 +383,9 @@ class _PermissionOnboardingScreenState
                     onPressed: _isProcessing ? null : _nextStep,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryGreen,
-                      disabledBackgroundColor: primaryGreen.withOpacity(0.6),
+                      disabledBackgroundColor: primaryGreen.withValues(
+                        alpha: 0.6,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
                       ),
@@ -441,8 +443,8 @@ class _PermissionDialog extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(
-                theme.brightness == Brightness.dark ? 0.4 : 0.15,
+              color: Colors.black.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.4 : 0.15,
               ),
               blurRadius: 30,
               offset: const Offset(0, 12),
@@ -455,7 +457,7 @@ class _PermissionDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(0.08),
+                color: primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -480,7 +482,9 @@ class _PermissionDialog extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.6,
+                ),
                 height: 1.4,
               ),
             ),
@@ -504,8 +508,8 @@ class _PermissionDialog extends StatelessWidget {
                     child: Text(
                       'Cancel',
                       style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.7,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.7,
                         ),
                       ),
                     ),
@@ -652,7 +656,7 @@ class _OnboardingPage extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: primaryGreen.withOpacity(0.35),
+                        color: primaryGreen.withValues(alpha: 0.35),
                         blurRadius: 30,
                         spreadRadius: 4,
                       ),
@@ -680,7 +684,9 @@ class _OnboardingPage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.6,
+                  ),
                   height: 1.5,
                 ),
               ),
@@ -709,8 +715,8 @@ class _OnboardingPage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    primaryGreen.withOpacity(0.12),
-                    secondaryGreen.withOpacity(0.12),
+                    primaryGreen.withValues(alpha: 0.12),
+                    secondaryGreen.withValues(alpha: 0.12),
                   ],
                 ),
                 shape: BoxShape.circle,
@@ -737,7 +743,7 @@ class _OnboardingPage extends StatelessWidget {
             step.description,
             style: TextStyle(
               fontSize: 15,
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
               height: 1.5,
             ),
             textAlign: TextAlign.center,
@@ -747,8 +753,8 @@ class _OnboardingPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: primaryGreen.withOpacity(
-                  theme.brightness == Brightness.dark ? 0.12 : 0.06,
+                color: primaryGreen.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
                 ), // CHANGED: slightly stronger tint in dark mode for visibility
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -758,7 +764,7 @@ class _OnboardingPage extends StatelessWidget {
                   Icon(
                     Icons.info_outline_rounded,
                     size: 15,
-                    color: primaryGreen.withOpacity(0.9),
+                    color: primaryGreen.withValues(alpha: 0.9),
                   ),
                   const SizedBox(width: 8),
                   Flexible(
@@ -766,7 +772,7 @@ class _OnboardingPage extends StatelessWidget {
                       why,
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: primaryGreen.withOpacity(0.95),
+                        color: primaryGreen.withValues(alpha: 0.95),
                         fontWeight: FontWeight.w600,
                       ),
                     ),

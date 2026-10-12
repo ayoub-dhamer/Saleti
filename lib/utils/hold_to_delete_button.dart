@@ -64,7 +64,7 @@ class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
                     value: _controller.value,
                     strokeWidth: 3,
                     color: Colors.redAccent,
-                    backgroundColor: Colors.redAccent.withOpacity(0.2),
+                    backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
                   ),
                 )
               : const Text(
