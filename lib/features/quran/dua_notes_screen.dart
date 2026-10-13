@@ -17,7 +17,7 @@ class DuaNotesScreen extends StatefulWidget {
 }
 
 /// FIXED (bug #8): a du'a and its font size used to live in two parallel
-/// structures — the text in a List<String>, the size in a Map<int, double>
+/// structures — the text in a List of String, the size in a Map "int, double"
 /// keyed by *list index*. Inserting a new du'a at index 0 only set
 /// _duaFontSizes[0] and never shifted the existing entries down, and
 /// deleting one never shifted anything up, so every size after the change
