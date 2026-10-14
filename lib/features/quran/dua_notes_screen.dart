@@ -17,7 +17,7 @@ class DuaNotesScreen extends StatefulWidget {
 }
 
 /// FIXED (bug #8): a du'a and its font size used to live in two parallel
-/// structures — the text in a List of String, the size in a Map "int, double"
+/// structures — the text in a List<String>, the size in a Map<int, double>
 /// keyed by *list index*. Inserting a new du'a at index 0 only set
 /// _duaFontSizes[0] and never shifted the existing entries down, and
 /// deleting one never shifted anything up, so every size after the change
@@ -38,14 +38,25 @@ class _Dua {
 
   static _Dua? tryFromJson(String raw) {
     try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      return _Dua(
-        id: map['id'] as String,
-        text: map['text'] as String,
-        fontSize: (map['fontSize'] as num?)?.toDouble() ?? 24,
-      );
+      return _tryFromMap(jsonDecode(raw));
     } catch (_) {
       return null; // skip a corrupt entry rather than losing the whole list
+    }
+  }
+
+  // FIXED (polish #13): split out of tryFromJson so import (bullet 13
+  // below) can parse each note straight from an already-decoded map,
+  // instead of re-encoding it back to a string just to decode it again.
+  static _Dua? _tryFromMap(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return _Dua(
+        id: raw['id'] as String,
+        text: raw['text'] as String,
+        fontSize: (raw['fontSize'] as num?)?.toDouble() ?? 24,
+      );
+    } catch (_) {
+      return null;
     }
   }
 }
@@ -128,6 +139,117 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       _storageKeyV2,
       _duaList.map((d) => jsonEncode(d.toJson())).toList(),
     );
+  }
+
+  // ───────────── Export / Import (bullet 13) ─────────────
+  //
+  // FIXED (polish #13): du'a notes lived only in SharedPreferences, with
+  // no way to get them off the device — uninstalling the app, switching
+  // phones, or just wanting an external copy meant losing them for good.
+  // Clipboard export/import needs no new dependency (Clipboard is already
+  // part of Flutter, already imported above) and works anywhere the user
+  // can paste: a notes app, an email to themselves, a messaging app, or a
+  // text file through a file manager.
+
+  Map<String, dynamic> _exportPayload() => {
+    'app': 'saleti',
+    'export': 'dua_notes',
+    'version': 1,
+    'exportedAt': DateTime.now().toIso8601String(),
+    'notes': _duaList.map((d) => d.toJson()).toList(),
+  };
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _exportToClipboard() async {
+    if (_duaList.isEmpty) {
+      _showSnack("No du'as to export yet.");
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: jsonEncode(_exportPayload())));
+    final count = _duaList.length;
+    _showSnack(
+      "Copied $count du'a${count == 1 ? '' : 's'} to the clipboard — "
+      "paste it somewhere safe (a notes app, an email to yourself, ...) "
+      "to back it up.",
+    );
+  }
+
+  Future<void> _importFromClipboard() async {
+    final clip = await Clipboard.getData('text/plain');
+    final text = clip?.text;
+    if (text == null || text.trim().isEmpty) {
+      _showSnack('Clipboard is empty.');
+      return;
+    }
+
+    List<_Dua> imported;
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is! Map || decoded['notes'] is! List) {
+        throw const FormatException("not a Saleti du'a export");
+      }
+      imported = (decoded['notes'] as List)
+          .map(_Dua._tryFromMap)
+          .whereType<_Dua>()
+          .toList();
+    } catch (_) {
+      _showSnack("That doesn't look like a du'a export — nothing imported.");
+      return;
+    }
+
+    if (imported.isEmpty) {
+      _showSnack("No du'as found in that text.");
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final count = imported.length;
+        return AlertDialog(
+          title: const Text("Import du'as?"),
+          content: Text(
+            "Add $count du'a${count == 1 ? '' : 's'} from the clipboard "
+            "to your list? This won't remove or change anything you "
+            "already have.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Import'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    // Fresh ids for every imported note, so an import can never collide
+    // with — or silently overwrite — anything already in _duaList.
+    setState(() {
+      _duaList.insertAll(
+        0,
+        imported.map(
+          (d) => _Dua(id: _newDuaId(), text: d.text, fontSize: d.fontSize),
+        ),
+      );
+    });
+    await _persist();
+
+    final count = imported.length;
+    _showSnack("Imported $count du'a${count == 1 ? '' : 's'}.");
   }
 
   void _increaseFont(int index) {
@@ -348,6 +470,38 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               IconButton(
                 icon: const Icon(Icons.list_rounded),
                 onPressed: _exitGalleryMode,
+              )
+            else
+              // ADDED (polish #13): export/import, see _exportToClipboard
+              // and _importFromClipboard above.
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                onSelected: (value) {
+                  if (value == 'export') _exportToClipboard();
+                  if (value == 'import') _importFromClipboard();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'export',
+                    child: Row(
+                      children: [
+                        Icon(Icons.upload_rounded, size: 20),
+                        SizedBox(width: 10),
+                        Text('Export to clipboard'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'import',
+                    child: Row(
+                      children: [
+                        Icon(Icons.download_rounded, size: 20),
+                        SizedBox(width: 10),
+                        Text('Import from clipboard'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
           ],
         ),
