@@ -113,6 +113,18 @@ dev_dependencies:
   # hive_generator, build_runner, flutter_launcher_icons) already lives.
   flutter_lints: ^6.0.0
 
+# ADDED: permission_handler_android 14.0.0 and 14.1.0 ship a broken
+# build.gradle.kts (a `kotlin { compilerOptions { jvmTarget = ... } }`
+# block that fails to resolve regardless of this project's own Kotlin
+# Gradle Plugin version) — a confirmed upstream packaging bug, not
+# something fixable from this project's side:
+# https://github.com/Baseflow/flutter-permission-handler/issues/1561
+# Pins the transitive Android implementation back to the last known-good
+# 13.x line while keeping permission_handler itself at ^13.0.2 above.
+# Remove this once Baseflow ships a fixed 14.x (or later) release.
+dependency_overrides:
+  permission_handler_android: ">=13.0.0 <14.0.0"
+
 flutter_icons:
   android: true
   ios: true
