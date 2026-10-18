@@ -8,7 +8,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:saleti/features/prayer_times/setup_onboarding_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
-import 'package:saleti/utils/battery_optimization_permission.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
@@ -180,13 +179,14 @@ Future<bool> _allCriticalPermissionsGranted() async {
   // Notifications
   final notificationGranted = await Permission.notification.isGranted;
 
-  // Battery Optimization
-  final batteryOk = await BatteryOptimizationHelper.isWhitelisted();
-
   // Exact Alarm
   final alarmOk = await ExactAlarmPermission.isGranted();
 
-  return locationGranted && notificationGranted && batteryOk && alarmOk;
+  // FIXED (Store/legal #1): battery-optimization exemption is no longer
+  // part of onboarding or this "critical" check — see setup_onboarding_
+  // screen.dart for why. Whether it's granted no longer affects whether
+  // onboarding gets skipped on a later launch.
+  return locationGranted && notificationGranted && alarmOk;
 }
 
 /// FIXED (bug #11): shown only if startup fails so completely that even

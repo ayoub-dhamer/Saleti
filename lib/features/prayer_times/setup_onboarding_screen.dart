@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../utils/battery_optimization_permission.dart';
 import '../../utils/exact_alarm_permission.dart';
 import '../home/home_screen.dart';
 
@@ -44,12 +43,16 @@ class _PermissionOnboardingScreenState
             'We need permission to send prayer reminders and Azan alerts.',
         requestPermission: _requestNotification,
       ),
-      _OnboardingStep(
-        title: 'Disable Battery Optimization',
-        description:
-            'This ensures Azan plays on time even when your phone is locked.',
-        requestPermission: _requestBatteryOptimization,
-      ),
+      // FIXED (Store/legal #1): this step used to show Android's battery-
+      // optimization exemption dialog to every user by default during
+      // onboarding. Google's own policy is that this request is only
+      // acceptable when Doze actually breaks the app's core function —
+      // and with azan alarms already scheduled Doze-safely (see bug #3),
+      // most users never need it at all. It's still available, but only
+      // offered reactively from here on: PrayerTimesScreen's readiness
+      // banner (bug #6) shows a "Fix" button for it if it's ever actually
+      // found to not be granted, rather than every user being asked for
+      // it upfront regardless of whether they need it.
       _OnboardingStep(
         title: 'Allow Exact Alarm',
         description:
@@ -151,20 +154,11 @@ class _PermissionOnboardingScreenState
     return status.isGranted;
   }
 
-  Future<bool> _requestBatteryOptimization() async {
-    await BatteryOptimizationHelper.requestDisable();
-    // FIXED (bug #5): this used to gate progression on isWhitelisted()
-    // actually being true. Android shows this exemption dialog at most
-    // once per app — if the user dismisses or denies it, nothing inside
-    // this flow can make isWhitelisted() become true, and with no skip
-    // button anywhere in onboarding, denying this one (non-essential,
-    // recoverable-later) step could strand a user on it permanently.
-    // The system dialog has now been shown either way, so let the user
-    // move on regardless of what they chose — PrayerTimesScreen's own
-    // readiness check can re-offer this later if alarms actually turn
-    // out to be late.
-    return true;
-  }
+  // FIXED (Store/legal #1): _requestBatteryOptimization used to live here
+  // (bug #5 made it non-blocking) — removed along with the onboarding
+  // step that called it. BatteryOptimizationHelper.requestDisable is now
+  // only ever invoked reactively, from PrayerTimesScreen's readiness
+  // banner.
 
   Future<bool> _requestExactAlarm() async {
     await ExactAlarmPermission.ensureEnabled();
@@ -576,8 +570,6 @@ class _OnboardingStep {
           permission == LocationPermission.always;
     } else if (title.contains('Notification')) {
       return await Permission.notification.isGranted;
-    } else if (title.contains('Battery')) {
-      return await BatteryOptimizationHelper.isWhitelisted();
     } else if (title.contains('Exact Alarm')) {
       return await ExactAlarmPermission.isGranted();
     }
@@ -602,9 +594,6 @@ class _OnboardingPage extends StatelessWidget {
     if (title.contains('Notification')) {
       return Icons.notifications_active_rounded;
     }
-    if (title.contains('Battery')) {
-      return Icons.battery_saver_rounded;
-    }
     if (title.contains('Exact')) {
       return Icons.alarm_rounded;
     }
@@ -620,9 +609,6 @@ class _OnboardingPage extends StatelessWidget {
     }
     if (title.contains('Notification')) {
       return 'Lets Saleti alert you a few minutes before each prayer.';
-    }
-    if (title.contains('Battery')) {
-      return 'Without this, Android may silence the Azan while the screen is off.';
     }
     if (title.contains('Exact')) {
       return 'Keeps prayer alerts accurate to the minute.';
