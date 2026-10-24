@@ -23,7 +23,14 @@ class QuranScreen extends StatelessWidget {
     _QuranItem(
       icon: Icons.auto_stories_rounded,
       title: 'Read Mushaf',
-      subtitle: '604 authentic pages',
+      // FIXED (Store/legal #3): was "604 authentic pages" — "authentic"
+      // implies a certified, glyph-for-glyph match to a specific printed
+      // Mushaf, which reflowed text with inserted tatweel justification
+      // (see mushaf_text_page.dart) isn't. "Standard Madani layout" is
+      // accurate without overclaiming: 604 pages is the standard Madani
+      // Mushaf page count this app's layout follows, without asserting
+      // certification it doesn't have.
+      subtitle: '604-page standard Madani layout',
       isReadMushaf: true,
     ),
     _QuranItem(

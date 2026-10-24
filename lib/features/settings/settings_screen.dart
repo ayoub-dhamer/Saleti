@@ -4,6 +4,7 @@ import 'package:adhan/adhan.dart';
 import 'package:saleti/utils/notification_service.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/religious_settings.dart';
+import 'credits_screen.dart';
 
 /// FIXED (polish #2): calculation method, madhab, high-latitude rule, and
 /// per-prayer minute adjustments were hard-coded before ReligiousSettings
@@ -152,7 +153,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Changes here affect every prayer time and azan alarm in the app.',
                 style: TextStyle(
                   fontSize: 12.5,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.6,
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -231,7 +234,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 "detection.",
                 style: TextStyle(
                   fontSize: 12.5,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.6,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -247,6 +252,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onIncrement: _hijriOffset < _maxHijriOffsetDays
                     ? () => setState(() => _hijriOffset++)
                     : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // ADDED (Store/legal #3): entry point for Amiri font / Qur'an
+          // text / mushaf data / frame image attribution and the
+          // open-source licenses page — see CreditsScreen.
+          _sectionCard(
+            theme,
+            title: 'About',
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CreditsScreen()),
+                  ),
+                  icon: const Icon(Icons.info_outline_rounded),
+                  label: const Text('Credits & Licenses'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primaryGreen,
+                    side: const BorderSide(color: primaryGreen),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -334,7 +368,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle,
                 style: TextStyle(
                   fontSize: 11.5,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.55),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.55,
+                  ),
                 ),
               ),
             ),
@@ -347,7 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return InputDecoration(
       filled: true,
       fillColor: isDark
-          ? Colors.white.withOpacity(0.06)
+          ? Colors.white.withValues(alpha: 0.06)
           : const Color(0xFFF4F6F8),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       border: OutlineInputBorder(
@@ -426,9 +462,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: enabled
-              ? primaryGreen.withOpacity(isDark ? 0.18 : 0.1)
+              ? primaryGreen.withValues(alpha: isDark ? 0.18 : 0.1)
               : (isDark
-                    ? Colors.white.withOpacity(0.05)
+                    ? Colors.white.withValues(alpha: 0.05)
                     : Colors.grey.shade100),
           borderRadius: BorderRadius.circular(10),
         ),
