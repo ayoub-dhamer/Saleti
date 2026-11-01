@@ -5,6 +5,7 @@ import 'package:saleti/utils/notification_service.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/religious_settings.dart';
 import 'credits_screen.dart';
+import 'package:saleti/utils/theme_controller.dart';
 
 /// FIXED (polish #2): calculation method, madhab, high-latitude rule, and
 /// per-prayer minute adjustments were hard-coded before ReligiousSettings
@@ -35,6 +36,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Map<String, int> _adjustments;
   late int _hijriOffset;
   bool _saving = false;
+
+  final ThemeController _themeController = ThemeController();
 
   @override
   void initState() {
@@ -255,6 +258,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+          _sectionCard(
+            theme,
+            title: 'Appearance',
+            children: [
+              _label(theme, 'Theme'),
+              ListenableBuilder(
+                listenable: _themeController,
+                builder: (context, _) => SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<AppThemeMode>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(
+                        value: AppThemeMode.light,
+                        icon: Icon(Icons.light_mode_rounded, size: 18),
+                        label: Text('Light'),
+                      ),
+                      ButtonSegment(
+                        value: AppThemeMode.dark,
+                        icon: Icon(Icons.dark_mode_rounded, size: 18),
+                        label: Text('Dark'),
+                      ),
+                      ButtonSegment(
+                        value: AppThemeMode.system,
+                        icon: Icon(Icons.brightness_auto_rounded, size: 18),
+                        label: Text('Auto'),
+                      ),
+                    ],
+                    selected: {_themeController.mode},
+                    onSelectionChanged: (s) {
+                      HapticFeedback.selectionClick();
+                      _themeController.setMode(s.first);
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 16),
           // ADDED (Store/legal #3): entry point for Amiri font / Qur'an
           // text / mushaf data / frame image attribution and the

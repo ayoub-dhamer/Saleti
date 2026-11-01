@@ -13,7 +13,7 @@ import 'package:saleti/utils/date_helpers.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/religious_settings.dart';
 import 'package:saleti/utils/special_day_helper.dart';
-import 'package:saleti/utils/theme_controller.dart';
+
 import 'package:saleti/widgets/icon_action.dart';
 import '../../utils/notification_service.dart';
 import 'package:flutter/services.dart';
@@ -813,8 +813,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          const ThemeCycleButton(), // ADD: single tap-to-cycle icon
+          // ADD: single tap-to-cycle icon
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -1735,85 +1734,4 @@ class _ReadinessIssue {
   final String message;
   final Future<void> Function() fix;
   const _ReadinessIssue(this.message, this.fix);
-}
-
-/// Single icon button that cycles Light -> Dark -> Auto on each tap,
-/// instead of a three-way selector row.
-class ThemeCycleButton extends StatefulWidget {
-  const ThemeCycleButton({super.key});
-
-  @override
-  State<ThemeCycleButton> createState() => _ThemeCycleButtonState();
-}
-
-class _ThemeCycleButtonState extends State<ThemeCycleButton> {
-  final ThemeController _controller = ThemeController();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_onChange);
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_onChange);
-    super.dispose();
-  }
-
-  void _onChange() {
-    if (mounted) setState(() {});
-  }
-
-  void _cycle() {
-    HapticFeedback.selectionClick();
-    final next = switch (_controller.mode) {
-      AppThemeMode.light => AppThemeMode.dark,
-      AppThemeMode.dark => AppThemeMode.system,
-      AppThemeMode.system => AppThemeMode.light,
-    };
-    _controller.setMode(next);
-  }
-
-  IconData get _icon => switch (_controller.mode) {
-    AppThemeMode.light => Icons.light_mode_rounded,
-    AppThemeMode.dark => Icons.dark_mode_rounded,
-    AppThemeMode.system => Icons.brightness_auto_rounded,
-  };
-
-  String get _tooltip => switch (_controller.mode) {
-    AppThemeMode.light => 'Light mode — tap for Dark',
-    AppThemeMode.dark => 'Dark mode — tap for Auto',
-    AppThemeMode.system => 'Auto mode — tap for Light',
-  };
-
-  // In _ThemeCycleButtonState.build() — replace the outer GestureDetector+Tooltip
-  @override
-  Widget build(BuildContext context) {
-    return IconAction(
-      label:
-          _tooltip, // reuse the existing getter — was already a good description
-      onTap: _cycle,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1FA45B).withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, anim) => ScaleTransition(
-            scale: anim,
-            child: RotationTransition(turns: anim, child: child),
-          ),
-          child: Icon(
-            _icon,
-            key: ValueKey(_icon),
-            color: const Color(0xFF1FA45B),
-            size: 18,
-          ),
-        ),
-      ),
-    );
-  }
 }
