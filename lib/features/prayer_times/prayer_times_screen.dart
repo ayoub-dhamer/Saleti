@@ -732,108 +732,113 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
   Widget _header(HijriCalendar hijri, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: _refreshLocation,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: _refreshLocation,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: primaryGreen.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.location_on_rounded,
+                          color: primaryGreen,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _locationName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            Text(
+                              'Tap to refresh',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: primaryGreen.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.location_on_rounded,
+                  Text(
+                    '${hijri.hDay} ${hijri.longMonthName} ${hijri.hYear} AH',
+                    style: const TextStyle(
                       color: primaryGreen,
-                      size: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _locationName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: theme.textTheme.bodyLarge?.color,
-                          ),
-                        ),
-                        Text(
-                          'Tap to refresh',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    DateFormat('EEEE d MMM y').format(DateTime.now()),
+                    style: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.7,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          // ADDED (polish #2): entry point for calculation method/madhab/
-          // high-latitude-rule/per-prayer adjustments and the Hijri day
-          // offset — see SettingsScreen.
-          IconAction(
-            label: 'Settings',
-            onTap: () {
-              HapticFeedback.selectionClick();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.grey.shade100,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.settings_rounded,
-                size: 18,
-                color: theme.textTheme.bodyMedium?.color?.withValues(
-                  alpha: 0.7,
+
+          // Settings button: directly underneath the date, aligned right.
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconAction(
+              label: 'Settings',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.grey.shade100,
+                  shape: BoxShape.circle,
                 ),
-              ),
-            ),
-          ),
-          // ADD: single tap-to-cycle icon
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${hijri.hDay} ${hijri.longMonthName} ${hijri.hYear} AH',
-                style: const TextStyle(
-                  color: primaryGreen,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                DateFormat('EEEE d MMM y').format(DateTime.now()),
-                style: TextStyle(
+                child: Icon(
+                  Icons.settings_rounded,
+                  size: 18,
                   color: theme.textTheme.bodyMedium?.color?.withValues(
                     alpha: 0.7,
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
