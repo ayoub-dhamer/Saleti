@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:quran/quran.dart' as quran;
 
 import 'package:saleti/data/juz_data.dart';
+import 'package:saleti/utils/mushaf_color_settings.dart';
 
 import 'package:saleti/utils/mushaf_data_service.dart';
 
@@ -14,16 +15,12 @@ import 'package:saleti/utils/mushaf_data_service.dart';
 
 typedef _LineLayoutKey = (
   int pageNumber,
-
   int lineNumber,
-
   double width,
-
   int fontSizeTenths,
-
   Color ayahEndColor,
-
   Color textColor,
+  int textWeight,
 );
 
 class _JustifiedLine {
@@ -215,13 +212,16 @@ class MushafTextPage extends StatelessWidget {
     }
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colors = MushafColorSettings();
+    final brightness = isDarkMode ? Brightness.dark : Brightness.light;
 
-    // Resolves to custom passed textColor (light mode -> black, dark mode -> white)
-
+    // Custom color wins; otherwise fall back to the existing behavior.
     final Color resolvedTextColor =
-        textColor ?? (isDarkMode ? Colors.white : Colors.black);
+        colors.textFor(brightness) ??
+        textColor ??
+        (isDarkMode ? Colors.white : Colors.black);
 
-    final ayahEndColor = Colors.lightBlue;
+    final ayahEndColor = colors.ayahFor(brightness) ?? Colors.lightBlue;
 
     final frameAsset = isDarkMode
         ? 'assets/images/mushaf_frame_dark.png'
@@ -540,16 +540,12 @@ class MushafTextPage extends StatelessWidget {
 
     final key = (
       pageNumber,
-
       line.lineNumber,
-
       availableWidth.roundToDouble(),
-
       (fontSize * 10).round(),
-
       ayahEndColor,
-
       activeTextColor,
+      MushafColorSettings().textWeight,
     );
 
     final justified = _lineLayoutCache.putIfAbsent(
@@ -731,7 +727,7 @@ class MushafTextPage extends StatelessWidget {
         style: TextStyle(
           fontFamily: kQuranFontFamily,
 
-          fontWeight: FontWeight.bold,
+          fontWeight: MushafColorSettings().fontWeight,
 
           fontSize: fontSize,
         ),
@@ -811,7 +807,7 @@ class MushafTextPage extends StatelessWidget {
             style: TextStyle(
               fontFamily: kQuranFontFamily,
 
-              fontWeight: FontWeight.w900,
+              fontWeight: MushafColorSettings().fontWeight,
 
               fontSize: fontSize,
 

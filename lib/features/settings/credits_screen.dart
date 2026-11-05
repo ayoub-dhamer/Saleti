@@ -1,22 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// FIXED (Store/legal #3): no in-app attribution existed anywhere for the
-/// Amiri font, the Qur'an text, the mushaf page-layout data, or the frame
-/// images — all four need it; Amiri's own OFL license requires it, and an
-/// Islamic app misattributing (or not attributing) its Qur'an text source
-/// is a trust problem as much as a legal one. Reached from Settings.
-///
-/// IMPORTANT — read before shipping this: I only know the Amiri font's
-/// source and license with real confidence; it's an identifiable,
-/// well-known open font (amiri-regular.ttf / amiri-bold.ttf are
-/// unambiguous). I do NOT know where mushaf_complete.json, the Qur'an
-/// text it contains, or the frame images actually came from — that was
-/// never shared with me anywhere in this project, and I'm not going to
-/// guess at a source or license for content I can't verify. The three
-/// sections below marked TODO must be filled in with the real source,
-/// license, and (where the license requires it) a note on whether the
-/// text was used unmodified, before this screen ships. See the inline
-/// comments at each TODO for specifically what's needed and why.
 class CreditsScreen extends StatelessWidget {
   const CreditsScreen({super.key});
 
@@ -26,7 +9,6 @@ class CreditsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -80,52 +62,27 @@ class CreditsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _card(
             theme,
-            title: "Qur'an Text",
-            isDark: isDark,
-            needsAttention: true,
+            title: "Qur'an Text & Page Layout",
             children: [
-              // TODO (before release): replace this whole block with the
-              // actual source of the Qur'an text used in
-              // mushaf_complete.json. What's needed:
-              //  1. The publisher/source name (e.g. a specific mushaf
-              //     printing, or a text provider such as Tanzil.net).
-              //  2. Its license terms — many Qur'an text sources (Tanzil
-              //     included) explicitly require the text to be used
-              //     UNMODIFIED. This app inserts kashida (tatweel) for
-              //     line-justification (see mushaf_text_page.dart) — if
-              //     the source's license requires unmodified text, this
-              //     needs to be resolved (get explicit permission, switch
-              //     to a source that allows reflow, or switch to a
-              //     pre-laid-out glyph font/image approach instead of
-              //     programmatic justification) before relying on that
-              //     source.
-              //  3. A link to the source and its license text, matching
-              //     the Amiri section's format above.
               _paragraph(
                 theme,
-                'TODO: add the source and license for the Qur\'an text '
-                'used in this app before release.',
-                isWarning: true,
+                "The Qur'an text (Uthmani script) and the Mushaf page and line "
+                "layout used in this app were obtained from the Quran.com API, "
+                "provided by the Quran Foundation.",
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _card(
-            theme,
-            title: 'Mushaf Page Layout Data',
-            isDark: isDark,
-            needsAttention: true,
-            children: [
-              // TODO (before release): the per-page/per-line word
-              // segmentation in assets/data/mushaf_complete.json (surah
-              // boundaries, ayah markers, line breaks) — note where this
-              // dataset came from and its license/attribution terms, the
-              // same way the Amiri section does above.
+              const SizedBox(height: 8),
               _paragraph(
                 theme,
-                'TODO: add the source and license for the mushaf page '
-                'layout data before release.',
-                isWarning: true,
+                "The Qur'an text is displayed as provided by the source, apart "
+                "from kashida (tatweel) characters added at display time to "
+                "justify the lines.",
+              ),
+              const SizedBox(height: 10),
+              _linkRow(theme, 'Quran.com', 'https://quran.com'),
+              _linkRow(
+                theme,
+                'Quran Foundation API documentation',
+                'https://api-docs.quran.foundation',
               ),
             ],
           ),
@@ -133,19 +90,12 @@ class CreditsScreen extends StatelessWidget {
           _card(
             theme,
             title: 'Mushaf Frame Images',
-            isDark: isDark,
-            needsAttention: true,
             children: [
-              // TODO (before release): mushaf_frame_dark.png,
-              // mushaf_frame_light.png, surah_name_frame_light.png,
-              // surah_name_frame_dark.png — note their source (an asset
-              // pack, a commissioned design, a stock-asset site, ...)
-              // and license/attribution terms.
               _paragraph(
                 theme,
-                'TODO: add the source and license for the decorative '
-                'frame images before release.',
-                isWarning: true,
+                'The decorative page frames and surah name banners in the Mushaf '
+                'view were created with the help of AI image generation tools, '
+                'and edited for use in this app.',
               ),
             ],
           ),
@@ -190,7 +140,7 @@ class CreditsScreen extends StatelessWidget {
     ThemeData theme, {
     required String title,
     required List<Widget> children,
-    bool isDark = false,
+
     bool needsAttention = false,
   }) {
     return Container(
@@ -246,12 +196,6 @@ class CreditsScreen extends StatelessWidget {
     );
   }
 
-  // NOTE: this app has no URL-launching package (e.g. url_launcher) as a
-  // dependency, and I'm not adding one just for this screen — that's a
-  // pubspec.yaml change plus (on Android 11+) a <queries> manifest entry
-  // for the browser intent, which is more to take on than a credits
-  // screen needs. The URL itself is shown as selectable text instead, so
-  // it can be copied and opened manually.
   Widget _linkRow(ThemeData theme, String label, String url) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),

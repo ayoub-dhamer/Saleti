@@ -9,6 +9,7 @@ import 'package:saleti/features/prayer_times/setup_onboarding_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
+import 'package:saleti/utils/mushaf_color_settings.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
@@ -34,8 +35,6 @@ void main() {
       debugPrint(
         'Uncaught error outside the Flutter framework: $error\n$stack',
       );
-      // TODO: report to a crash reporting service, e.g.
-      // FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     },
   );
 }
@@ -46,8 +45,6 @@ Future<void> _bootstrap() async {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('Flutter framework error: ${details.exceptionAsString()}');
-    // TODO: report to a crash reporting service, e.g.
-    // FirebaseCrashlytics.instance.recordFlutterFatalError(details);
   };
 
   try {
@@ -116,6 +113,8 @@ Future<void> _bootstrap() async {
           ) ??
           false;
     }
+
+    await MushafColorSettings().load();
 
     runApp(SaletiApp(skipOnboarding: allGranted));
   } catch (e, st) {

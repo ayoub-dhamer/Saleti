@@ -1446,21 +1446,6 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
                 ],
               ),
             ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => NotificationService.testAzan(),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'Test azan',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
         ],
       ),
     );

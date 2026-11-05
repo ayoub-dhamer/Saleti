@@ -5,6 +5,8 @@ import 'package:saleti/widgets/icon_action.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'mushaf_page_screen.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
+import 'package:quran/quran.dart' as quran;
+import 'package:saleti/data/surah_pages.dart';
 
 /// 🔹 Bookmark model
 class BookmarkItem {
@@ -32,6 +34,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   void initState() {
     super.initState();
     _loadBookmarks();
+  }
+
+  String _arabicSurahNameForPage(int page) {
+    for (int i = 114; i >= 1; i--) {
+      final start = surahStartPages[i] ?? 1;
+      if (page >= start) return quran.getSurahNameArabic(i);
+    }
+    return '';
   }
 
   Future<void> _loadBookmarks() async {
@@ -302,14 +312,24 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          b.surah,
+                          _arabicSurahNameForPage(b.page),
+                          textAlign: TextAlign.right,
                           style: TextStyle(
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
                             color: theme.textTheme.bodyLarge?.color,
                           ),
                         ),
                         const SizedBox(height: 4),
+                        Text(
+                          b.surah,
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withValues(alpha: 0.55),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             Container(

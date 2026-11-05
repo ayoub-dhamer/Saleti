@@ -75,90 +75,6 @@ class _MushafPageScreenState extends State<MushafPageScreen>
 
   KhatmYear? _khatmYear;
 
-  static const int _minTextScale = 20;
-
-  static const int _maxTextScale = 22;
-
-  static const int _textScaleStep = 1;
-
-  static const String _textScaleKey = 'mushaf_text_scale';
-
-  int _textScale = 20;
-
-  Future<void> _loadTextScale() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final value = prefs.get(_textScaleKey);
-    final saved = switch (value) {
-      int v => v,
-      double v => v.round(),
-      _ => _minTextScale,
-    };
-    if (!mounted) return;
-    setState(() {
-      _textScale = saved.clamp(_minTextScale, _maxTextScale).toInt();
-    });
-    await prefs.setInt(_textScaleKey, _textScale);
-  }
-
-  void _changeTextScale(int delta) {
-    final next = (_textScale + delta)
-        .clamp(_minTextScale, _maxTextScale)
-        .toInt();
-
-    if (next == _textScale) return;
-
-    HapticFeedback.selectionClick();
-
-    setState(() => _textScale = next);
-
-    SharedPreferences.getInstance().then((p) => p.setInt(_textScaleKey, next));
-  }
-
-  Widget _buildZoomControls({required Color color}) {
-    final canDecrease = _textScale > _minTextScale;
-
-    final canIncrease = _textScale < _maxTextScale;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-
-      children: [
-        IconButton(
-          tooltip: 'Smaller text',
-
-          visualDensity: VisualDensity.compact,
-
-          onPressed: canDecrease
-              ? () => _changeTextScale(-_textScaleStep)
-              : null,
-
-          icon: Icon(
-            Icons.remove_circle_outline_rounded,
-
-            color: canDecrease ? color : color.withValues(alpha: 0.35),
-          ),
-        ),
-
-        IconButton(
-          tooltip: 'Larger text',
-
-          visualDensity: VisualDensity.compact,
-
-          onPressed: canIncrease
-              ? () => _changeTextScale(_textScaleStep)
-              : null,
-
-          icon: Icon(
-            Icons.add_circle_outline_rounded,
-
-            color: canIncrease ? color : color.withValues(alpha: 0.35),
-          ),
-        ),
-      ],
-    );
-  }
-
   static const Color primaryGreen = Color(0xFF1FA45B);
 
   static const Color secondaryGreen = Color(0xFF4FC3A1);
@@ -221,8 +137,6 @@ class _MushafPageScreenState extends State<MushafPageScreen>
     _loadBookmarks();
 
     _initPageController();
-
-    _loadTextScale();
 
     if (widget.readingMode == ReadingMode.khatm) {
       _loadKhatmYear();
@@ -597,8 +511,6 @@ class _MushafPageScreenState extends State<MushafPageScreen>
 
   AppBar _buildAppBar() {
     return AppBar(
-      actions: [_buildZoomControls(color: Colors.white)],
-
       elevation: 0,
 
       centerTitle: true,
@@ -1149,8 +1061,6 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                                 Colors.black),
 
                       accentColor: primaryGreen,
-
-                      textScale: _textScale,
                     ),
                   ),
                 ),

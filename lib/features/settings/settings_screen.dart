@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:adhan/adhan.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:saleti/utils/mushaf_color_settings.dart';
 import 'package:saleti/utils/notification_service.dart';
 import 'package:saleti/utils/prayer_cache.dart';
 import 'package:saleti/utils/religious_settings.dart';
@@ -37,6 +39,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late int _hijriOffset;
   bool _saving = false;
 
+  late Color? _textLight, _textDark, _ayahLight, _ayahDark;
+
+  late int _textWeight;
+
+  FontWeight get _previewWeight => switch (_textWeight) {
+    400 => FontWeight.normal,
+    900 => FontWeight.w900,
+    _ => FontWeight.bold,
+  };
+
   final ThemeController _themeController = ThemeController();
 
   @override
@@ -47,6 +59,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _highLatitudeRule = ReligiousSettings.highLatitudeRule;
     _adjustments = Map<String, int>.from(ReligiousSettings.adjustmentsMinutes);
     _hijriOffset = ReligiousSettings.hijriDayOffset;
+    final mc = MushafColorSettings();
+    _textLight = mc.textLight;
+    _textDark = mc.textDark;
+    _ayahLight = mc.ayahLight;
+    _ayahDark = mc.ayahDark;
+    _textWeight = mc.textWeight;
   }
 
   Future<void> _save() async {
@@ -61,6 +79,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ReligiousSettings.hijriDayOffset = _hijriOffset;
     await ReligiousSettings.save();
 
+    final mc = MushafColorSettings();
+    mc.textLight = _textLight;
+    mc.textDark = _textDark;
+    mc.ayahLight = _ayahLight;
+    mc.ayahDark = _ayahDark;
+    mc.textWeight = _textWeight;
+    await mc.save();
+
     // The calculation itself just changed, so every prayer and azan alarm
     // needs recomputing against it — not just today's reminder settings.
     if (PrayerCache().hasLocation) {
@@ -72,6 +98,177 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.pop(context);
+  }
+
+  Widget _modeColors(
+    ThemeData theme,
+    bool isDark, {
+    required String title,
+    required Color bg,
+    required Color defaultText,
+    required Color? text,
+    required Color? ayah,
+    required ValueChanged<Color?> onText,
+    required ValueChanged<Color?> onAyah,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: theme.textTheme.bodyLarge?.color,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Live preview on that mode's background
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ',
+                    style: TextStyle(
+                      fontFamily: 'amiri',
+                      fontSize: 22,
+                      fontWeight: _previewWeight, // was FontWeight.w900
+                      color: text ?? defaultText,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '\u06DD١',
+                    style: TextStyle(
+                      fontFamily: 'amiri',
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: ayah ?? Colors.lightBlue,
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _colorTile(
+          theme,
+          isDark,
+          label: 'Text color',
+          current: text,
+          fallback: defaultText,
+          onChanged: onText,
+        ),
+        _colorTile(
+          theme,
+          isDark,
+          label: 'Ayah number color',
+          current: ayah,
+          fallback: Colors.lightBlue,
+          onChanged: onAyah,
+        ),
+      ],
+    );
+  }
+
+  Widget _colorTile(
+    ThemeData theme,
+    bool isDark, {
+    required String label,
+    required Color? current,
+    required Color fallback,
+    required ValueChanged<Color?> onChanged,
+  }) {
+    final shown = current ?? fallback;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              current == null ? '$label (default)' : label,
+              style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+            ),
+          ),
+          if (current != null)
+            IconButton(
+              tooltip: 'Reset to default',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.restart_alt_rounded,
+                size: 20,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                onChanged(null);
+              },
+            ),
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.selectionClick();
+              final picked = await _pickColor(shown);
+              if (picked != null) onChanged(picked);
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: shown,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Color?> _pickColor(Color initial) {
+    Color temp = initial;
+    final theme = Theme.of(context);
+    return showDialog<Color>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.cardColor,
+        contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: initial,
+            onColorChanged: (c) => temp = c,
+            enableAlpha: false,
+            hexInputBar: true,
+            labelTypes: const [],
+            pickerAreaHeightPercent: 0.7,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
+            onPressed: () => Navigator.pop(ctx, temp),
+            child: const Text('Select', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   String _methodLabel(CalculationMethod m) {
@@ -255,6 +452,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onIncrement: _hijriOffset < _maxHijriOffsetDays
                     ? () => setState(() => _hijriOffset++)
                     : null,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          _sectionCard(
+            theme,
+            title: 'Mushaf text',
+            children: [
+              _label(theme, 'Text weight'),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 400, label: Text('Normal')),
+                    ButtonSegment(value: 700, label: Text('Bold')),
+                    ButtonSegment(value: 900, label: Text('W900')),
+                  ],
+                  selected: {_textWeight},
+                  onSelectionChanged: (s) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _textWeight = s.first);
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              _modeColors(
+                theme,
+                isDark,
+                title: 'Light mode',
+                bg: const Color(0xFFFFFFFF),
+                defaultText: Colors.black,
+                text: _textLight,
+                ayah: _ayahLight,
+                onText: (c) => setState(() => _textLight = c),
+                onAyah: (c) => setState(() => _ayahLight = c),
+              ),
+              const SizedBox(height: 18),
+              _modeColors(
+                theme,
+                isDark,
+                title: 'Dark mode',
+                bg: const Color(0xFF121212),
+                defaultText: Colors.white,
+                text: _textDark,
+                ayah: _ayahDark,
+                onText: (c) => setState(() => _textDark = c),
+                onAyah: (c) => setState(() => _ayahDark = c),
               ),
             ],
           ),

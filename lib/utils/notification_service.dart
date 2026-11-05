@@ -65,8 +65,6 @@ class NotificationService {
 
   static const int rebootCatchUpAlarmId = 9998;
 
-  static const int testAzanAlarmId = 6001;
-
   static const int azanLookaheadDays = 7;
 
   static int alarmId(String prayer, String type, {int dayOffset = 0}) {
@@ -418,16 +416,6 @@ class NotificationService {
     } catch (e) {
       debugPrint('Failed to stop Azan: $e');
     }
-  }
-
-  static Future<void> testAzan() async {
-    await scheduleAzanNative(
-      id: testAzanAlarmId,
-      time: DateTime.now().add(const Duration(seconds: 5)),
-      prayer: 'Test',
-      volume: 1.0,
-      azanEnabled: true,
-    );
   }
 
   static Future<void> cancelAzan(int id) async {

@@ -215,47 +215,22 @@ class MushafDataService extends ChangeNotifier {
     try {
       final raw = await rootBundle.loadString(
         'assets/data/mushaf_complete.json',
-
-        // FIXED (Battery/CPU #4): loadString caches the decoded STRING
-
-        // indefinitely by default. The only thing that needs to live for
-
-        // the app's lifetime is the already-parsed `_pages` below — this
-
-        // raw (multi-MB) JSON text is never read again after the one
-
-        // parse just below, so there's no reason to also keep it resident
-
-        // in rootBundle's string cache for the rest of the session.
         cache: false,
       );
 
-      // CHANGED: decoding the JSON and building every page/line/word object
-
-      // now happens on a background isolate via compute(), so this first
-
-      // load() of the session — however large mushaf_complete.json is —
-
-      // never blocks the UI thread while it parses.
-
       final parsedPages = await compute(_parseMushafPages, raw);
 
-      _pages.addAll(parsedPages);
+      // Wait for the max line width (cached after the first run) BEFORE
+      // marking the data as loaded, so the first page is never drawn at
+      // the fallback size.
+      await _warmUpMaxNaturalWidth(parsedPages.values);
 
+      _pages.addAll(parsedPages);
       _loaded = true;
     } catch (e) {
       _loadFuture = null;
-
       rethrow;
     }
-
-    // fire-and-forget — starts warming up (or reading the cached) max
-
-    // width right away, in the background, typically well before the
-
-    // user has navigated to the Mushaf screen at all.
-
-    _warmUpMaxNaturalWidth();
   }
 
   MushafPageData? getPage(int pageNumber) => _pages[pageNumber];
@@ -298,7 +273,7 @@ class MushafDataService extends ChangeNotifier {
 
   // cached double.
 
-  Future<void> _warmUpMaxNaturalWidth() async {
+  Future<void> _warmUpMaxNaturalWidth(Iterable<MushafPageData> pages) async {
     if (_isWarmingUp || _maxNaturalWidthAtReference != null) return;
 
     _isWarmingUp = true;
@@ -321,7 +296,7 @@ class MushafDataService extends ChangeNotifier {
 
     int pagesProcessed = 0;
 
-    for (final page in _pages.values) {
+    for (final page in pages) {
       for (final line in page.lines) {
         final text = _plainLineText(line);
 
@@ -388,7 +363,6 @@ class MushafDataService extends ChangeNotifier {
     final scaleFactor = normalizedScale / 20.0;
 
     if (_maxNaturalWidthAtReference == null) {
-      _warmUpMaxNaturalWidth(); // no-op if already running
       return (_fallbackFontSize * scaleFactor)
           .clamp(minFont, maxFont)
           .toDouble();

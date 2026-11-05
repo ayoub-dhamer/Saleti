@@ -1320,14 +1320,14 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: theme.cardColor, // CHANGED
+          color: theme.cardColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 12),
-            ), // CHANGED
+            ),
           ],
         ),
         child: Column(
@@ -1345,7 +1345,7 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                         fontWeight: FontWeight.bold,
                         color: theme.textTheme.bodyLarge?.color,
                       ),
-                    ), // CHANGED
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
@@ -1356,14 +1356,14 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                             ? Colors.white.withValues(alpha: 0.08)
                             : Colors.grey.shade100,
                         shape: BoxShape.circle,
-                      ), // CHANGED
+                      ),
                       child: Icon(
                         Icons.close,
                         size: 18,
                         color: theme.textTheme.bodyMedium?.color?.withValues(
                           alpha: 0.6,
                         ),
-                      ), // CHANGED
+                      ),
                     ),
                   ),
                 ],
@@ -1375,27 +1375,25 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.06)
-                      : const Color(0xFFF4F6F8), // CHANGED
+                      : const Color(0xFFF4F6F8),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: TextField(
                   autofocus: true,
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                  ), // ADD
+                  style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                   decoration: InputDecoration(
                     hintText: "Search Surah...",
                     hintStyle: TextStyle(
                       color: theme.textTheme.bodyMedium?.color?.withValues(
                         alpha: 0.4,
                       ),
-                    ), // ADD
+                    ),
                     prefixIcon: Icon(
                       Icons.search,
                       color: theme.textTheme.bodyMedium?.color?.withValues(
                         alpha: 0.4,
                       ),
-                    ), // CHANGED
+                    ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -1404,74 +1402,86 @@ class _SurahSearchDialogState extends State<_SurahSearchDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.45,
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No results found",
-                        style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color?.withValues(
-                            alpha: 0.5,
+
+            // FIXED: was a SizedBox with a fixed height taken from the full
+            // screen height, which ignores the keyboard, so the list
+            // overflowed the dialog's shrunken background. Flexible +
+            // maxHeight lets the list use whatever space is actually left.
+            Flexible(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Center(
+                          child: Text(
+                            "No results found",
+                            style: TextStyle(
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withValues(alpha: 0.5),
+                            ),
                           ),
                         ),
-                      ), // CHANGED
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.grey.shade100,
-                      ), // CHANGED
-                      itemBuilder: (context, index) {
-                        final surah = filtered[index];
-                        return ListTile(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: primaryGreen.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.grey.shade100,
+                        ),
+                        itemBuilder: (context, index) {
+                          final surah = filtered[index];
+                          return ListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              "${surah['number']}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: primaryGreen,
-                                fontSize: 12,
+                            leading: Container(
+                              width: 36,
+                              height: 36,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: primaryGreen.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                "${surah['number']}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryGreen,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
-                          ),
-                          title: Text(
-                            surah['name'],
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: theme.textTheme.bodyLarge?.color,
+                            title: Text(
+                              surah['name'],
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
                             ),
-                          ), // CHANGED
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: isDark
-                                ? Colors.white24
-                                : Colors.grey.shade400,
-                          ), // CHANGED
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            Navigator.pop(context, surah);
-                          },
-                        );
-                      },
-                    ),
+                            trailing: Icon(
+                              Icons.chevron_right_rounded,
+                              color: isDark
+                                  ? Colors.white24
+                                  : Colors.grey.shade400,
+                            ),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              Navigator.pop(context, surah);
+                            },
+                          );
+                        },
+                      ),
+              ),
             ),
             const SizedBox(height: 12),
           ],
