@@ -13,6 +13,11 @@ class MushafColorSettings extends ChangeNotifier {
   static const _kAyahLight = 'mushaf_ayah_color_light';
   static const _kAyahDark = 'mushaf_ayah_color_dark';
 
+  static const _kPageFlip = 'mushaf_page_flip';
+
+  /// Book-style page turn animation. On by default.
+  bool pageFlip = true;
+
   static const _kWeight = 'mushaf_text_weight';
 
   /// 400 = normal, 700 = bold, 900 = w900 (the previous behavior).
@@ -42,6 +47,7 @@ class MushafColorSettings extends ChangeNotifier {
     ayahLight = _read(p, _kAyahLight);
     ayahDark = _read(p, _kAyahDark);
     textWeight = p.getInt(_kWeight) ?? 700;
+    pageFlip = p.getBool(_kPageFlip) ?? true;
     notifyListeners();
   }
 
@@ -54,6 +60,7 @@ class MushafColorSettings extends ChangeNotifier {
     await write(_kAyahLight, ayahLight);
     await write(_kAyahDark, ayahDark);
     await p.setInt(_kWeight, textWeight);
+    await p.setBool(_kPageFlip, pageFlip);
     notifyListeners();
   }
 }

@@ -26,6 +26,10 @@ import 'package:saleti/utils/mushaf_data_service.dart';
 
 import 'package:saleti/features/quran/mushaf_text_page.dart';
 
+import 'dart:math' as math;
+
+import 'package:saleti/utils/mushaf_color_settings.dart';
+
 class MushafPageScreen extends StatefulWidget {
   final int startPage;
 
@@ -704,6 +708,103 @@ class _MushafPageScreenState extends State<MushafPageScreen>
     );
   }
 
+  Widget _bookFlip({
+    required int index,
+    required Widget flat, // this page, fully built
+    Widget? previous, // the page before it (index - 1), body only
+  }) {
+    final controller = _pageController!;
+
+    return AnimatedBuilder(
+      animation: controller,
+      child: RepaintBoundary(child: flat),
+      builder: (context, cachedFlat) {
+        final page =
+            (controller.hasClients && controller.position.haveDimensions)
+            ? (controller.page ?? controller.initialPage.toDouble())
+            : controller.initialPage.toDouble();
+        final delta = page - index;
+
+        // Outgoing page (going forward): the page above covers it, so skip it.
+        if (delta > 0.001) return const SizedBox.shrink();
+        // Too far away to be visible.
+        if (delta <= -1) return const SizedBox.shrink();
+
+        // 0 → 1 as the previous page lifts away to the right.
+        final p = (1 + delta).clamp(0.0, 1.0);
+        final settled = delta.abs() <= 0.001;
+
+        Widget content = cachedFlat!;
+
+        if (!settled && previous != null) {
+          content = Stack(
+            fit: StackFit.expand,
+            children: [
+              // This page, with a shadow that fades as it gets uncovered
+              cachedFlat,
+              IgnorePointer(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.35 * (1 - p)),
+                ),
+              ),
+              // The previous page, lifting around the right-hand spine
+              if (p < 0.999)
+                Transform(
+                  alignment: Alignment.centerRight,
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.0012) // perspective
+                    ..rotateY(-p * math.pi / 2),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      previous,
+                      IgnorePointer(
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.25 * p),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        }
+
+        // PageView slides each page by delta * width; cancel that so only the
+        // rotation is visible.
+        return LayoutBuilder(
+          builder: (context, constraints) => Transform.translate(
+            offset: Offset(-delta * constraints.maxWidth, 0),
+            child: content,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pageBody(
+    int pageNumber,
+    Color lectureTextColor,
+    Color lectureBgColor,
+  ) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, _isLectureMode ? 0 : 64),
+      child: Container(
+        color: _isLectureMode
+            ? lectureBgColor
+            : Theme.of(context).scaffoldBackgroundColor,
+        child: MushafTextPage(
+          pageNumber: pageNumber,
+          isLectureMode: _isLectureMode,
+          textColor: _isLectureMode
+              ? lectureTextColor
+              : (Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black),
+          accentColor: primaryGreen,
+        ),
+      ),
+    );
+  }
+
   // In mushaf_page_screen.dart - Replace the Stack children overlay in build():
 
   // In mushaf_page_screen.dart
@@ -994,136 +1095,78 @@ class _MushafPageScreenState extends State<MushafPageScreen>
       children: [
         PageView.builder(
           controller: _pageController,
-
           reverse: true,
-
           itemCount: _pageCount,
-
           onPageChanged: (index) {
             final page = _firstPage + index;
 
             setState(() {
               _currentPage = page;
-
               _sessionEndPage = page;
-
               _isLastPage = page == 604;
             });
 
             _saveLastPage(page);
 
-            // FIXED (bug #7): periodic checkpoint every ~5 pages, so a
-
-            // process kill mid-session loses at most a handful of pages
-
-            // instead of the whole session. Fire-and-forget, same as
-
-            // _saveLastPage above — this callback isn't async.
-
+            // Periodic Khatm checkpoint every ~5 pages, so a process kill
+            // mid-session loses at most a handful of pages.
             if (widget.readingMode == ReadingMode.khatm &&
                 _calculatePagesRead(_lastCheckpointedPage, page) >= 5) {
               _checkpointKhatmProgress();
             }
           },
-
           itemBuilder: (context, index) {
             final pageNumber = _firstPage + index;
 
-            return Stack(
+            final flat = Stack(
               fit: StackFit.expand,
-
               children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    0,
-
-                    0,
-
-                    0,
-
-                    _isLectureMode ? 0 : 64,
-                  ),
-
-                  child: Container(
-                    // FIX: Use lectureBgColor instead of hardcoded Colors.black
-                    color: _isLectureMode
-                        ? lectureBgColor
-                        : Theme.of(context).scaffoldBackgroundColor,
-
-                    child: MushafTextPage(
-                      pageNumber: pageNumber,
-
-                      isLectureMode: _isLectureMode,
-
-                      textColor: _isLectureMode
-                          ? lectureTextColor
-                          : (Theme.of(context).textTheme.bodyLarge?.color ??
-                                Colors.black),
-
-                      accentColor: primaryGreen,
-                    ),
-                  ),
-                ),
+                _pageBody(pageNumber, lectureTextColor, lectureBgColor),
 
                 if (_isLastSurahPage &&
                     _isPageSettled &&
                     widget.surahGoal != null)
                   Positioned(
                     bottom: _isLectureMode ? 10 : 67,
-
                     left: 10,
-
                     child: SizedBox(
                       height: 35,
-
                       child: _AnimatedActionButton(
                         label: 'Count Recitation',
-
                         onTap: () async {
                           final theme = Theme.of(context);
 
                           final confirm = await showDialog<bool>(
                             context: context,
-
                             builder: (_) => AlertDialog(
                               backgroundColor: theme.cardColor,
-
                               title: Text(
                                 'Mark Surah Completed?',
-
                                 style: TextStyle(
                                   color: theme.textTheme.bodyLarge?.color,
                                 ),
                               ),
-
                               content: Text(
                                 'You reached the end of ${widget.surahGoal!.surahName}. '
                                 'Do you want to count this recitation toward your goal?',
-
                                 style: TextStyle(
                                   color: theme.textTheme.bodyMedium?.color
                                       ?.withValues(alpha: 0.7),
                                 ),
                               ),
-
                               actions: [
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.pop(context, false),
-
                                   child: const Text('Cancel'),
                                 ),
-
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryGreen,
                                   ),
-
                                   onPressed: () => Navigator.pop(context, true),
-
                                   child: const Text(
                                     'Yes',
-
                                     style: TextStyle(color: Colors.white),
                                   ),
                                 ),
@@ -1146,28 +1189,32 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                   ),
               ],
             );
+
+            // Animation off: plain PageView slide, and the extra "previous"
+            // page is never built.
+            if (!MushafColorSettings().pageFlip) return flat;
+
+            return _bookFlip(
+              index: index,
+              previous: index > 0
+                  ? _pageBody(pageNumber - 1, lectureTextColor, lectureBgColor)
+                  : null,
+              flat: flat,
+            );
           },
         ),
 
         Positioned(
           left: 0,
-
           right: 0,
-
           bottom: 0,
-
           child: AnimatedSlide(
             duration: const Duration(milliseconds: 250),
-
             curve: Curves.easeOutCubic,
-
             offset: _isLectureMode ? const Offset(0, 1) : Offset.zero,
-
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
-
               opacity: _isLectureMode ? 0 : 1,
-
               child: _buildFooter(),
             ),
           ),

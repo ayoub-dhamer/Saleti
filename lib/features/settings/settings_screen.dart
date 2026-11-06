@@ -43,6 +43,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   late int _textWeight;
 
+  late bool _pageFlip;
+
   FontWeight get _previewWeight => switch (_textWeight) {
     400 => FontWeight.normal,
     900 => FontWeight.w900,
@@ -65,6 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _ayahLight = mc.ayahLight;
     _ayahDark = mc.ayahDark;
     _textWeight = mc.textWeight;
+    _pageFlip = mc.pageFlip;
   }
 
   Future<void> _save() async {
@@ -85,6 +88,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     mc.ayahLight = _ayahLight;
     mc.ayahDark = _ayahDark;
     mc.textWeight = _textWeight;
+    mc.pageFlip = _pageFlip;
     await mc.save();
 
     // The calculation itself just changed, so every prayer and azan alarm
@@ -479,6 +483,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                activeColor: primaryGreen,
+                title: Text(
+                  'Page flip animation',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                subtitle: Text(
+                  'Turn pages like a book. Turn off for a plain slide.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: theme.textTheme.bodyMedium?.color?.withValues(
+                      alpha: 0.55,
+                    ),
+                  ),
+                ),
+                value: _pageFlip,
+                onChanged: (v) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _pageFlip = v);
+                },
+              ),
+              const SizedBox(height: 8),
               _modeColors(
                 theme,
                 isDark,
