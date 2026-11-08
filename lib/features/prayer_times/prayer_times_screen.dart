@@ -1551,7 +1551,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1602,15 +1602,17 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Reminder Before Prayer',
             style: TextStyle(
-              color: Colors.white,
+              color: theme.textTheme.bodyLarge?.color,
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
@@ -1624,12 +1626,14 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _wheel(
+                    theme: theme,
                     label: 'Hours',
                     controller: _hoursCtrl,
                     max: 24,
                     onChanged: (v) => setState(() => hours = v),
                   ),
                   _wheel(
+                    theme: theme,
                     label: 'Minutes',
                     controller: _minutesCtrl,
                     max: 60,
@@ -1646,6 +1650,7 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
                 backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
@@ -1663,6 +1668,7 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
   }
 
   Widget _wheel({
+    required ThemeData theme,
     required String label,
     required FixedExtentScrollController controller,
     required int max,
@@ -1676,8 +1682,10 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               label,
-              style: const TextStyle(
-                color: Colors.grey,
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.6,
+                ),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -1687,15 +1695,15 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
             child: CupertinoPicker.builder(
               scrollController: controller,
               itemExtent: 52,
-              backgroundColor: Colors.black,
+              backgroundColor: Colors.transparent,
               onSelectedItemChanged: (index) => onChanged(index % max),
               itemBuilder: (_, index) {
                 final value = index % max;
                 return Center(
                   child: Text(
                     value.toString().padLeft(2, '0'),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color,
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
                     ),
