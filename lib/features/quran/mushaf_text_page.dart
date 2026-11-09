@@ -223,6 +223,10 @@ class MushafTextPage extends StatelessWidget {
 
     final ayahEndColor = colors.ayahFor(brightness) ?? Colors.lightBlue;
 
+    final bannerColor = colors.bannerFor(brightness) ?? resolvedTextColor;
+    final basmalaColor = colors.basmalaFor(brightness) ?? resolvedTextColor;
+    final labelColor = colors.labelFor(brightness) ?? resolvedTextColor;
+
     final frameAsset = isDarkMode
         ? 'assets/images/mushaf_frame_dark.png'
         : 'assets/images/mushaf_frame_light.png';
@@ -248,7 +252,13 @@ class MushafTextPage extends StatelessWidget {
 
               bottom: isLectureMode ? 0 : height * _frameInsetBottom,
 
-              child: _buildContent(page, ayahEndColor, resolvedTextColor),
+              child: _buildContent(
+                page,
+                ayahEndColor,
+                resolvedTextColor,
+                bannerColor,
+                basmalaColor,
+              ),
             ),
 
             if (!isLectureMode) ...[
@@ -257,7 +267,7 @@ class MushafTextPage extends StatelessWidget {
 
                 right: width * 0.20,
 
-                child: _cornerLabel(_juzLabel(page), resolvedTextColor),
+                child: _cornerLabel(_juzLabel(page), labelColor),
               ),
 
               Positioned(
@@ -265,7 +275,7 @@ class MushafTextPage extends StatelessWidget {
 
                 left: width * 0.2,
 
-                child: _cornerLabel(_surahLabel(page), resolvedTextColor),
+                child: _cornerLabel(_surahLabel(page), labelColor),
               ),
 
               Positioned(
@@ -275,9 +285,7 @@ class MushafTextPage extends StatelessWidget {
 
                 right: 0,
 
-                child: Center(
-                  child: _cornerLabel('$pageNumber', resolvedTextColor),
-                ),
+                child: Center(child: _cornerLabel('$pageNumber', labelColor)),
               ),
             ],
           ],
@@ -288,10 +296,10 @@ class MushafTextPage extends StatelessWidget {
 
   Widget _buildContent(
     MushafPageData page,
-
     Color ayahEndColor,
-
     Color effectiveTextColor,
+    Color bannerColor,
+    Color basmalaColor,
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -391,11 +399,9 @@ class MushafTextPage extends StatelessWidget {
 
                       child: _surahBanner(
                         nextSurah,
-
                         includeBismillah: nextSurah != 9 && nextSurah != 1,
-
-                        effectiveTextColor: effectiveTextColor,
-
+                        effectiveTextColor: bannerColor, // surah name
+                        basmalaColor: basmalaColor, // basmala
                         isDarkMode: isDarkMode,
                       ),
                     )
@@ -843,11 +849,9 @@ class MushafTextPage extends StatelessWidget {
 
   Widget _surahBanner(
     int surahNumber, {
-
     required bool includeBismillah,
-
     required Color effectiveTextColor,
-
+    required Color basmalaColor,
     required bool isDarkMode,
   }) {
     final arabicName = quran.getSurahNameArabic(surahNumber);
@@ -887,8 +891,7 @@ class MushafTextPage extends StatelessWidget {
 
                   height: 1.2,
 
-                  color:
-                      effectiveTextColor, //  Updated to use effectiveTextColor
+                  color: basmalaColor,
                 ),
               ),
             ),

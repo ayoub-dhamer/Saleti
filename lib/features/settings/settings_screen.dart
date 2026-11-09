@@ -45,6 +45,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   late bool _pageFlip;
 
+  late Color? _bannerLight, _bannerDark, _labelLight, _labelDark;
+
+  late Color? _basmalaLight, _basmalaDark;
+
   FontWeight get _previewWeight => switch (_textWeight) {
     400 => FontWeight.normal,
     900 => FontWeight.w900,
@@ -66,6 +70,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _textDark = mc.textDark;
     _ayahLight = mc.ayahLight;
     _ayahDark = mc.ayahDark;
+    _bannerLight = mc.bannerLight;
+    _bannerDark = mc.bannerDark;
+    _labelLight = mc.labelLight;
+    _labelDark = mc.labelDark;
+    _basmalaLight = mc.basmalaLight;
+    _basmalaDark = mc.basmalaDark;
     _textWeight = mc.textWeight;
     _pageFlip = mc.pageFlip;
   }
@@ -87,6 +97,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     mc.textDark = _textDark;
     mc.ayahLight = _ayahLight;
     mc.ayahDark = _ayahDark;
+    mc.bannerLight = _bannerLight;
+    mc.bannerDark = _bannerDark;
+    mc.labelLight = _labelLight;
+    mc.labelDark = _labelDark;
+    mc.basmalaLight = _basmalaLight;
+    mc.basmalaDark = _basmalaDark;
     mc.textWeight = _textWeight;
     mc.pageFlip = _pageFlip;
     await mc.save();
@@ -112,9 +128,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required Color defaultText,
     required Color? text,
     required Color? ayah,
+    required Color? banner,
+    required Color? basmala,
+    required Color? pageLabel,
     required ValueChanged<Color?> onText,
     required ValueChanged<Color?> onAyah,
+    required ValueChanged<Color?> onBanner,
+    required ValueChanged<Color?> onBasmala,
+    required ValueChanged<Color?> onPageLabel,
   }) {
+    final labelStyle = TextStyle(
+      fontFamily: 'amiri',
+      fontSize: 13,
+      fontWeight: FontWeight.bold,
+      color: pageLabel ?? text ?? defaultText,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -129,42 +158,145 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Live preview on that mode's background
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
           ),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ',
-                    style: TextStyle(
-                      fontFamily: 'amiri',
-                      fontSize: 22,
-                      fontWeight: _previewWeight, // was FontWeight.w900
-                      color: text ?? defaultText,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '\u06DD١',
-                    style: TextStyle(
-                      fontFamily: 'amiri',
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: ayah ?? Colors.lightBlue,
-                    ),
-                  ),
-                ],
+          child: Column(
+            children: [
+              // Top labels: juz (right) and surah (left), like the real page
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('الجزء 1', style: labelStyle),
+                    Text('الفاتحة', style: labelStyle),
+                  ],
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
+              const SizedBox(height: 6),
+              // Surah name on the banner image
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 350),
+                  child: AspectRatio(
+                    aspectRatio: 550 / 62,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final previewIsDark = bg.computeLuminance() < 0.5;
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.asset(
+                              previewIsDark
+                                  ? 'assets/images/surah_name_frame_dark.png'
+                                  : 'assets/images/surah_name_frame_light.png',
+                              fit: BoxFit.fill,
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: constraints.maxWidth * 0.16,
+                              ),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'سورة الفاتحة',
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontFamily: 'amiri',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 22,
+                                      color: banner ?? text ?? defaultText,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Basmala
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Text(
+                  'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
+                  style: TextStyle(
+                    fontFamily: 'amiri',
+                    fontSize: 20,
+                    color: basmala ?? text ?? defaultText,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Regular verse + ayah number
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ ',
+                        style: TextStyle(
+                          fontFamily: 'amiri',
+                          fontSize: 22,
+                          fontWeight: _previewWeight,
+                          color: text ?? defaultText,
+                        ),
+                      ),
+                      TextSpan(
+                        text: '\u06DD٢',
+                        style: TextStyle(
+                          fontFamily: 'amiri',
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: ayah ?? Colors.lightBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Bottom label: page number
+              Text('1', style: labelStyle),
+            ],
           ),
         ),
         const SizedBox(height: 10),
+        _colorTile(
+          theme,
+          isDark,
+          label: 'Page labels color (surah, juz, page no.)',
+          current: pageLabel,
+          fallback: text ?? defaultText,
+          onChanged: onPageLabel,
+        ),
+        _colorTile(
+          theme,
+          isDark,
+          label: 'Surah name color',
+          current: banner,
+          fallback: text ?? defaultText,
+          onChanged: onBanner,
+        ),
+        _colorTile(
+          theme,
+          isDark,
+          label: 'Basmala color',
+          current: basmala,
+          fallback: text ?? defaultText,
+          onChanged: onBasmala,
+        ),
         _colorTile(
           theme,
           isDark,
@@ -523,8 +655,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 defaultText: Colors.black,
                 text: _textLight,
                 ayah: _ayahLight,
+                banner: _bannerLight,
+                pageLabel: _labelLight,
+                basmala: _basmalaLight,
                 onText: (c) => setState(() => _textLight = c),
                 onAyah: (c) => setState(() => _ayahLight = c),
+                onBanner: (c) => setState(() => _bannerLight = c),
+                onPageLabel: (c) => setState(() => _labelLight = c),
+                onBasmala: (c) => setState(() => _basmalaLight = c),
               ),
               const SizedBox(height: 18),
               _modeColors(
@@ -535,8 +673,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 defaultText: Colors.white,
                 text: _textDark,
                 ayah: _ayahDark,
+                banner: _bannerDark,
+                pageLabel: _labelDark,
+                basmala: _basmalaDark,
                 onText: (c) => setState(() => _textDark = c),
                 onAyah: (c) => setState(() => _ayahDark = c),
+                onBanner: (c) => setState(() => _bannerDark = c),
+                onPageLabel: (c) => setState(() => _labelDark = c),
+                onBasmala: (c) => setState(() => _basmalaDark = c),
               ),
             ],
           ),
