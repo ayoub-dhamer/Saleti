@@ -172,7 +172,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
+      padding: const EdgeInsets.fromLTRB(15, 16, 15, 22),
       decoration: const BoxDecoration(
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -247,7 +247,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Widget _bookmarksList(ThemeData theme, bool isDark) {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       itemCount: _bookmarks.length,
       itemBuilder: (context, index) {
         final b = _bookmarks[index];
@@ -279,8 +279,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               );
             },
             child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
                 color: theme.cardColor,
                 borderRadius: BorderRadius.circular(18),
@@ -288,8 +288,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               child: Row(
                 children: [
                   Container(
-                    width: 54,
-                    height: 54,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -310,23 +310,30 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _arabicSurahNameForPage(b.page),
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyLarge?.color,
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: _arabicSurahNameForPage(b.page),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' - ${b.surah}',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withValues(alpha: 0.55),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          b.surah,
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withValues(alpha: 0.55),
-                            fontWeight: FontWeight.w600,
-                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
                         Row(

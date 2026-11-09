@@ -75,7 +75,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
   Widget _header(int resultCount) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
+      padding: const EdgeInsets.fromLTRB(15, 16, 15, 22),
       decoration: const BoxDecoration(
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -212,7 +212,7 @@ class _SurahListScreenState extends State<SurahListScreen> {
 
   Widget _surahListView(List<int> surahs, ThemeData theme, bool isDark) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       itemCount: surahs.length,
       itemBuilder: (context, index) {
         final surah = surahs[index];
@@ -260,98 +260,106 @@ class _SurahListScreenState extends State<SurahListScreen> {
     required ThemeData theme,
     required bool isDark,
   }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        HapticFeedback.selectionClick();
-        final int actualStartPage = surahStartPages[surah] ?? 1;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          final int actualStartPage = surahStartPages[surah] ?? 1;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MushafPageScreen(
-              startPage: actualStartPage,
-              storageKey: 'last_jumped_page',
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MushafPageScreen(
+                startPage: actualStartPage,
+                storageKey: 'last_jumped_page',
+              ),
             ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: theme.cardColor,
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: theme.cardColor,
-        ),
-        child: Row(
-          children: [
-            _surahNumberBadge(surah),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            children: [
+              _surahNumberBadge(surah),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: getSurahNameArabic(surah),
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' - ${getSurahName(surah)}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        _miniBadge('$ayat Ayat', isDark),
+                        const SizedBox(width: 6),
+                        _miniBadge(
+                          '$pages ${pages == 1 ? 'Page' : 'Pages'}',
+                          isDark,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    getSurahNameArabic(surah),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyLarge?.color,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.menu_book_rounded,
+                      size: 18,
+                      color: primaryGreen,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    getSurahName(surah),
-                    style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withValues(
-                        alpha: 0.55,
-                      ),
-                      fontWeight: FontWeight.w600,
+                    'page $startPage',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: primaryGreen,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      _miniBadge('$ayat Ayat', isDark),
-                      const SizedBox(width: 6),
-                      _miniBadge(
-                        '$pages ${pages == 1 ? 'Page' : 'Pages'}',
-                        isDark,
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: primaryGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.menu_book_rounded,
-                    size: 18,
-                    color: primaryGreen,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'page $startPage',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: primaryGreen,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -379,8 +387,8 @@ class _SurahListScreenState extends State<SurahListScreen> {
 
   Widget _surahNumberBadge(int number) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 50,
+      height: 50,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [primaryGreen, secondaryGreen],

@@ -88,12 +88,12 @@ class QuranScreen extends StatelessWidget {
           _header(),
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               itemCount: _items.length,
               itemBuilder: (context, index) {
                 final item = _items[index];
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: _AnimatedMainCard(
                     index: index,
                     icon: item.icon,
@@ -128,7 +128,7 @@ class QuranScreen extends StatelessWidget {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(15, 20, 15, 26),
+      padding: const EdgeInsets.fromLTRB(15, 16, 15, 22),
       decoration: const BoxDecoration(
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -209,7 +209,7 @@ class _AnimatedMainCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
             color: theme.cardColor,
             borderRadius: BorderRadius.circular(18),
@@ -217,8 +217,8 @@ class _AnimatedMainCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -226,11 +226,11 @@ class _AnimatedMainCard extends StatelessWidget {
                       secondaryGreen.withValues(alpha: 0.15),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, size: 28, color: primaryGreen),
+                child: Icon(icon, size: 26, color: primaryGreen),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,7 +243,7 @@ class _AnimatedMainCard extends StatelessWidget {
                         color: theme.textTheme.bodyLarge?.color,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: TextStyle(
