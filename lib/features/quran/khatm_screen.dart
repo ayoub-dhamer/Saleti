@@ -135,10 +135,10 @@ class _KhatmScreenState extends State<KhatmScreen> {
   }
 
   Future<void> _confirmDeleteYear(int year) async {
-    final theme = Theme.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final theme = Theme.of(context); // fresh, tied to the dialog
         return AlertDialog(
           backgroundColor: theme.cardColor, // CHANGED
           shape: RoundedRectangleBorder(
@@ -197,33 +197,41 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: theme.cardColor, // CHANGED
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          'Confirm Cycle Completion',
-          style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-        ), // CHANGED
-        content: Text(
-          isLastCycle
-              ? 'This will finish the FINAL cycle and complete the year. Continue?'
-              : 'This will move you to the next cycle while keeping your current page. Continue?',
-          style: TextStyle(
-            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-          ), // CHANGED
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          backgroundColor: theme.cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          title: Text(
+            'Confirm Cycle Completion',
+            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
           ),
-        ],
-      ),
+          content: Text(
+            isLastCycle
+                ? 'This will finish the FINAL cycle and complete the year. Continue?'
+                : 'This will move you to the next cycle while keeping your current page. Continue?',
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text(
+                'Confirm',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) return;
@@ -1056,7 +1064,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
 
   Future<void> _configurePlan() async {
     final activeYear = _activeYear;
-    final theme = Theme.of(context);
 
     if (activeYear != null) {
       final totalPages = activeYear.targetCompletions * 604;
@@ -1066,31 +1073,40 @@ class _KhatmScreenState extends State<KhatmScreen> {
       if (pagesDone < totalPages) {
         await showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            backgroundColor: theme.cardColor, // CHANGED
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            title: Text(
-              "Active Plan Exists",
-              style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-            ), // CHANGED
-            content: Text(
-              "You already have an active Khatm plan for ${activeYear.year}. You must complete this plan before starting a new one.",
-              style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withValues(
-                  alpha: 0.7,
-                ),
-              ), // CHANGED
-            ),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK", style: TextStyle(color: Colors.white)),
+          builder: (dialogContext) {
+            final theme = Theme.of(dialogContext);
+            return AlertDialog(
+              backgroundColor: theme.cardColor,
+
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-            ],
-          ),
+              title: Text(
+                "Active Plan Exists",
+                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+              ), // CHANGED
+              content: Text(
+                "You already have an active Khatm plan for ${activeYear.year}. You must complete this plan before starting a new one.",
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.7,
+                  ),
+                ), // CHANGED
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                  ),
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
         );
         return;
       }

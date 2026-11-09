@@ -257,11 +257,11 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showLocationDialog() async {
-    final theme = Theme.of(context);
     final allow = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext); // fresh, tied to the dialog
         return AlertDialog(
           backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(
@@ -279,12 +279,12 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Not Now'),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text(
                 'Enable',
                 style: TextStyle(color: Colors.white),

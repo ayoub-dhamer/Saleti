@@ -1551,10 +1551,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen>
     return showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      backgroundColor:
+          Colors.transparent, // the sheet paints its own background
       builder: (_) => _DurationPickerSheet(initialMinutes: currentMinutes),
     );
   }
@@ -1604,65 +1602,71 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 24, bottom: 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Reminder Before Prayer',
-            style: TextStyle(
-              color: theme.textTheme.bodyLarge?.color,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 220,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _wheel(
-                    theme: theme,
-                    label: 'Hours',
-                    controller: _hoursCtrl,
-                    max: 24,
-                    onChanged: (v) => setState(() => hours = v),
-                  ),
-                  _wheel(
-                    theme: theme,
-                    label: 'Minutes',
-                    controller: _minutesCtrl,
-                    max: 60,
-                    onChanged: (v) => setState(() => minutes = v),
-                  ),
-                ],
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor, // read live, so it follows theme changes
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Reminder Before Prayer',
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 220,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _wheel(
+                      theme: theme,
+                      label: 'Hours',
+                      controller: _hoursCtrl,
+                      max: 24,
+                      onChanged: (v) => setState(() => hours = v),
+                    ),
+                    _wheel(
+                      theme: theme,
+                      label: 'Minutes',
+                      controller: _minutesCtrl,
+                      max: 60,
+                      onChanged: (v) => setState(() => minutes = v),
+                    ),
+                  ],
                 ),
               ),
-              onPressed: () => Navigator.pop(context, hours * 60 + minutes),
-              child: const Text(
-                'SET REMINDER',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context, hours * 60 + minutes),
+                child: const Text(
+                  'SET REMINDER',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

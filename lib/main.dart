@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,17 +15,10 @@ import 'utils/prayer_cache.dart';
 import 'utils/religious_settings.dart';
 import 'package:saleti/utils/theme_controller.dart';
 import 'package:saleti/utils/app_theme.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
-  // FIXED (bug #11): the startup sequence used to be a flat chain of about
-  // a dozen unguarded awaits — Hive boxes, settings, alarm scheduling,
-  // permission checks. Any single one throwing (a corrupt Hive box, a
-  // malformed prayer_settings JSON left over from a bad write, ...) sent
-  // the exception straight out of main(): runApp() was never reached, so
-  // there was no error screen, no crash report, just an indefinitely
-  // blank splash. runZonedGuarded is also the standard hook point for a
-  // crash reporter (Crashlytics/Sentry/etc.) — wire one in where marked
-  // below once you pick one.
   runZonedGuarded(
     () async {
       await _bootstrap();
@@ -60,11 +52,6 @@ Future<void> _bootstrap() async {
     await _openBoxSafely<DailyKhatmLog>('khatm_logs');
     await _openBoxSafely<SurahGoal>('surah_goals');
 
-    // ADDED (polish #2): must load before anything below computes prayer
-    // times (Eid reminder scheduling further down, and every screen once
-    // the app is up) — otherwise the first calculation of the session
-    // would silently use ReligiousSettings' hard-coded defaults instead
-    // of whatever the user had configured.
     await _tryStep('load religious settings', ReligiousSettings.load);
     await _tryStep('load PrayerCache', PrayerCache().load);
     await _tryStep(
@@ -72,35 +59,11 @@ Future<void> _bootstrap() async {
       NotificationService.loadSettings,
     );
     await _tryStep('load Eid offset', NotificationService.loadEidOffset);
+
     await _tryStep('init notifications', NotificationService.init);
-
-    await _tryStep('init alarm manager', AndroidAlarmManager.initialize);
-    await _tryStep(
-      'schedule daily rescheduler',
-      NotificationService.scheduleDailyRescheduler,
-    );
-    await _tryStep(
-      'schedule reboot catch-up',
-      NotificationService.scheduleRebootCatchUp,
-    );
-    await _tryStep(
-      'schedule Friday reminder',
-      NotificationService.scheduleFridayReminder,
-    );
-
-    // catch the case where the app is opened already on Eid day
-    if (PrayerCache().hasLocation) {
-      await _tryStep(
-        'schedule Eid reminder',
-        () => NotificationService.scheduleEidReminderIfApplicable(
-          todaysPrayerTimes: PrayerCache().calculatePrayerTimes(),
-        ),
-      );
-    }
 
     await _tryStep('load theme', ThemeController().load);
 
-    // ------------------- Decide Entry -------------------
     final onboardingDone =
         await _tryStep('read onboarding flag', hasCompletedOnboarding) ?? false;
 
@@ -114,26 +77,17 @@ Future<void> _bootstrap() async {
           false;
     }
 
-    await MushafColorSettings().load();
+    await _tryStep('load Mushaf colors', MushafColorSettings().load);
 
     runApp(SaletiApp(skipOnboarding: allGranted));
+
+    unawaited(_scheduleBackgroundWork());
   } catch (e, st) {
-    // FIXED (bug #11): every step above already guards itself via
-    // _tryStep/_openBoxSafely, so reaching here means something truly
-    // unexpected slipped through. runApp() still gets called either way —
-    // an indefinitely blank splash is worse than a plain "couldn't start"
-    // screen the user can at least see and report.
     debugPrint('Fatal startup error: $e\n$st');
     runApp(const _StartupErrorApp());
   }
 }
 
-/// Runs [action] and swallows any error, logging it and returning null
-/// instead of letting it escape and abort the rest of startup. Most of
-/// these steps are independent of each other — a failure to, say, schedule
-/// the Friday reminder has no business preventing the app from opening at
-/// all — so each gets its own isolated failure instead of one shared
-/// all-or-nothing chain.
 Future<T?> _tryStep<T>(String label, Future<T> Function() action) async {
   try {
     return await action();
@@ -143,30 +97,67 @@ Future<T?> _tryStep<T>(String label, Future<T> Function() action) async {
   }
 }
 
-/// Opens a Hive box, resetting it once if it fails to open at all (a
-/// corrupt box on disk, a schema mismatch after a bad shutdown, ...)
-/// instead of taking down the rest of startup with it. This trades that
-/// one box's data for the app still being usable — far better than a
-/// permanently unrecoverable blank splash. If even the fresh box fails to
-/// open, that's a real underlying problem (storage/permissions), and it's
-/// left to propagate to _bootstrap's outer catch.
-Future<Box<T>> _openBoxSafely<T>(String name) async {
-  try {
-    return await Hive.openBox<T>(name);
-  } catch (e) {
-    debugPrint('Hive box "$name" failed to open ($e) — resetting it.');
-    try {
-      await Hive.deleteBoxFromDisk(name);
-    } catch (_) {
-      // Best effort — fall through to the retry regardless.
-    }
-    return await Hive.openBox<T>(name);
+Future<void> _scheduleBackgroundWork() async {
+  await _tryStep(
+    'schedule daily rescheduler',
+    NotificationService.scheduleDailyRescheduler,
+  );
+  await _tryStep(
+    'schedule reboot catch-up',
+    NotificationService.scheduleRebootCatchUp,
+  );
+  await _tryStep(
+    'schedule Friday reminder',
+    NotificationService.scheduleFridayReminder,
+  );
+
+  if (PrayerCache().hasLocation) {
+    await _tryStep(
+      'schedule Eid reminder',
+      () => NotificationService.scheduleEidReminderIfApplicable(
+        todaysPrayerTimes: PrayerCache().calculatePrayerTimes(),
+      ),
+    );
   }
 }
 
-/// ------------------- CHECK CRITICAL PERMISSIONS -------------------
+Future<Box<T>> _openBoxSafely<T>(String name) async {
+  const attempts = 3;
+
+  for (var i = 0; i < attempts; i++) {
+    try {
+      return await Hive.openBox<T>(name);
+    } catch (e) {
+      debugPrint(
+        'Hive box "$name" failed to open (attempt ${i + 1}/$attempts): $e',
+      );
+      if (i < attempts - 1) {
+        await Future.delayed(Duration(milliseconds: 250 * (i + 1)));
+      }
+    }
+  }
+
+  debugPrint('Hive box "$name" is unreadable — backing up and resetting it.');
+  await _backupBoxFile(name);
+  try {
+    await Hive.deleteBoxFromDisk(name);
+  } catch (_) {}
+  return await Hive.openBox<T>(name);
+}
+
+Future<void> _backupBoxFile(String name) async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/${name.toLowerCase()}.hive');
+    if (await file.exists()) {
+      await file.copy('${file.path}.corrupt');
+    }
+  } catch (e) {
+    debugPrint('Could not back up Hive box "$name": $e');
+  }
+}
+
 Future<bool> _allCriticalPermissionsGranted() async {
-  // Location
   bool locationGranted = false;
   if (await Geolocator.isLocationServiceEnabled()) {
     final perm = await Geolocator.checkPermission();
@@ -175,24 +166,13 @@ Future<bool> _allCriticalPermissionsGranted() async {
         perm == LocationPermission.whileInUse;
   }
 
-  // Notifications
   final notificationGranted = await Permission.notification.isGranted;
 
-  // Exact Alarm
   final alarmOk = await ExactAlarmPermission.isGranted();
 
-  // FIXED (Store/legal #1): battery-optimization exemption is no longer
-  // part of onboarding or this "critical" check — see setup_onboarding_
-  // screen.dart for why. Whether it's granted no longer affects whether
-  // onboarding gets skipped on a later launch.
   return locationGranted && notificationGranted && alarmOk;
 }
 
-/// FIXED (bug #11): shown only if startup fails so completely that even
-/// the per-step guards above didn't contain it. Deliberately depends on
-/// nothing from the failed startup — no Hive, no NotificationService, no
-/// ThemeController — just plain Material, so it's guaranteed to render
-/// rather than risk failing itself.
 class _StartupErrorApp extends StatelessWidget {
   const _StartupErrorApp();
 

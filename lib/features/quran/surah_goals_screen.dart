@@ -102,12 +102,12 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
   }
 
   Future<void> _confirmDelete(SurahGoal goal) async {
-    final theme = Theme.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final theme = Theme.of(context); // fresh, tied to the dialog
         return AlertDialog(
-          backgroundColor: theme.cardColor, // CHANGED
+          backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -460,42 +460,50 @@ class _SurahGoalsScreenState extends State<SurahGoalsScreen>
                           HapticFeedback.selectionClick();
                           final confirm = await showDialog<bool>(
                             context: context,
-                            builder: (_) => AlertDialog(
-                              backgroundColor: theme.cardColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              title: Text(
-                                'Confirm Recitation',
-                                style: TextStyle(
-                                  color: theme.textTheme.bodyLarge?.color,
+                            builder: (dialogContext) {
+                              final dialogTheme = Theme.of(dialogContext);
+                              return AlertDialog(
+                                backgroundColor: dialogTheme.cardColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-                              ),
-                              content: Text(
-                                'Did you finish reciting this surah?',
-                                style: TextStyle(
-                                  color: theme.textTheme.bodyMedium?.color
-                                      ?.withValues(alpha: 0.7),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryGreen,
-                                  ),
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text(
-                                    'Yes',
-                                    style: TextStyle(color: Colors.white),
+                                title: Text(
+                                  'Confirm Recitation',
+                                  style: TextStyle(
+                                    color:
+                                        dialogTheme.textTheme.bodyLarge?.color,
                                   ),
                                 ),
-                              ],
-                            ),
+                                content: Text(
+                                  'Did you finish reciting this surah?',
+                                  style: TextStyle(
+                                    color: dialogTheme
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color
+                                        ?.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryGreen,
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, true),
+                                    child: const Text(
+                                      'Yes',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           );
 
                           if (confirm == true) {

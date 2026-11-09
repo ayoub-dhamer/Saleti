@@ -244,34 +244,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<Color?> _pickColor(Color initial) {
     Color temp = initial;
-    final theme = Theme.of(context);
     return showDialog<Color>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: theme.cardColor,
-        contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-        content: SingleChildScrollView(
-          child: ColorPicker(
-            pickerColor: initial,
-            onColorChanged: (c) => temp = c,
-            enableAlpha: false,
-            hexInputBar: true,
-            labelTypes: const [],
-            pickerAreaHeightPercent: 0.7,
+      builder: (ctx) {
+        final theme = Theme.of(ctx); // fresh, tied to the dialog
+        return AlertDialog(
+          backgroundColor: theme.cardColor,
+          contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              pickerColor: initial,
+              onColorChanged: (c) => temp = c,
+              enableAlpha: false,
+              hexInputBar: true,
+              labelTypes: const [],
+              pickerAreaHeightPercent: 0.7,
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-            onPressed: () => Navigator.pop(ctx, temp),
-            child: const Text('Select', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
+              onPressed: () => Navigator.pop(ctx, temp),
+              child: const Text(
+                'Select',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

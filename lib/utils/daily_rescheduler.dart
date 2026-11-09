@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:saleti/utils/religious_settings.dart';
 import 'notification_service.dart';
 import 'prayer_cache.dart';
 
@@ -6,6 +7,7 @@ import 'prayer_cache.dart';
 Future<void> dailyRescheduleCallback() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await ReligiousSettings.load();
   await NotificationService.loadSettings();
   await NotificationService.loadEidOffset(); // ADD — needed for the offset value
 

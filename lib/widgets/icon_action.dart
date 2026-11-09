@@ -62,8 +62,12 @@ class _TapScaleInnerState extends State<_TapScaleInner> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => setState(() => _scale = 0.9),
-      onTapUp: (_) => setState(() => _scale = 1),
-      onTapCancel: () => setState(() => _scale = 1),
+      onTapUp: (_) {
+        if (mounted) setState(() => _scale = 1);
+      },
+      onTapCancel: () {
+        if (mounted) setState(() => _scale = 1);
+      },
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       child: AnimatedScale(

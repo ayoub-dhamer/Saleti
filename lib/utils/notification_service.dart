@@ -435,9 +435,8 @@ class NotificationService {
     final id = alarmId(prayer, 'azan', dayOffset: dayOffset);
     final setting = prayerSettings[prayer]!;
     final enabled = setting['azan'] == true;
-    final volume = (setting['volume'] is double)
-        ? setting['volume'] as double
-        : 1.0;
+    final rawVolume = setting['volume'];
+    final volume = rawVolume is num ? rawVolume.toDouble() : 1.0;
 
     if (!enabled || time == null || !time.isAfter(DateTime.now())) {
       await cancelAzan(id);

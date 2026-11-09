@@ -1027,47 +1027,43 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                   onTap: () async {
                     final confirm = await showDialog<bool>(
                       context: context,
-
-                      builder: (_) => AlertDialog(
-                        backgroundColor: theme.cardColor, //  CHANGED
-                        title: Text(
-                          'Finish Cycle?',
-
-                          style: TextStyle(
-                            color: theme.textTheme.bodyLarge?.color,
-                          ),
-                        ), //  CHANGED
-                        content: Text(
-                          'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
-
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color
-                                ?.withValues(alpha: 0.7),
-                          ), //  CHANGED
-                        ),
-
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-
-                            child: const Text('Cancel'),
-                          ),
-
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryGreen,
-                            ),
-
-                            onPressed: () => Navigator.pop(context, true),
-
-                            child: const Text(
-                              'Yes',
-
-                              style: TextStyle(color: Colors.white),
+                      builder: (dialogContext) {
+                        final dialogTheme = Theme.of(dialogContext);
+                        return AlertDialog(
+                          backgroundColor: dialogTheme.cardColor,
+                          title: Text(
+                            'Finish Cycle?',
+                            style: TextStyle(
+                              color: dialogTheme.textTheme.bodyLarge?.color,
                             ),
                           ),
-                        ],
-                      ),
+                          content: Text(
+                            'You have reached the last page. Do you want to finish this cycle and go back to page 1?',
+                            style: TextStyle(
+                              color: dialogTheme.textTheme.bodyMedium?.color
+                                  ?.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryGreen,
+                              ),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: const Text(
+                                'Yes',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     );
 
                     if (confirm == true) {
@@ -1134,53 +1130,52 @@ class _MushafPageScreenState extends State<MushafPageScreen>
                       child: _AnimatedActionButton(
                         label: 'Count Recitation',
                         onTap: () async {
-                          final theme = Theme.of(context);
-
                           final confirm = await showDialog<bool>(
                             context: context,
-                            builder: (_) => AlertDialog(
-                              backgroundColor: theme.cardColor,
-                              title: Text(
-                                'Mark Surah Completed?',
-                                style: TextStyle(
-                                  color: theme.textTheme.bodyLarge?.color,
-                                ),
-                              ),
-                              content: Text(
-                                'You reached the end of ${widget.surahGoal!.surahName}. '
-                                'Do you want to count this recitation toward your goal?',
-                                style: TextStyle(
-                                  color: theme.textTheme.bodyMedium?.color
-                                      ?.withValues(alpha: 0.7),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryGreen,
-                                  ),
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text(
-                                    'Yes',
-                                    style: TextStyle(color: Colors.white),
+                            builder: (dialogContext) {
+                              final theme = Theme.of(dialogContext);
+                              return AlertDialog(
+                                backgroundColor: theme.cardColor,
+                                title: Text(
+                                  'Mark Surah Completed?',
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodyLarge?.color,
                                   ),
                                 ),
-                              ],
-                            ),
+                                content: Text(
+                                  'You reached the end of ${widget.surahGoal!.surahName}. '
+                                  'Do you want to count this recitation toward your goal?',
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryGreen,
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, true),
+                                    child: const Text(
+                                      'Yes',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           );
 
                           if (confirm == true) {
                             final service = SurahGoalService();
-
                             await service.incrementProgress(widget.surahGoal!);
-
                             if (!context.mounted) return;
-
                             Navigator.pop(context, true);
                           }
                         },

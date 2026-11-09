@@ -21,15 +21,15 @@ class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
         AnimationController(vsync: this, duration: const Duration(seconds: 1))
           ..addStatusListener((status) {
             if (status == AnimationStatus.completed) {
-              widget.onConfirmed();
               _reset();
+              widget.onConfirmed();
             }
           });
   }
 
   void _reset() {
     _controller.reset();
-    setState(() => _isHolding = false);
+    if (mounted) setState(() => _isHolding = false);
   }
 
   @override
@@ -45,7 +45,7 @@ class _HoldToDeleteButtonState extends State<HoldToDeleteButton>
 
   void _cancelHold() {
     _controller.reset();
-    setState(() => _isHolding = false);
+    if (mounted) setState(() => _isHolding = false);
   }
 
   @override

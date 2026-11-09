@@ -351,11 +351,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   Future<void> _deleteDua(int index) async {
     final id = _duaList[index].id;
-    final theme = Theme.of(context);
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
+        // Read the theme here, from the dialog's own context, so it
+        // rebuilds when the app theme changes while the dialog is open.
+        final theme = Theme.of(context);
         return AlertDialog(
           backgroundColor: theme.cardColor, // CHANGED
           shape: RoundedRectangleBorder(
