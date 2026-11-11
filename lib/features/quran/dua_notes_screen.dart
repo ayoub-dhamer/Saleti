@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/utils/hold_to_delete_button.dart';
@@ -20,7 +19,6 @@ String _newDuaId([int salt = 0]) =>
     '${DateTime.now().microsecondsSinceEpoch}_$salt';
 
 class _DuaNotesScreenState extends State<DuaNotesScreen> {
-  final TextEditingController _addController = TextEditingController();
   List<_Dua> _duaList = [];
   bool _isGalleryMode = false;
 
@@ -58,8 +56,36 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   void dispose() {
     WakelockPlus.disable();
     _pageController?.dispose();
-    _addController.dispose();
     super.dispose();
+  }
+
+  void _tapCounter(_Dua dua) {
+    if (!dua.hasCounter) return;
+    if (dua.isDone) {
+      HapticFeedback.lightImpact();
+      return;
+    }
+    setState(() => dua.count++);
+    if (dua.isDone) {
+      HapticFeedback.heavyImpact();
+    } else {
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _resetCounter(_Dua dua) {
+    HapticFeedback.mediumImpact();
+    setState(() => dua.count = 0);
+  }
+
+  void _changeFont(_Dua dua, double delta) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      dua.fontSize = (dua.fontSize + delta)
+          .clamp(_minFontSize, _maxFontSize)
+          .toDouble();
+    });
+    _persist();
   }
 
   Future<void> _loadDuaNotes() async {
@@ -244,89 +270,36 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  void _increaseFont(int index) {
-    HapticFeedback.selectionClick();
-    final dua = _visible[index];
-    setState(() {
-      dua.fontSize = (dua.fontSize + _fontStep)
-          .clamp(_minFontSize, _maxFontSize)
-          .toDouble();
-    });
-    _persist();
-  }
-
-  void _decreaseFont(int index) {
-    HapticFeedback.selectionClick();
-    final dua = _visible[index];
-    setState(() {
-      dua.fontSize = (dua.fontSize - _fontStep)
-          .clamp(_minFontSize, _maxFontSize)
-          .toDouble();
-    });
-    _persist();
-  }
-
   // ───────────── Dialogs ─────────────
 
-  void _showAddDialog() {
-    _addController.clear();
+  void _showEditor({_Dua? dua}) {
+    final id = dua?.id;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Add Dua',
+      barrierLabel: dua == null ? 'Add Dua' : 'Edit Dua',
       barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-      transitionBuilder: (context, anim, secondaryAnim, child) {
+      pageBuilder: (_, _, _) => _DuaEditorDialog(
+        title: dua == null ? "New Du'a" : "Edit Du'a",
+        categories: _categories,
+        onCreateCategory: _addCategory,
+        initialText: dua?.text ?? '',
+        initialCategories: dua != null
+            ? List<String>.of(dua.categories)
+            : (_selectedCategory == null ? [] : [_selectedCategory!]),
+        initialTarget: dua?.target ?? 0,
+        onSave: (text, cats, target) => id == null
+            ? _saveDua(text, cats, target)
+            : _updateDua(id, text, cats, target),
+      ),
+      transitionBuilder: (_, anim, _, child) {
         final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
-        return Transform.scale(
-          scale: 0.9 + (0.1 * curved.value.clamp(0.0, 1.0)),
-          child: Opacity(
-            opacity: anim.value.clamp(0.0, 1.0),
-            child: _DuaEditorDialog(
-              title: "New Du'a",
-              categories: _categories,
-              onCreateCategory: _addCategory,
-              initialText: '',
-              initialCategories: _selectedCategory == null
-                  ? []
-                  : [_selectedCategory!],
-              onSave: (text, cats) => _saveDua(text, cats),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showEditDialog(int index) {
-    // Capture the id now: the dialog is async, and an index could point at a
-    // different du'a by the time the user taps save.
-    final id = _visible[index].id;
-    final initialText = _visible[index].text;
-    final initialCategories = List<String>.of(_visible[index].categories);
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Edit Dua',
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-      transitionBuilder: (context, anim, secondaryAnim, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
-        return Transform.scale(
-          scale: 0.9 + (0.1 * curved.value.clamp(0.0, 1.0)),
-          child: Opacity(
-            opacity: anim.value.clamp(0.0, 1.0),
-            child: _DuaEditorDialog(
-              title: "Edit Du'a",
-              categories: _categories,
-              onCreateCategory: _addCategory,
-              initialText: initialText,
-              initialCategories: initialCategories,
-              onSave: (text, cats) => _updateDua(id, text, cats),
-            ),
+        return FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
+            child: child,
           ),
         );
       },
@@ -335,30 +308,155 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
   // ───────────── Storage Logic ─────────────
 
-  Future<void> _saveDua(String dua, List<String> cats) async {
-    if (dua.trim().isEmpty) return;
+  Future<void> _saveDua(String text, List<String> cats, int target) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || !mounted) return;
     setState(() {
       _duaList.insert(
         0,
-        _Dua(id: _newDuaId(), text: dua.trim(), categories: cats),
+        _Dua(
+          id: _newDuaId(),
+          text: trimmed,
+          categories: List<String>.of(cats),
+          target: target,
+        ),
       );
     });
     await _persist();
   }
 
-  Future<void> _updateDua(String id, String dua, List<String> cats) async {
-    if (dua.trim().isEmpty) return;
-    final index = _duaList.indexWhere((d) => d.id == id);
-    if (index < 0) return;
+  Future<void> _updateDua(
+    String id,
+    String text,
+    List<String> cats,
+    int target,
+  ) async {
+    final trimmed = text.trim();
+    final dua = _duaList.where((d) => d.id == id).firstOrNull;
+    if (trimmed.isEmpty || dua == null || !mounted) return;
     setState(() {
-      _duaList[index].text = dua.trim();
-      _duaList[index].categories = cats;
+      dua.text = trimmed;
+      dua.categories = List<String>.of(cats);
+      dua.target = target;
+      dua.count = 0;
     });
     await _persist();
   }
 
-  Future<void> _deleteDua(int index) async {
-    final id = _visible[index].id;
+  Widget _counterButton(_Dua dua, ThemeData theme, bool isDark) {
+    final done = dua.isDone;
+    final progress = dua.target == 0 ? 0.0 : dua.count / dua.target;
+
+    return MediaQuery(
+      // fixed-size circle: ignore system text scaling
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dua.count > 0) ...[
+            IconAction(
+              label: 'Reset counter',
+              onTap: () => _resetCounter(dua),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isDark ? theme.cardColor : Colors.white).withValues(
+                    alpha: 0.92,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.08,
+                      ),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.refresh_rounded,
+                  size: 18,
+                  color: primaryGreen,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          TapScale(
+            onTap: () => _tapCounter(dua),
+            child: SizedBox(
+              width: 88,
+              height: 88,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 5,
+                      backgroundColor: primaryGreen.withValues(alpha: 0.18),
+                      valueColor: AlwaysStoppedAnimation(
+                        done ? Colors.amber : primaryGreen,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.all(9),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: done ? Colors.amber.shade400 : primaryGreen,
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryGreen.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: done
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: Colors.black,
+                            size: 34,
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${dua.count}',
+                                textDirection: TextDirection.ltr,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '/ ${dua.target}',
+                                textDirection: TextDirection.ltr,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteDua(_Dua dua) async {
+    final id = dua.id;
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -367,7 +465,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         // rebuilds when the app theme changes while the dialog is open.
         final theme = Theme.of(context);
         return AlertDialog(
-          backgroundColor: theme.cardColor, // CHANGED
+          backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -376,7 +474,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             style: TextStyle(
               fontFamily: arabicFont,
               color: theme.textTheme.bodyLarge?.color,
-            ), // CHANGED
+            ),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -388,7 +486,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   color: theme.textTheme.bodyMedium?.color?.withValues(
                     alpha: 0.7,
                   ),
-                ), // CHANGED
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -424,11 +522,35 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     }
   }
 
-  void _openGalleryAt(int index) {
+  void _reorder(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
+    if (oldIndex == newIndex) return;
+
+    // Reorder the currently visible du'as...
+    final reordered = List<_Dua>.of(_visible);
+    reordered.insert(newIndex, reordered.removeAt(oldIndex));
+
+    // ...then put them back into the slots they occupied in the full list,
+    // so du'as hidden by a category filter keep their positions.
+    final ids = {for (final d in reordered) d.id};
+    final slots = [
+      for (var i = 0; i < _duaList.length; i++)
+        if (ids.contains(_duaList[i].id)) i,
+    ];
+    setState(() {
+      for (var k = 0; k < slots.length; k++) {
+        _duaList[slots[k]] = reordered[k];
+      }
+    });
+    _persist();
+  }
+
+  void _openGallery(int index) {
     if (_visible.isEmpty) return;
     setState(() {
       _isGalleryMode = true;
       _galleryIndex = index;
+      _pageController?.dispose();
       _pageController = PageController(
         initialPage: index,
         viewportFraction: 0.9,
@@ -516,10 +638,10 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       canPop: !_isGalleryMode,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        setState(() => _isGalleryMode = false);
+        _exitGalleryMode();
       },
       child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor, // CHANGED
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
           elevation: 0,
           centerTitle: true,
@@ -574,6 +696,9 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   void _exitGalleryMode() {
     setState(() {
       _isGalleryMode = false;
+      for (final d in _duaList) {
+        d.count = 0;
+      }
     });
   }
 
@@ -602,7 +727,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
               Text(
                 _duaList.isEmpty
                     ? "Heartfelt whispers"
-                    : "${_duaList.length} saved ${_duaList.length == 1 ? 'du\'a' : 'du\'as'}",
+                    : "${_duaList.length} saved ${_duaList.length == 1 ? "du'a" : "du'as"}",
                 style: const TextStyle(
                   fontFamily: arabicFont,
                   color: Colors.white70,
@@ -614,24 +739,11 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           Row(
             children: [
               IconAction(
-                label: _isGalleryMode
-                    ? 'Switch to list view'
-                    : 'Switch to gallery view',
+                label: 'Open gallery view',
                 onTap: () {
                   if (_visible.isEmpty) return;
                   HapticFeedback.selectionClick();
-                  setState(() {
-                    if (_isGalleryMode) {
-                      _isGalleryMode = false;
-                    } else {
-                      _isGalleryMode = true;
-                      _galleryIndex = _visible.length - 1;
-                      _pageController = PageController(
-                        initialPage: _visible.length - 1,
-                        viewportFraction: 0.9,
-                      );
-                    }
-                  });
+                  _openGallery(_visible.length - 1);
                 },
                 child: Container(
                   padding: const EdgeInsets.all(10),
@@ -640,10 +752,8 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white30),
                   ),
-                  child: Icon(
-                    _isGalleryMode
-                        ? Icons.list_rounded
-                        : Icons.auto_stories_rounded,
+                  child: const Icon(
+                    Icons.auto_stories_rounded,
                     color: Colors.white,
                   ),
                 ),
@@ -653,7 +763,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 label: "Add a new dua",
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  _showAddDialog();
+                  _showEditor();
                 },
                 child: Container(
                   padding: const EdgeInsets.all(10),
@@ -686,16 +796,24 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         ),
       );
     }
-    return ListView.builder(
+    return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       itemCount: visible.length,
-      itemBuilder: (_, i) => _duaCard(i, theme, isDark),
+      buildDefaultDragHandles: false, // no drag icons, long press only
+      onReorderStart: (_) => HapticFeedback.mediumImpact(),
+      onReorder: _reorder,
+      proxyDecorator: (child, index, animation) =>
+          Material(type: MaterialType.transparency, child: child),
+      itemBuilder: (_, i) => ReorderableDelayedDragStartListener(
+        key: ValueKey(visible[i].id),
+        index: i,
+        child: _duaCard(visible[i], i, theme, isDark),
+      ),
     );
   }
 
-  Widget _duaCard(int index, ThemeData theme, bool isDark) {
+  Widget _duaCard(_Dua dua, int index, ThemeData theme, bool isDark) {
     return TweenAnimationBuilder<double>(
-      key: ValueKey('dua_${_visible[index].id}'),
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 300 + (index.clamp(0, 6) * 40)),
       curve: Curves.easeOutCubic,
@@ -711,24 +829,24 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: theme.cardColor, // CHANGED
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: primaryGreen.withValues(alpha: isDark ? 0.15 : 0.1),
                 blurRadius: 18,
                 spreadRadius: 1,
-              ), // CHANGED
+              ),
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
-              ), // CHANGED
+              ),
             ],
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
-            onTap: () => _openGalleryAt(index),
+            onTap: () => _openGallery(index),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Column(
@@ -736,7 +854,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 children: [
                   Row(
                     children: [
-                      // 1. "Tap to view" + Icon (Placed FIRST to render on the RIGHT in RTL mode)
                       Text(
                         "Tap to view",
                         style: TextStyle(
@@ -758,8 +875,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
 
                       const Spacer(),
 
-                      // 2. Index Circle (Placed LAST to render on the LEFT in RTL mode)
-                      // Index Circle (Placed LAST to render on the LEFT in RTL mode)
                       Container(
                         width: 26,
                         height: 26,
@@ -768,7 +883,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                           color: primaryGreen.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
-                        // ADD: same text-scale lock — this is a fixed 26x26 circle
                         child: MediaQuery(
                           data: MediaQuery.of(
                             context,
@@ -788,7 +902,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _visible[index].text,
+                    dua.text,
                     textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
                     maxLines: 3,
@@ -798,14 +912,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                       height: 1.7,
-                      color: theme.textTheme.bodyLarge?.color, // CHANGED
+                      color: theme.textTheme.bodyLarge?.color,
                     ),
                   ),
                   Divider(
                     height: 20,
                     color: isDark ? Colors.white.withValues(alpha: 0.08) : null,
-                  ), // CHANGED
-                  _cardActions(index, isDark),
+                  ),
+                  _cardActions(dua, isDark),
                 ],
               ),
             ),
@@ -815,12 +929,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
-  Widget _cardActions(int index, bool isDark) {
-    final cats = _visible[index].categories;
+  Widget _cardActions(_Dua dua, bool isDark) {
+    final cats = dua.categories;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (cats.isNotEmpty)
+        if (cats.isNotEmpty || dua.hasCounter)
           Expanded(
             child: Align(
               alignment: AlignmentDirectional.centerStart,
@@ -828,6 +942,39 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  if (dua.hasCounter)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: primaryGreen.withValues(
+                          alpha: isDark ? 0.22 : 0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.repeat_rounded,
+                            size: 12,
+                            color: primaryGreen,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${dua.target}×',
+                            textDirection: TextDirection.ltr,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: primaryGreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   for (final c in cats)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -860,14 +1007,14 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
           icon: Icons.edit_note,
           color: primaryGreen,
           label: 'Edit',
-          onTap: () => _showEditDialog(index),
+          onTap: () => _showEditor(dua: dua),
         ),
         const SizedBox(width: 8),
         _smallActionButton(
           icon: Icons.delete_outline,
           color: Colors.redAccent,
           label: 'Delete',
-          onTap: () => _deleteDua(index),
+          onTap: () => _deleteDua(dua),
         ),
       ],
     );
@@ -907,16 +1054,19 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   }
 
   Widget _galleryView(ThemeData theme, bool isDark) {
-    if (_pageController == null) return const SizedBox.shrink();
+    final visible = _visible;
+    if (_pageController == null || visible.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Stack(
       children: [
         PageView.builder(
           controller: _pageController,
-          itemCount: _visible.length,
+          itemCount: visible.length,
           onPageChanged: (i) => setState(() => _galleryIndex = i),
           itemBuilder: (_, i) {
-            final fontSize = _visible[i].fontSize;
+            final dua = visible[i];
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 30),
               child: Stack(
@@ -925,13 +1075,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
                     decoration: BoxDecoration(
-                      color: theme.cardColor, // CHANGED
+                      color: theme.cardColor,
                       borderRadius: BorderRadius.circular(32),
                       border: Border.all(
                         color: primaryGreen.withValues(
                           alpha: isDark ? 0.15 : 0.08,
                         ),
-                      ), // CHANGED
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(
@@ -939,7 +1089,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                           ),
                           blurRadius: 30,
                           offset: const Offset(0, 12),
-                        ), // CHANGED
+                        ),
                       ],
                     ),
                     child: LayoutBuilder(
@@ -951,22 +1101,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                               minHeight: constraints.maxHeight,
                             ),
                             child: Center(
-                              child: AutoSizeText(
-                                _visible[i].text,
+                              child: Text(
+                                dua.text,
                                 textAlign: TextAlign.center,
                                 textDirection: TextDirection.rtl,
-                                maxLines: null,
-                                minFontSize: fontSize,
-                                maxFontSize: fontSize,
-                                overflow: TextOverflow.visible,
                                 style: TextStyle(
                                   fontFamily: arabicFont,
+                                  fontSize: dua.fontSize,
                                   fontWeight: FontWeight.w700,
                                   height: 1.9,
-                                  color: theme
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.color, // CHANGED
+                                  color: theme.textTheme.bodyLarge?.color,
                                 ),
                               ),
                             ),
@@ -975,7 +1119,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       },
                     ),
                   ),
-
                   Positioned(
                     top: -10,
                     right: -10,
@@ -984,17 +1127,22 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                       size: 100,
                       color: Colors.green.withValues(
                         alpha: isDark ? 0.08 : 0.05,
-                      ), // CHANGED
+                      ),
                     ),
                   ),
-
+                  if (dua.hasCounter)
+                    Positioned(
+                      bottom: 24,
+                      left: 24,
+                      child: _counterButton(dua, theme, isDark),
+                    ),
                   Positioned(
                     bottom: 24,
                     right: 24,
                     child: Container(
                       decoration: BoxDecoration(
                         color: (isDark ? theme.cardColor : Colors.white)
-                            .withValues(alpha: 0.92), // CHANGED
+                            .withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
@@ -1002,7 +1150,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                               alpha: isDark ? 0.3 : 0.08,
                             ),
                             blurRadius: 12,
-                          ), // CHANGED
+                          ),
                         ],
                       ),
                       child: Column(
@@ -1012,22 +1160,20 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                             icon: const Icon(Icons.add),
                             color: primaryGreen,
                             tooltip: 'Increase text size',
-                            onPressed: () => _increaseFont(i),
+                            onPressed: () => _changeFont(dua, _fontStep),
                           ),
                           Text(
-                            '${fontSize.round()}',
+                            '${dua.fontSize.round()}',
                             style: TextStyle(
                               fontSize: 10,
                               color: theme.textTheme.bodyMedium?.color
-                                  ?.withValues(
-                                    alpha: 0.6,
-                                  ), // also bumped per contrast fix
+                                  ?.withValues(alpha: 0.6),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           IconAction(
                             label: 'Decrease text size',
-                            onTap: () => _decreaseFont(i),
+                            onTap: () => _changeFont(dua, -_fontStep),
                             child: const Padding(
                               padding: EdgeInsets.all(8),
                               child: Icon(Icons.remove, color: primaryGreen),
@@ -1042,7 +1188,6 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             );
           },
         ),
-
         Positioned(
           top: 8,
           left: 0,
@@ -1055,7 +1200,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '${_galleryIndex + 1} / ${_visible.length}',
+                '${_galleryIndex + 1} / ${visible.length}',
                 textDirection: TextDirection.ltr,
                 style: const TextStyle(
                   color: Colors.white,
@@ -1098,7 +1243,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 17,
                 color: theme.textTheme.bodyLarge?.color,
-              ), // CHANGED
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -1110,7 +1255,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                   alpha: 0.5,
                 ),
                 fontSize: 13,
-              ), // CHANGED
+              ),
             ),
           ],
         ),
@@ -1123,14 +1268,16 @@ class _DuaEditorDialog extends StatefulWidget {
   final String title;
   final String initialText;
   final List<String> initialCategories;
+  final int initialTarget;
   final List<String> categories;
   final Future<String?> Function() onCreateCategory;
-  final void Function(String text, List<String> categories) onSave;
+  final void Function(String text, List<String> categories, int target) onSave;
 
   const _DuaEditorDialog({
     required this.title,
     required this.initialText,
     this.initialCategories = const [],
+    this.initialTarget = 0,
     required this.categories,
     required this.onCreateCategory,
     required this.onSave,
@@ -1152,6 +1299,10 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
 
   late List<String> _cats;
 
+  late int _target;
+
+  static const List<int> _presets = [10, 30, 50, 80, 100];
+
   @override
   void initState() {
     super.initState();
@@ -1160,6 +1311,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
     _focusNode.addListener(() => setState(() {}));
     _selected = List<String>.of(widget.initialCategories);
     _cats = List.of(widget.categories);
+    _target = widget.initialTarget;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 150), () {
@@ -1179,7 +1331,7 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     HapticFeedback.selectionClick();
-    widget.onSave(text, _selected);
+    widget.onSave(text, _selected, _target);
     Navigator.pop(context);
   }
 
@@ -1374,6 +1526,84 @@ class _DuaEditorDialogState extends State<_DuaEditorDialog> {
                   ),
                 ),
 
+                // ── Repeat counter ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.repeat_rounded,
+                            size: 18,
+                            color: primaryGreen,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Repeat counter',
+                            style: TextStyle(
+                              fontFamily: arabicFont,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.remove_circle_outline),
+                            color: primaryGreen,
+                            onPressed: _target > 0
+                                ? () => setState(() => _target--)
+                                : null,
+                          ),
+                          SizedBox(
+                            width: 52,
+                            child: Text(
+                              _target == 0 ? 'Off' : '$_target×',
+                              textAlign: TextAlign.center,
+                              textDirection: TextDirection.ltr,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.add_circle_outline),
+                            color: primaryGreen,
+                            onPressed: _target < 9999
+                                ? () => setState(() => _target++)
+                                : null,
+                          ),
+                        ],
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final p in _presets)
+                            ChoiceChip(
+                              label: Text('$p'),
+                              selected: _target == p,
+                              showCheckmark: false,
+                              selectedColor: primaryGreen,
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                color: _target == p
+                                    ? Colors.white
+                                    : theme.textTheme.bodyMedium?.color,
+                              ),
+                              onSelected: (on) =>
+                                  setState(() => _target = on ? p : 0),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
                 // ── Character count ──
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1472,19 +1702,27 @@ class _Dua {
   String text;
   double fontSize;
   List<String> categories;
+  int target; // 0 = no counter
+  int count;
 
   _Dua({
     required this.id,
     required this.text,
     this.fontSize = 24,
     List<String>? categories,
+    this.target = 0,
+    this.count = 0,
   }) : categories = categories ?? [];
+
+  bool get hasCounter => target > 0;
+  bool get isDone => hasCounter && count >= target;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'text': text,
     'fontSize': fontSize,
     'categories': categories,
+    'target': target,
   };
 
   static _Dua? tryFromJson(String raw) {
@@ -1497,7 +1735,7 @@ class _Dua {
       if (list is List) {
         cats.addAll(list.whereType<String>());
       } else if (map['category'] is String) {
-        cats.add(map['category'] as String); // old single-category format
+        cats.add(map['category'] as String);
       }
 
       return _Dua(
@@ -1505,6 +1743,7 @@ class _Dua {
         text: map['text'] as String,
         fontSize: (map['fontSize'] as num?)?.toDouble() ?? 24,
         categories: cats,
+        target: (map['target'] as num?)?.toInt() ?? 0,
       );
     } catch (_) {
       return null;
