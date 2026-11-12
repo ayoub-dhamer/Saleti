@@ -37,12 +37,12 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
   static const String _categoriesKey = 'dua_categories_v1';
   List<String> _categories = [];
 
-  String? _selectedCategory; // null = All
+  final Set<String> _selectedCategories = {}; // empty = All
 
-  List<_Dua> get _visible => _selectedCategory == null
+  List<_Dua> get _visible => _selectedCategories.isEmpty
       ? _duaList
       : _duaList
-            .where((d) => d.categories.contains(_selectedCategory))
+            .where((d) => d.categories.any(_selectedCategories.contains))
             .toList();
 
   @override
@@ -171,7 +171,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         final i = d.categories.indexOf(old);
         if (i >= 0) d.categories[i] = name;
       }
-      if (_selectedCategory == old) _selectedCategory = name;
+      if (_selectedCategories.remove(old)) _selectedCategories.add(name);
     });
     await _persistCategories();
     await _persist();
@@ -228,7 +228,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
       for (final d in _duaList) {
         d.categories.remove(cat);
       }
-      if (_selectedCategory == cat) _selectedCategory = null;
+      _selectedCategories.remove(cat);
     });
     await _persistCategories();
     await _persist();
@@ -287,7 +287,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
         initialText: dua?.text ?? '',
         initialCategories: dua != null
             ? List<String>.of(dua.categories)
-            : (_selectedCategory == null ? [] : [_selectedCategory!]),
+            : _selectedCategories.toList(),
         initialTarget: dua?.target ?? 0,
         onSave: (text, cats, target) => id == null
             ? _saveDua(text, cats, target)
@@ -585,14 +585,16 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
                 HapticFeedback.selectionClick();
                 final created = await _addCategory();
                 if (created != null && mounted) {
-                  setState(() => _selectedCategory = created);
+                  setState(() => _selectedCategories.add(created));
                 }
               },
             );
           }
 
           final String? cat = i == 0 ? null : _categories[i - 1];
-          final selected = cat == _selectedCategory;
+          final selected = cat == null
+              ? _selectedCategories.isEmpty
+              : _selectedCategories.contains(cat);
           final chip = ChoiceChip(
             label: Text(cat ?? 'All'),
             selected: selected,
@@ -614,7 +616,13 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
             ),
             onSelected: (_) {
               HapticFeedback.selectionClick();
-              setState(() => _selectedCategory = cat);
+              setState(() {
+                if (cat == null) {
+                  _selectedCategories.clear();
+                } else if (!_selectedCategories.remove(cat)) {
+                  _selectedCategories.add(cat);
+                }
+              });
             },
           );
 
@@ -788,7 +796,7 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     if (visible.isEmpty) {
       return Center(
         child: Text(
-          "No du'as in this category yet",
+          "No du'as match these categories",
           style: TextStyle(
             fontFamily: arabicFont,
             color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
@@ -929,94 +937,155 @@ class _DuaNotesScreenState extends State<DuaNotesScreen> {
     );
   }
 
+  static const int _maxCardCategories = 2;
+
   Widget _cardActions(_Dua dua, bool isDark) {
     final cats = dua.categories;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    final shown = cats.take(_maxCardCategories).toList();
+    final hidden = cats.length - shown.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (cats.isNotEmpty || dua.hasCounter)
-          Expanded(
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (dua.hasCounter)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
+        if (cats.isNotEmpty || dua.hasCounter) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (dua.hasCounter)
+                _badge(
+                  color: primaryGreen.withValues(alpha: isDark ? 0.22 : 0.14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.repeat_rounded,
+                        size: 12,
+                        color: primaryGreen,
                       ),
-                      decoration: BoxDecoration(
-                        color: primaryGreen.withValues(
-                          alpha: isDark ? 0.22 : 0.14,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.repeat_rounded,
-                            size: 12,
-                            color: primaryGreen,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${dua.target}×',
-                            textDirection: TextDirection.ltr,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: primaryGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  for (final c in cats)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: primaryGreen.withValues(
-                          alpha: isDark ? 0.18 : 0.1,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        c,
+                      const SizedBox(width: 4),
+                      Text(
+                        '${dua.target}×',
+                        textDirection: TextDirection.ltr,
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: primaryGreen,
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              for (final c in shown)
+                _badge(
+                  color: primaryGreen.withValues(alpha: isDark ? 0.18 : 0.1),
+                  child: Text(
+                    c,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: primaryGreen,
                     ),
-                ],
-              ),
+                  ),
+                ),
+              if (hidden > 0)
+                GestureDetector(
+                  onTap: () => _showDuaCategories(dua),
+                  child: _badge(
+                    color: primaryGreen.withValues(alpha: isDark ? 0.32 : 0.2),
+                    child: Text(
+                      '+$hidden',
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: primaryGreen,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            _smallActionButton(
+              icon: Icons.edit_note,
+              color: primaryGreen,
+              label: 'Edit',
+              onTap: () => _showEditor(dua: dua),
             ),
-          )
-        else
-          const Spacer(),
-        const SizedBox(width: 8),
-        _smallActionButton(
-          icon: Icons.edit_note,
-          color: primaryGreen,
-          label: 'Edit',
-          onTap: () => _showEditor(dua: dua),
-        ),
-        const SizedBox(width: 8),
-        _smallActionButton(
-          icon: Icons.delete_outline,
-          color: Colors.redAccent,
-          label: 'Delete',
-          onTap: () => _deleteDua(dua),
+            const SizedBox(width: 8),
+            _smallActionButton(
+              icon: Icons.delete_outline,
+              color: Colors.redAccent,
+              label: 'Delete',
+              onTap: () => _deleteDua(dua),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _badge({required Color color, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+
+  void _showDuaCategories(_Dua dua) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Categories',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final c in dua.categories)
+                      _badge(
+                        color: primaryGreen.withValues(alpha: 0.14),
+                        child: Text(
+                          c,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: primaryGreen,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
