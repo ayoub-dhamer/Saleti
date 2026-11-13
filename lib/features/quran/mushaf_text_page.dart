@@ -120,40 +120,26 @@ class MushafTextPage extends StatelessWidget {
 
   static const Set<int> _shortEndingPages = {
     76,
-
     207,
-
     331,
-
     341,
-
     349,
-
     366,
-
     376,
-
     414,
-
     417,
-
     445,
-
     452,
-
     498,
-
     506,
-
     525,
-
     548,
-
     555,
-
     557,
-
     584,
+    586,
+    590,
+    594,
   };
 
   bool get _isCenteredPage => _centeredPages.contains(pageNumber);

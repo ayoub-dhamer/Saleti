@@ -187,7 +187,7 @@ class MushafDataService extends ChangeNotifier {
 
   // forces a fresh scan on their next launch.
 
-  static const String _maxWidthCacheKey = 'mushaf_max_line_width_v1';
+  static const String _maxWidthCacheKey = 'mushaf_max_line_width_v3';
 
   // FIXED (Battery/CPU #4): memoizes the in-flight load so two screens
 
@@ -293,7 +293,7 @@ class MushafDataService extends ChangeNotifier {
     }
 
     double maxWidth = 0;
-
+    int maxPage = 0, maxLine = 0;
     int pagesProcessed = 0;
 
     for (final page in pages) {
@@ -318,7 +318,11 @@ class MushafDataService extends ChangeNotifier {
           maxLines: 1,
         )..layout();
 
-        if (tp.width > maxWidth) maxWidth = tp.width;
+        if (tp.width > maxWidth) {
+          maxWidth = tp.width;
+          maxPage = page.pageNumber;
+          maxLine = line.lineNumber;
+        }
       }
 
       pagesProcessed++;
@@ -331,6 +335,11 @@ class MushafDataService extends ChangeNotifier {
         await Future.delayed(Duration.zero);
       }
     }
+
+    debugPrint(
+      'Widest mushaf line: page $maxPage line $maxLine '
+      '(${maxWidth.toStringAsFixed(1)}px at ${_referenceFontSize}pt)',
+    );
 
     _maxNaturalWidthAtReference = maxWidth;
 
