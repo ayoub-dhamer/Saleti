@@ -14,6 +14,64 @@ String _freqLabel(ReminderFrequency f) => switch (f) {
   ReminderFrequency.monthly => 'Monthly',
 };
 
+/// Shared hold-to-confirm dialog. Returns true if the user confirmed.
+Future<bool> _confirmHold(
+  BuildContext context, {
+  required String title,
+  required String message,
+}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      final theme = Theme.of(context);
+      return AlertDialog(
+        backgroundColor: theme.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          title,
+          style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.7,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Hold to delete',
+              style: TextStyle(fontSize: 12, color: Colors.redAccent),
+            ),
+          ],
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          HoldToDeleteButton(onConfirmed: () => Navigator.pop(context, true)),
+        ],
+      );
+    },
+  );
+  return ok == true;
+}
+
+/// Asks for a category name; returns it, or null if cancelled.
+Future<String?> _askCategoryName(BuildContext context, List<String> existing) {
+  return showDialog<String>(
+    context: context,
+    builder: (_) => _CategoryNameDialog(existing: existing),
+  );
+}
+
 // ───────────────────────── List screen ─────────────────────────
 
 class RemindersScreen extends StatefulWidget {
@@ -25,9 +83,10 @@ class RemindersScreen extends StatefulWidget {
 
 class _RemindersScreenState extends State<RemindersScreen> {
   List<Reminder> _reminders = [];
+  List<String> _categories = [];
   bool _loaded = false;
 
-  final Set<ReminderCategory> _categoryFilter = {};
+  final Set<String> _categoryFilter = {};
   final Set<ReminderFrequency> _frequencyFilter = {};
 
   @override
@@ -38,9 +97,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
 
   Future<void> _load() async {
     final list = await ReminderService.load();
+    final cats = await ReminderService.loadCategories();
     if (!mounted) return;
     setState(() {
       _reminders = list;
+      _categories = cats;
       _loaded = true;
     });
   }
@@ -54,7 +115,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
       return catOk && freqOk;
     }).toList();
 
-    // Active reminders first by next fire time; disabled or passed last.
     list.sort((a, b) {
       final an = (a.enabled && !a.isPassed) ? a.nextOccurrence() : null;
       final bn = (b.enabled && !b.isPassed) ? b.nextOccurrence() : null;
@@ -66,14 +126,57 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return list;
   }
 
+  // ── Categories ──
+
+  /// Creates a category; returns its name, or null if cancelled.
+  Future<String?> _addCategory() async {
+    final name = await _askCategoryName(context, _categories);
+    if (name == null || !mounted) return null;
+    setState(() => _categories.add(name));
+    await ReminderService.saveCategories(_categories);
+    return name;
+  }
+
+  Future<void> _deleteCategory(String name) async {
+    final ok = await _confirmHold(
+      context,
+      title: 'Delete "$name"?',
+      message:
+          'Your reminders in this category are kept, '
+          'but will have no category.',
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _categories.remove(name);
+      _categoryFilter.remove(name);
+      for (final r in _reminders) {
+        if (r.category == name) r.category = null;
+      }
+    });
+    await ReminderService.saveCategories(_categories);
+    await ReminderService.save(_reminders);
+  }
+
+  // ── Reminders ──
+
   Future<void> _openEditor([Reminder? existing]) async {
-    final result = await Navigator.push<Reminder>(
+    final result = await Navigator.push<Object>(
       context,
       MaterialPageRoute(
-        builder: (_) => ReminderEditorScreen(existing: existing),
+        builder: (_) => ReminderEditorScreen(
+          existing: existing,
+          categories: _categories,
+          onCreateCategory: _addCategory,
+        ),
       ),
     );
-    if (result == null || !mounted) return;
+    if (!mounted) return;
+
+    if (result == ReminderEditorScreen.deleted && existing != null) {
+      await _removeReminder(existing);
+      return;
+    }
+    if (result is! Reminder) return;
 
     final i = _reminders.indexWhere((r) => r.id == result.id);
     setState(() {
@@ -94,56 +197,22 @@ class _RemindersScreenState extends State<RemindersScreen> {
     await ReminderService.schedule(r);
   }
 
-  Future<bool> _confirmDelete(Reminder r) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          backgroundColor: theme.cardColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Delete reminder?',
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '"${r.title}" will stop notifying you.',
-                style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color?.withValues(
-                    alpha: 0.7,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Hold to delete',
-                style: TextStyle(fontSize: 12, color: Colors.redAccent),
-              ),
-            ],
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            const SizedBox(width: 8),
-            HoldToDeleteButton(onConfirmed: () => Navigator.pop(context, true)),
-          ],
-        );
-      },
-    );
-    if (ok != true) return false;
-
-    await ReminderService.cancel(r);
-    if (!mounted) return true;
+  Future<void> _removeReminder(Reminder r) async {
+    // Remove and save first, so a failing alarm cancel can't block this.
     setState(() => _reminders.removeWhere((x) => x.id == r.id));
     await ReminderService.save(_reminders);
+    await ReminderService.cancel(r);
+  }
+
+  /// Confirm, then delete. Returns true if deleted.
+  Future<bool> _confirmAndDelete(Reminder r) async {
+    final ok = await _confirmHold(
+      context,
+      title: 'Delete reminder?',
+      message: '"${r.title}" will stop notifying you.',
+    );
+    if (!ok) return false;
+    await _removeReminder(r);
     return true;
   }
 
@@ -176,7 +245,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
       body: Column(
         children: [
           _header(),
-          if (_reminders.isNotEmpty) _filters(theme, isDark),
+          if (_loaded) _filters(theme, isDark),
           Expanded(
             child: !_loaded
                 ? const Center(
@@ -259,93 +328,124 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
-  Widget _chipRow<T>({
-    required List<T> values,
-    required Set<T> selected,
-    required String Function(T) label,
+  ChoiceChip _chip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
     required ThemeData theme,
     required bool isDark,
   }) {
-    return SizedBox(
-      height: 46,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        children: [
-          ChoiceChip(
-            label: const Text('All'),
-            selected: selected.isEmpty,
-            showCheckmark: false,
-            selectedColor: _primaryGreen,
-            backgroundColor: theme.cardColor,
-            side: BorderSide(
-              color: selected.isEmpty
-                  ? _primaryGreen
-                  : _primaryGreen.withValues(alpha: isDark ? 0.25 : 0.15),
-            ),
-            labelStyle: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected.isEmpty
-                  ? Colors.white
-                  : theme.textTheme.bodyMedium?.color,
-            ),
-            onSelected: (_) {
-              HapticFeedback.selectionClick();
-              setState(selected.clear);
-            },
-          ),
-          for (final v in values) ...[
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: Text(label(v)),
-              selected: selected.contains(v),
-              showCheckmark: false,
-              selectedColor: _primaryGreen,
-              backgroundColor: theme.cardColor,
-              side: BorderSide(
-                color: selected.contains(v)
-                    ? _primaryGreen
-                    : _primaryGreen.withValues(alpha: isDark ? 0.25 : 0.15),
-              ),
-              labelStyle: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected.contains(v)
-                    ? Colors.white
-                    : theme.textTheme.bodyMedium?.color,
-              ),
-              onSelected: (_) {
-                HapticFeedback.selectionClick();
-                setState(() {
-                  if (!selected.remove(v)) selected.add(v);
-                });
-              },
-            ),
-          ],
-        ],
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: _primaryGreen,
+      backgroundColor: theme.cardColor,
+      side: BorderSide(
+        color: selected
+            ? _primaryGreen
+            : _primaryGreen.withValues(alpha: isDark ? 0.25 : 0.15),
       ),
+      labelStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: selected ? Colors.white : theme.textTheme.bodyMedium?.color,
+      ),
+      onSelected: (_) {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
     );
   }
 
   Widget _filters(ThemeData theme, bool isDark) {
+    final gap = const SizedBox(width: 8);
     return Column(
       children: [
         const SizedBox(height: 6),
-        _chipRow<ReminderCategory>(
-          values: ReminderCategory.values,
-          selected: _categoryFilter,
-          label: (c) => c.label,
-          theme: theme,
-          isDark: isDark,
+        // Categories: tap to filter, long-press a chip to delete it.
+        SizedBox(
+          height: 46,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            children: [
+              _chip(
+                label: 'All',
+                selected: _categoryFilter.isEmpty,
+                onTap: () => setState(_categoryFilter.clear),
+                theme: theme,
+                isDark: isDark,
+              ),
+              for (final c in _categories) ...[
+                gap,
+                GestureDetector(
+                  onLongPress: () {
+                    HapticFeedback.mediumImpact();
+                    _deleteCategory(c);
+                  },
+                  child: _chip(
+                    label: c,
+                    selected: _categoryFilter.contains(c),
+                    onTap: () => setState(() {
+                      if (!_categoryFilter.remove(c)) _categoryFilter.add(c);
+                    }),
+                    theme: theme,
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+              gap,
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 18, color: _primaryGreen),
+                label: const Text('New'),
+                backgroundColor: theme.cardColor,
+                side: BorderSide(color: _primaryGreen.withValues(alpha: 0.4)),
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _primaryGreen,
+                ),
+                onPressed: () async {
+                  HapticFeedback.selectionClick();
+                  final created = await _addCategory();
+                  if (created != null && mounted) {
+                    setState(() => _categoryFilter.add(created));
+                  }
+                },
+              ),
+            ],
+          ),
         ),
-        _chipRow<ReminderFrequency>(
-          values: ReminderFrequency.values,
-          selected: _frequencyFilter,
-          label: _freqLabel,
-          theme: theme,
-          isDark: isDark,
-        ),
+        if (_reminders.isNotEmpty)
+          SizedBox(
+            height: 46,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              children: [
+                _chip(
+                  label: 'All',
+                  selected: _frequencyFilter.isEmpty,
+                  onTap: () => setState(_frequencyFilter.clear),
+                  theme: theme,
+                  isDark: isDark,
+                ),
+                for (final f in ReminderFrequency.values) ...[
+                  gap,
+                  _chip(
+                    label: _freqLabel(f),
+                    selected: _frequencyFilter.contains(f),
+                    onTap: () => setState(() {
+                      if (!_frequencyFilter.remove(f)) _frequencyFilter.add(f);
+                    }),
+                    theme: theme,
+                    isDark: isDark,
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -357,7 +457,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return Dismissible(
       key: ValueKey(r.id),
       direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDelete(r),
+      // The dialog does the deletion itself, so the card must not also be
+      // dismissed by the framework.
+      confirmDismiss: (_) async {
+        await _confirmAndDelete(r);
+        return false;
+      },
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.only(right: 24),
@@ -378,7 +483,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           borderRadius: BorderRadius.circular(18),
           onTap: () => _openEditor(r),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -391,7 +496,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(r.category.icon, color: _primaryGreen, size: 24),
+                  child: Icon(
+                    reminderCategoryIcon(r.category),
+                    color: _primaryGreen,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -422,7 +531,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-                          _pill(r.category.label, isDark),
+                          if (r.category != null) _pill(r.category!, isDark),
                           _pill(r.summary, isDark),
                         ],
                       ),
@@ -443,10 +552,24 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     ],
                   ),
                 ),
-                Switch(
-                  value: r.enabled && !r.isPassed,
-                  activeThumbColor: _primaryGreen,
-                  onChanged: r.isPassed ? null : (v) => _toggle(r, v),
+                Column(
+                  children: [
+                    Switch(
+                      value: r.enabled && !r.isPassed,
+                      activeThumbColor: _primaryGreen,
+                      onChanged: r.isPassed ? null : (v) => _toggle(r, v),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete reminder',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 22,
+                        color: Colors.redAccent,
+                      ),
+                      onPressed: () => _confirmAndDelete(r),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -520,11 +643,97 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 }
 
+// ───────────────────────── Category name dialog ─────────────────────────
+
+class _CategoryNameDialog extends StatefulWidget {
+  final List<String> existing;
+  const _CategoryNameDialog({required this.existing});
+
+  @override
+  State<_CategoryNameDialog> createState() => _CategoryNameDialogState();
+}
+
+class _CategoryNameDialogState extends State<_CategoryNameDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Enter a name');
+      return;
+    }
+    if (widget.existing.any((c) => c.toLowerCase() == name.toLowerCase())) {
+      setState(() => _error = 'That category already exists');
+      return;
+    }
+    Navigator.pop(context, name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      backgroundColor: theme.cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        'New category',
+        style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 24,
+        textCapitalization: TextCapitalization.sentences,
+        cursorColor: _primaryGreen,
+        decoration: InputDecoration(
+          hintText: 'e.g. Tahajjud',
+          errorText: _error,
+        ),
+        onChanged: (_) {
+          if (_error != null) setState(() => _error = null);
+        },
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text(
+            'Add',
+            style: TextStyle(color: _primaryGreen, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ───────────────────────── Editor screen ─────────────────────────
 
 class ReminderEditorScreen extends StatefulWidget {
+  /// Popped by the editor when the user deletes the reminder.
+  static const Object deleted = 'deleted';
+
   final Reminder? existing;
-  const ReminderEditorScreen({super.key, this.existing});
+  final List<String> categories;
+  final Future<String?> Function() onCreateCategory;
+
+  const ReminderEditorScreen({
+    super.key,
+    this.existing,
+    required this.categories,
+    required this.onCreateCategory,
+  });
 
   @override
   State<ReminderEditorScreen> createState() => _ReminderEditorScreenState();
@@ -533,7 +742,8 @@ class ReminderEditorScreen extends StatefulWidget {
 class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
   late final TextEditingController _title;
   late final TextEditingController _body;
-  late ReminderCategory _category;
+  late List<String> _cats;
+  String? _category;
   late ReminderFrequency _frequency;
   late DateTime _when;
   bool _saving = false;
@@ -544,7 +754,8 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
     final e = widget.existing;
     _title = TextEditingController(text: e?.title ?? '');
     _body = TextEditingController(text: e?.body ?? '');
-    _category = e?.category ?? ReminderCategory.extraPrayer;
+    _cats = List<String>.of(widget.categories);
+    _category = e?.category;
     _frequency = e?.frequency ?? ReminderFrequency.once;
     if (e != null) {
       _when = e.start;
@@ -597,6 +808,26 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
         picked.minute,
       );
     });
+  }
+
+  Future<void> _newCategory() async {
+    final created = await widget.onCreateCategory();
+    if (created == null || !mounted) return;
+    setState(() {
+      _cats.add(created);
+      _category = created;
+    });
+  }
+
+  Future<void> _delete() async {
+    final e = widget.existing;
+    if (e == null) return;
+    final ok = await _confirmHold(
+      context,
+      title: 'Delete reminder?',
+      message: '"${e.title}" will stop notifying you.',
+    );
+    if (ok && mounted) Navigator.pop(context, ReminderEditorScreen.deleted);
   }
 
   Future<void> _save() async {
@@ -690,8 +921,21 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
       ),
     );
 
-    final dateText =
-        '${_when.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][_when.month - 1]} ${_when.year}';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final dateText = '${_when.day} ${months[_when.month - 1]} ${_when.year}';
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -716,6 +960,14 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
             color: Colors.white,
           ),
         ),
+        actions: [
+          if (widget.existing != null)
+            IconButton(
+              tooltip: 'Delete reminder',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _delete,
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -737,19 +989,19 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
             cursorColor: _primaryGreen,
             decoration: deco('What should the notification say?'),
           ),
-          label('Category'),
+          label('Category (optional)'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final c in ReminderCategory.values)
+              for (final c in _cats)
                 ChoiceChip(
                   avatar: Icon(
-                    c.icon,
+                    reminderCategoryIcon(c),
                     size: 16,
                     color: _category == c ? Colors.white : _primaryGreen,
                   ),
-                  label: Text(c.label),
+                  label: Text(c),
                   selected: _category == c,
                   showCheckmark: false,
                   selectedColor: _primaryGreen,
@@ -759,8 +1011,16 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
                         ? Colors.white
                         : theme.textTheme.bodyMedium?.color,
                   ),
-                  onSelected: (_) => setState(() => _category = c),
+                  // Tap the selected chip again to clear it.
+                  onSelected: (_) =>
+                      setState(() => _category = _category == c ? null : c),
                 ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16, color: _primaryGreen),
+                label: const Text('New'),
+                labelStyle: const TextStyle(fontSize: 13, color: _primaryGreen),
+                onPressed: _newCategory,
+              ),
             ],
           ),
           label('Repeat'),
@@ -843,6 +1103,25 @@ class _ReminderEditorScreenState extends State<ReminderEditorScreen> {
               ),
             ),
           ),
+          if (widget.existing != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _delete,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete reminder'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

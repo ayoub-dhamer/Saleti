@@ -7,17 +7,35 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum ReminderFrequency { once, daily, weekly, monthly }
 
-enum ReminderCategory {
-  extraPrayer('Extra prayer', Icons.self_improvement_rounded),
-  quran('Qur\'an', Icons.menu_book_rounded),
-  dhikr('Dhikr', Icons.spa_rounded),
-  fasting('Fasting', Icons.no_food_rounded),
-  charity('Charity', Icons.volunteer_activism_rounded),
-  other('Other', Icons.notifications_rounded);
+const List<String> kDefaultReminderCategories = [
+  'Extra prayer',
+  "Qur'an",
+  'Dhikr',
+  'Fasting',
+  'Charity',
+];
 
-  final String label;
-  final IconData icon;
-  const ReminderCategory(this.label, this.icon);
+IconData reminderCategoryIcon(String? name) => switch (name) {
+  'Extra prayer' => Icons.self_improvement_rounded,
+  "Qur'an" => Icons.menu_book_rounded,
+  'Dhikr' => Icons.spa_rounded,
+  'Fasting' => Icons.no_food_rounded,
+  'Charity' => Icons.volunteer_activism_rounded,
+  _ => Icons.label_rounded,
+};
+
+// Older versions saved the enum name; map it to the new display name.
+String? _readCategory(Object? raw) {
+  if (raw is! String || raw.isEmpty) return null;
+  return switch (raw) {
+    'extraPrayer' => 'Extra prayer',
+    'quran' => "Qur'an",
+    'dhikr' => 'Dhikr',
+    'fasting' => 'Fasting',
+    'charity' => 'Charity',
+    'other' => null,
+    _ => raw,
+  };
 }
 
 String _ordinal(int n) {
@@ -66,7 +84,7 @@ class Reminder {
   final int notifId;
   String title;
   String body;
-  ReminderCategory category;
+  String? category;
   ReminderFrequency frequency;
   DateTime start; // first occurrence; also fixes the weekday / day of month
   bool enabled;
@@ -76,7 +94,7 @@ class Reminder {
     required this.notifId,
     required this.title,
     this.body = '',
-    this.category = ReminderCategory.other,
+    this.category,
     this.frequency = ReminderFrequency.once,
     required this.start,
     this.enabled = true,
@@ -87,7 +105,7 @@ class Reminder {
     'notifId': notifId,
     'title': title,
     'body': body,
-    'category': category.name,
+    'category': category,
     'frequency': frequency.name,
     'start': start.toIso8601String(),
     'enabled': enabled,
@@ -101,10 +119,7 @@ class Reminder {
         notifId: m['notifId'] as int,
         title: m['title'] as String,
         body: (m['body'] as String?) ?? '',
-        category: ReminderCategory.values.firstWhere(
-          (c) => c.name == m['category'],
-          orElse: () => ReminderCategory.other,
-        ),
+        category: _readCategory(m['category']),
         frequency: ReminderFrequency.values.firstWhere(
           (f) => f.name == m['frequency'],
           orElse: () => ReminderFrequency.once,
@@ -185,6 +200,19 @@ class ReminderService {
   static const String _idCounterKey = 'custom_reminders_next_id';
   static const int _firstNotifId = 700000; // clear of your other alarm ids
 
+  static const String _categoriesKey = 'reminder_categories_v1';
+
+  static Future<List<String>> loadCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_categoriesKey) ??
+        List<String>.of(kDefaultReminderCategories);
+  }
+
+  static Future<void> saveCategories(List<String> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_categoriesKey, list);
+  }
+
   static Future<List<Reminder>> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_storageKey) ?? [];
@@ -238,8 +266,16 @@ class ReminderService {
   }
 
   static Future<void> cancel(Reminder r) async {
-    await AndroidAlarmManager.cancel(r.notifId);
-    await _plugin.cancel(r.notifId);
+    try {
+      await AndroidAlarmManager.cancel(r.notifId);
+    } catch (e) {
+      debugPrint('Failed to cancel alarm ${r.notifId}: $e');
+    }
+    try {
+      await _plugin.cancel(r.notifId);
+    } catch (e) {
+      debugPrint('Failed to cancel notification ${r.notifId}: $e');
+    }
   }
 
   /// Call at startup and after anything that could have dropped alarms.
