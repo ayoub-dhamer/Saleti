@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:saleti/features/quran/dua_notes_screen.dart';
 import 'package:saleti/features/quran/khatm_screen.dart';
+import 'package:saleti/features/quran/reminders_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/features/quran/surah_list_screen.dart';
 import 'package:saleti/features/quran/mushaf_page_screen.dart';
@@ -56,6 +57,12 @@ class QuranScreen extends StatelessWidget {
       title: 'Du\'a Notes',
       subtitle: 'Save & read your personal du\'as',
       routeBuilder: DuaNotesScreen.new,
+    ),
+    _QuranItem(
+      icon: Icons.notifications_active_rounded,
+      title: 'Reminders',
+      subtitle: 'Schedule extra prayers, fasts & more',
+      routeBuilder: RemindersScreen.new,
     ),
   ];
 

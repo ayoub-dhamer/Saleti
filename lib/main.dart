@@ -9,6 +9,7 @@ import 'package:saleti/features/quran/khatm_screen.dart';
 import 'package:saleti/features/quran/surah_goals_screen.dart';
 import 'package:saleti/utils/exact_alarm_permission.dart';
 import 'package:saleti/utils/mushaf_color_settings.dart';
+import 'package:saleti/utils/reminder_service.dart';
 import 'features/home/home_screen.dart';
 import 'utils/notification_service.dart';
 import 'utils/prayer_cache.dart';
@@ -119,6 +120,8 @@ Future<void> _scheduleBackgroundWork() async {
       ),
     );
   }
+
+  await _tryStep('reschedule custom reminders', ReminderService.rescheduleAll);
 }
 
 Future<Box<T>> _openBoxSafely<T>(String name) async {
