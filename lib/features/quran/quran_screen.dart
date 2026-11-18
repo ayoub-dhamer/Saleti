@@ -94,34 +94,51 @@ class QuranScreen extends StatelessWidget {
         children: [
           _header(),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              itemCount: _items.length,
-              itemBuilder: (context, index) {
-                final item = _items[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _AnimatedMainCard(
-                    index: index,
-                    icon: item.icon,
-                    title: item.title,
-                    subtitle: item.subtitle,
-                    theme: theme,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => item.isReadMushaf
-                              ? const MushafPageScreen(
-                                  storageKey: 'last_read_general',
-                                  useLastReadPosition: true,
-                                )
-                              : item.routeBuilder!(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const vPad = 12.0;
+                const gap = 10.0;
+                final n = _items.length;
+                final available =
+                    constraints.maxHeight - (vPad * 2) - (gap * (n - 1));
+                // Share the space equally, but never too small or too tall.
+                final cardHeight = (available / n).clamp(68.0, 104.0);
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, vPad, 16, vPad),
+                  itemCount: n,
+                  itemBuilder: (context, index) {
+                    final item = _items[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == n - 1 ? 0 : gap,
+                      ),
+                      child: SizedBox(
+                        height: cardHeight,
+                        child: _AnimatedMainCard(
+                          index: index,
+                          icon: item.icon,
+                          title: item.title,
+                          subtitle: item.subtitle,
+                          theme: theme,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => item.isReadMushaf
+                                    ? const MushafPageScreen(
+                                        storageKey: 'last_read_general',
+                                        useLastReadPosition: true,
+                                      )
+                                    : item.routeBuilder!(),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -135,7 +152,7 @@ class QuranScreen extends StatelessWidget {
   Widget _header() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(15, 16, 15, 22),
+      padding: const EdgeInsets.fromLTRB(15, 10, 15, 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(colors: [primaryGreen, secondaryGreen]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -151,7 +168,7 @@ class QuranScreen extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 6),
+          SizedBox(height: 3),
           Text(
             'The Holy Qur\'an at your fingertips',
             style: TextStyle(color: Colors.white70),
@@ -216,12 +233,13 @@ class _AnimatedMainCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: BoxDecoration(
             color: theme.cardColor,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 50,
@@ -233,13 +251,15 @@ class _AnimatedMainCard extends StatelessWidget {
                       secondaryGreen.withValues(alpha: 0.15),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, size: 26, color: primaryGreen),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(

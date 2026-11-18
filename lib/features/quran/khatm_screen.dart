@@ -190,7 +190,6 @@ class _KhatmScreenState extends State<KhatmScreen> {
     final active = _activeYear;
     if (active == null) return;
 
-    final theme = Theme.of(context);
     final totalCycles = active.targetCompletions;
     final currentCycles = active.completedCycles;
     final isLastCycle = currentCycles + 1 >= totalCycles;
