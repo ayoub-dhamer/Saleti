@@ -187,7 +187,7 @@ class MushafDataService extends ChangeNotifier {
 
   // forces a fresh scan on their next launch.
 
-  static const String _maxWidthCacheKey = 'mushaf_max_line_width_v3';
+  static const String _maxWidthCacheKey = 'mushaf_max_line_width_v6';
 
   // FIXED (Battery/CPU #4): memoizes the in-flight load so two screens
 
